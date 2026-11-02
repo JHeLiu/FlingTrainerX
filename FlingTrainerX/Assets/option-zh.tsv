@@ -1,0 +1,628 @@
+﻿# 修改选项 / 分组标题的中英对照表 —— 英文原文<TAB>中文
+# 运行时由 TrainerZh 读取；左边是官网原文（大小写、弯引号都会归一化后再比对）
+100% Critical Chance	100% 暴击几率
+100% Drop Rate	100% 掉落率
+100% Evade Chance	100% 闪避几率
+100% Hit Chance	100% 命中几率
+100% Proposal Chance	100% 提议成功率
+100% Request Chance	100% 请求成功率
+100% Unlock Traits Chance	100% 解锁特质几率
+AI Units: Drain HP	敌方单位：清空生命
+AI Units: Drain Morale	敌方单位：清空士气
+AP	行动点（AP）
+Action	行动力
+Add Exp (In Battle)	增加经验（战斗中）
+Administrative Ability	行政能力
+Advance	推进
+Adventurer’s Emblem	冒险者徽章
+Age	年龄
+Agents: Infinite Movement	特工：无限移动
+Amber Multiplier	琥珀倍率
+Animal Yield Bonus Output	动物产出加成
+Animal Yield Collection Speed	动物采集速度
+Anonymous Artisan’s Crafting Tool	匿名工匠的打造工具
+Anti-Cheat Disabled” launch option when launching the game from Steam.	提示：从 Steam 启动游戏时请勾选 “Anti-Cheat Disabled” 启动项。
+Armor	护甲
+Army Soul Level	军团之魂等级
+Army: Infinite Movement	军队：无限移动
+Army: Restore Unit Size	军队：补满部队规模
+Art	艺术
+Artwork	艺术品
+Artwork Speed	艺术品制作速度
+Bargaining Ability	议价能力
+Base Reputation	基础声望
+Battle: Damage Multiplier	战斗：伤害倍率
+Battle: Defense Multiplier	战斗：防御倍率
+Battle: Empty AI Ammo	战斗：清空敌方弹药
+Battle: Empty AI Morale	战斗：清空敌方士气
+Battle: Empty Enemy Morale	战斗：清空敌军士气
+Battle: Empty Enemy Troops	战斗：清空敌军兵力
+Battle: Extra Item Drop Count	战斗：额外掉落数量
+Battle: God Mode	战斗：无敌模式
+Battle: God Mode/Ignore Hits	战斗：无敌/无视攻击
+Battle: Infinite Ammo	战斗：无限弹药
+Battle: Infinite HP	战斗：无限生命
+Battle: Infinite Morale	战斗：无限士气
+Battle: Infinite SP	战斗：无限技能点
+Battle: Infinite Shield	战斗：无限护盾
+Battle: Infinite Troops	战斗：无限兵力
+Battle: Max Morale	战斗：士气全满
+Battle: One Hit Kills	战斗：一击必杀
+Break Multiplier	破防倍率
+Butcher Bonus Output	屠宰产出加成
+Butcher Speed	屠宰速度
+CHA	魅力（CHA）
+Can Save Anywhere	随处存档
+Change Fly Height	调整飞行高度
+Change Weather	改变天气
+Clear Loss Gauge	清空失败进度
+Combat: Infinite HP	战斗：无限生命
+Combat: Infinite MP	战斗：无限法力
+Combat: Max Dodge Chance	战斗：闪避率全满
+Combat: Super Damage/One Hit Kills	战斗：超高伤害/一击必杀
+Concoct Elixir Speed	炼制丹药速度
+Conservation Credits Multiplier	保护点数倍率
+Construction	建造
+Construction Speed	建造速度
+Construction Success Rate	建造成功率
+Consumables Won’t Decrease	消耗品不减少
+Contribution	贡献
+Cooking	烹饪
+Cooking Speed	烹饪速度
+Crafting	制作
+Crafting Speed	制作速度
+Damage Multiplier	伤害倍率
+Dantian Expansion Points	丹田扩展点
+Daytime +1 Hour	白天 +1 小时
+Daytime -1 Hour	白天 -1 小时
+Debate: Infinite AP	辩论：无限行动点
+Debate: Infinite Health	辩论：无限生命
+Debate: Infinite Inspiration	辩论：无限灵感
+Debate: Super Damage/One Hit Kills	辩论：超高伤害/一击必杀
+Decrease Fly Height	降低飞行高度
+Defense Multiplier	防御倍率
+Diplomacy	外交
+Diplomatic Ability	外交能力
+Doom	毁灭
+Drain AI Army Size	削减敌方陆军规模
+Drain AI Navy Size	削减敌方海军规模
+Duel: Infinite AP	决斗：无限行动点
+Duel: Infinite Health	决斗：无限生命
+Duel: Infinite Qi	决斗：无限真气
+Duel: Super Damage/One Hit Kills	决斗：超高伤害/一击必杀
+Easy Stagger	轻松击倒
+Edit ADV	修改 ADV
+Edit Accessory Amounts	修改饰品数量
+Edit Advanced Essence	修改高级精华
+Edit Alchemy Points	修改炼金点数
+Edit All Vocation DCP	修改全职业 DCP
+Edit Amber	修改琥珀
+Edit Armor Amounts	修改护甲数量
+Edit Army Tradition	修改陆军传统
+Edit Attribute Points	修改属性点
+Edit Base Defense	修改基础防御
+Edit Base Knockdown Power	修改基础击倒力
+Edit Base Magick	修改基础魔法
+Edit Base Magick Defense	修改基础魔法防御
+Edit Base Max Health	修改基础最大生命
+Edit Base Max Stamina	修改基础最大体力
+Edit Base Reputation	修改基础声望
+Edit Base Strength	修改基础力量
+Edit Basic Essence	修改基础精华
+Edit Beast Item Amounts	修改野兽材料数量
+Edit Book Amounts	修改书籍数量
+Edit Bounty Agent’s XP	修改赏金特工经验
+Edit Character Money	修改角色金钱
+Edit Charm	修改魅力
+Edit Clicked Item Amount	修改点击物品数量
+Edit Companion Attribute Points	修改同伴属性点
+Edit Companion Florescence	修改同伴华光
+Edit Companion Strength	修改同伴力量
+Edit Companion Vitality	修改同伴活力
+Edit Conservation Credits	修改保护点数
+Edit Constitution	修改体质
+Edit Consumable Amounts	修改消耗品数量
+Edit Contribution	修改贡献
+Edit Corrupted Cluster	修改腐化晶簇
+Edit Corrupted Crystal	修改腐化水晶
+Edit Craft Item Amounts	修改制作材料数量
+Edit Credit	修改信用点
+Edit Critical Chance	修改暴击几率
+Edit Cultural Influence	修改文化影响力
+Edit Cultural Tradition	修改文化传统
+Edit Current Exp	修改当前经验
+Edit Current HP	修改当前生命
+Edit Current Vocation DCP	修改当前职业 DCP
+Edit Days Remaining	修改剩余天数
+Edit Defense	修改防御
+Edit Diplomats	修改外交官数量
+Edit Dragged Item Amount	修改拖动物品数量
+Edit ENT	修改 ENT
+Edit EQ	修改 EQ
+Edit Elixir Amounts	修改丹药数量
+Edit Engineer Skill Level	修改工程师技能等级
+Edit Exp	修改经验
+Edit Experience	修改经验值
+Edit Extra Talent Points	修改额外天赋点
+Edit Face	修改面部
+Edit Faction Assets	修改派系资产
+Edit Faction Fame	修改派系名望
+Edit Faction Justice	修改派系正义值
+Edit Faction Money	修改派系金钱
+Edit Faction Population	修改派系人口
+Edit Faction Reputation	修改派系声望
+Edit Faction Unity	修改派系凝聚力
+Edit Food Amounts	修改食物数量
+Edit Forging Points	修改锻造点数
+Edit Gift Amounts	修改礼物数量
+Edit Gift Points	修改赠礼点数
+Edit Gold	修改金币
+Edit Good Evil Value	修改善恶值
+Edit Harper’s Tokens	修改竖琴手代币
+Edit Headhunter Skill Level	修改猎头技能等级
+Edit Health Regen	修改生命回复
+Edit Holy Points	修改神圣点数
+Edit Hunter’s Tokens	修改猎手代币
+Edit IQ	修改智商
+Edit Imagination	修改想象力
+Edit Inflation	修改通货膨胀
+Edit Ingredient Amounts	修改食材数量
+Edit Kudosh	修改 Kudosh
+Edit Legitimacy	修改正统性
+Edit Level	修改等级
+Edit Lifespan	修改寿命
+Edit MTL	修改 MTL
+Edit Magic Spell Amounts	修改法术数量
+Edit Magical Herb Amounts	修改灵草数量
+Edit Manpower	修改人力
+Edit Martial Art Amounts	修改武学数量
+Edit Martial Points	修改武学点数
+Edit Material Amounts	修改材料数量
+Edit Max Carrying Weight	修改最大负重
+Edit Max Encumbrance	修改最大承重
+Edit Max Health	修改最大生命
+Edit Max Qi Shield	修改最大真气护盾
+Edit Max Spirit	修改最大灵力
+Edit Max Stamina	修改最大体力
+Edit Max Unit Count	修改最大部队数量
+Edit Medicine Amounts	修改药品数量
+Edit Memory	修改记忆
+Edit Money	修改金钱
+Edit Mood	修改心情
+Edit Mouse Hover Item Amount	修改鼠标悬停物品数量
+Edit Mutation Samples	修改变异样本
+Edit Navy Tradition	修改海军传统
+Edit Netrunner Skill Level	修改黑客技能等级
+Edit Perk Points	修改专长点数
+Edit Player Attribute Points	修改玩家属性点
+Edit Player Florescence	修改玩家华光
+Edit Player Level	修改玩家等级
+Edit Player Strength	修改玩家力量
+Edit Player Vitality	修改玩家活力
+Edit Prestige	修改威望
+Edit Relic Points	修改遗物点数
+Edit Remnant Dust	修改遗迹之尘
+Edit Rift Crystals	修改裂隙水晶
+Edit SEN	修改 SEN
+Edit SOC	修改 SOC
+Edit STA	修改 STA
+Edit Sailors	修改水手数量
+Edit Sect Faith	修改门派信仰
+Edit Selected Item Amount	修改选中物品数量
+Edit Selected Item/Money Amount	修改选中物品/金钱数量
+Edit Shinobi Skill Level	修改忍者技能等级
+Edit Skill Points	修改技能点
+Edit Solo Skill Level	修改单人技能等级
+Edit Speaking Power	修改口才
+Edit Spirit Stones (In Battle)	修改灵石（战斗中）
+Edit Stability	修改稳定度
+Edit Stat: Behaviour	修改属性：行为
+Edit Stat: Dexterity	修改属性：敏捷
+Edit Stat: Disposition	修改属性：性情
+Edit Stat: Fate	修改属性：天命
+Edit Stat: Fist	修改属性：拳法
+Edit Stat: Hidden Weapon	修改属性：暗器
+Edit Stat: Internal Force	修改属性：内力
+Edit Stat: Literacy	修改属性：学识
+Edit Stat: Moral	修改属性：道德
+Edit Stat: Paralysis Resistance	修改属性：抗麻痹
+Edit Stat: Poison Resistance	修改属性：抗毒
+Edit Stat: Sword	修改属性：剑法
+Edit Stat: Talking	修改属性：口才
+Edit Stat: Training	修改属性：训练
+Edit Stat: Vitality	修改属性：活力
+Edit Stat: Yin Yang	修改属性：阴阳
+Edit Storage Item Amount	修改仓库物品数量
+Edit Street Cred Level	修改街头声望等级
+Edit Supply Amounts	修改补给数量
+Edit Talisman Amounts	修改符箓数量
+Edit Total DCP	修改总 DCP
+Edit War Exhaustion	修改战争疲劳
+Edit Watcher Tokens	修改守望者代币
+Edit Weapon Amounts	修改武器数量
+Enable Fly Mode	开启飞行模式
+Enemies Can’t Attack	敌人无法攻击
+Epic Tech Chance	史诗科技几率
+Equipment RARITY Bonus	装备品质加成
+Essence of the Demon Dragon	魔龙精华
+Exp Gain Bonus	经验获取加成
+Exp Multiplier	经验倍率
+Exp Pickup Radius	经验拾取范围
+Face Challenge: Infinite HP	挑战：无限生命
+Face Challenge: One Hit Kills	挑战：一击必杀
+Farming	种植
+Farming Bonus Output	种植产出加成
+Farming Speed	种植速度
+Fast Build	快速建造
+Fast Construction & Recruit	快速建造与招募
+Fast Expedition	快速远征
+Fast Forging & Alchemy	快速锻造与炼金
+Fast Heal Injuries	快速治疗伤势
+Fast Practice	快速修炼
+Fast Random Encounter	快速触发随机事件
+Fast Reform	快速改革
+Fast Research	快速研究
+Fast Training	快速训练
+Fast Weapon Swap Cooldown	武器切换无冷却
+Fate’s Invitation	命运之邀
+Fire	火
+Fly Mode	飞行模式
+Forging Mold	锻造模具
+Fragment of Afterimage	残影碎片
+Fragment of Memory	记忆碎片
+Fragment of Sacred Light	圣光碎片
+Freeze Breach Protocol Timer	锁定破解协议倒计时
+Freeze Challenge Timer	锁定挑战计时
+Freeze Daytime	锁定白天时间
+Freeze Enshrouded Duration	锁定笼罩持续时间
+Freeze Time	锁定时间
+Freeze Time of Day	锁定昼夜时间
+Freeze Time of Day (Hour)	锁定昼夜时间（小时）
+Generals & Agents: Edit Skill Points	将领与特工：修改技能点
+Generals & Agents: Exp Multiplier	将领与特工：经验倍率
+Generals & Agents: Infinite Exp	将领与特工：无限经验
+God Mode	无敌模式
+God Mode/Ignore Hits	无敌/无视攻击
+Gold	金币
+Good Evil Value	善恶值
+Grade	品级
+Grenades No Cooldown	手雷无冷却
+Group Battle: Infinite Health	团队战：无限生命
+Group Battle: Infinite Stamina	团队战：无限体力
+Group Battle: Infinite Time	团队战：无限时间
+Group Battle: Skills Instant Cooldown	团队战：技能瞬间冷却
+Group Battle: Super Damage/One Hit Kills	团队战：超高伤害/一击必杀
+Guest: Fulfill Energy Need	客人：满足精力需求
+Guest: Fulfill Hunger Need	客人：满足饥饿需求
+Guest: Fulfill Thirst Need	客人：满足口渴需求
+Guest: Fulfill Toilet Need	客人：满足如厕需求
+Guest: Max Happiness	客人：幸福度全满
+Guests: Max Entertainment	客人：娱乐度全满
+Guests: Max Environment	客人：环境度全满
+Guests: Max Happiness	客人：幸福度全满
+Harmony	和谐
+Healing	治疗
+Healing Items No Cooldown	治疗物品无冷却
+Hero Exp Multiplier	英雄经验倍率
+Highlight Interactable Objects	高亮可交互物体
+Honor	荣誉
+INT	智力（INT）
+INT Soul Level	智力之魂等级
+Ice	冰
+Ignore Blueprint Upgrade Requirements	忽略图纸升级需求
+Ignore Crafting Requirements	忽略制作需求
+Ignore Cyberware Capacity	忽略义体容量上限
+Ignore Equipment Upgrade Requirement	忽略装备升级需求
+Increase Critical Damage %	提升暴击伤害 %
+Increase Fire Rate %	提升射速 %
+Increase Fly Height	提升飞行高度
+Increase Magic Damage %	提升魔法伤害 %
+Increase Melee Damage %	提升近战伤害 %
+Increase Money	增加金钱
+Increase Ranged Damage %	提升远程伤害 %
+Infinite APS	无限行动点（APS）
+Infinite Action Points	无限行动点
+Infinite Ammo	无限弹药
+Infinite Companions Health	同伴无限生命
+Infinite Components	无限组件
+Infinite Consumables	无限消耗品
+Infinite Crafting Materials	无限制作材料
+Infinite Decoys	无限诱饵
+Infinite Double Jumps (Reinforced Tendons)	无限二段跳（强化肌腱）
+Infinite Energy	无限精力
+Infinite Equipment Durability	装备无限耐久
+Infinite Exp	无限经验
+Infinite Familiar Stamina	伙伴无限体力
+Infinite Fly Duration	无限飞行时间
+Infinite Focus	无限专注
+Infinite Food	无限食物
+Infinite Forging & Alchemy Cost	锻造与炼金不消耗材料
+Infinite Fuel	无限燃料
+Infinite Grenades	无限手雷
+Infinite HP	无限生命
+Infinite Health	无限生命
+Infinite Hero Exp	英雄无限经验
+Infinite Immunity	无限免疫
+Infinite Items/Ammo	无限物品/弹药
+Infinite Job Exp	职业无限经验
+Infinite Knowledge	无限知识
+Infinite MP	无限法力
+Infinite MRP	无限 MRP
+Infinite Mana	无限法力
+Infinite Mercenary Exp	佣兵无限经验
+Infinite Money	无限金钱
+Infinite Mood	无限心情
+Infinite Oxygen	无限氧气
+Infinite Practice Cost	修炼不消耗资源
+Infinite Qi Shield	无限真气护盾
+Infinite Quickhack Components	无限快速破解组件
+Infinite RAM	无限内存
+Infinite Remnant Spark	无限遗迹火花
+Infinite Requests	无限请求
+Infinite Revives	无限复活
+Infinite Sha-Chi	无限沙气
+Infinite Sha-Chi Essence	无限沙气精华
+Infinite Shield	无限护盾
+Infinite Skill Points	无限技能点
+Infinite Smoke Bombs	无限烟雾弹
+Infinite Spirit	无限灵力
+Infinite Stamina	无限体力
+Infinite Stimpacks	无限兴奋剂
+Infinite Street Cred	无限街头声望
+Infinite Tech Alternations	无限技术改造
+Infinite Tech Bans	无限技术禁用
+Infinite Tech Rerolls	无限技术重掷
+Infinite Units Health	单位无限生命
+Infinite Weapon Durability	武器无限耐久
+Infinite XP	无限经验值
+Instant Gear Cooldown	装备瞬间冷却
+Instant Refill Job Applicants	求职者立即刷新
+Instant Reload	瞬间装填
+Instant Smoke Bomb Cooldown	烟雾弹瞬间冷却
+Intellect	智力
+Item Drop Rate	物品掉落率
+Item Shelf Life Won’t Decrease	物品保质期不减少
+Items Won’t Decrease	物品不减少
+Job Exp Multiplier	职业经验倍率
+Karma	因果值
+Knockback	击退
+LEA	学习（LEA）
+Legendary Tech Chance	传说科技几率
+Lethal Gauge Damage Multiplier	处决槽伤害倍率
+Life Expectancy	预期寿命
+Long Weapon Puncture	长兵器刺击
+Long Weapon Slash	长兵器斩击
+Loyalty	忠诚
+Luck	幸运
+Lustrous Goddess Stone	光辉神女石
+MRP Multiplier	MRP 倍率
+Mag. Atk.	魔法攻击
+Mag. Def.	魔法防御
+Magic	魔法
+Magic Attack	魔法攻击
+Magic Defense	魔法防御
+Martial Art Exp Multiplier	武学经验倍率
+Max Comfort	舒适度全满
+Max Critical Chance	暴击率全满
+Max Dodge Chance	闪避率全满
+Max Entanglement Gauge	纠缠槽全满
+Max Florescence Points	华光点全满
+Max Friendship	好感度全满
+Max Fullness	饱食度全满
+Max HP	生命全满
+Max Happiness	幸福度全满
+Max Hit Chance	命中率全满
+Max Insight	洞察力全满
+Max Limit Gauge	极限槽全满
+Max MP	法力全满
+Max Martial Art Exp	武学经验全满
+Max NPC Approval	NPC 认可度全满
+Max NPC Friendship	NPC 好感度全满
+Max NPC Gratitude	NPC 感激度全满
+Max NPC Respect	NPC 尊敬度全满
+Max Perception	感知力全满
+Max Poise	韧性全满
+Max Qi Source Awakening Progress	气源觉醒进度全满
+Max Rapport	默契度全满
+Max Relaxation	放松度全满
+Max Rest	休息度全满
+Max Room Decoration Rating	房间装饰评分全满
+Max Satisfaction	满意度全满
+Max Skill Proficiency	技能熟练度全满
+Max Skill XP/Progression	技能经验/进度全满
+Medicines Won’t Decrease	药品不减少
+Mercenary Exp Multiplier	佣兵经验倍率
+Military Ability	军事能力
+Mind	意志
+Mining	采矿
+Mining Bonus Output	采矿产出加成
+Mining Speed	采矿速度
+Mission Reward: Credit Multiplier	任务奖励：信用点倍率
+Mission Reward: Exp Multiplier	任务奖励：经验倍率
+Mission Reward: Infinite Exp	任务奖励：无限经验
+Money Multiplier	金钱倍率
+Moon Key	月之钥
+Mythic Tech Chance	神话科技几率
+NPC Friendship Multiplier	NPC 好感倍率
+Navy: Infinite Movement	海军：无限移动
+Navy: Restore Unit Size	海军：补满舰队规模
+Negotiation Ability	谈判能力
+New Game: Infinite Points	新游戏：无限点数
+New Game: Infinite Taoist Points	新游戏：无限道行点
+New Game: Max Disciples	新游戏：最大弟子数
+New Game: Resource Points	新游戏：资源点数
+New Game: Script Points	新游戏：剧本点数
+New Game: Skill Points	新游戏：技能点数
+No Bleeding	无流血
+No Crafting Material Requirements	制作无需材料
+No Dash Cooldown	冲刺无冷却
+No Drowsiness	无困倦
+No Food Cooldown	食物无冷却
+No Grenade Cooldown	手雷无冷却
+No Hunger	无饥饿
+No Hypothermia	无失温
+No Injury	无受伤
+No Radiation	无辐射
+No Random Encounter	无随机事件
+No Recoil	无后坐力
+No Reload	无需装填
+No Skill Cooldown	技能无冷却
+No Switch Character Cooldown	切换角色无冷却
+No Weapon Overheat	武器不会过热
+Obtain All Accessories	获得全部饰品
+Obtain All Armor	获得全部护甲
+Obtain All Consumables	获得全部消耗品
+Obtain All Foods	获得全部食物
+Obtain All Ingredients	获得全部食材
+Obtain All Materials	获得全部材料
+Obtain All Weapons	获得全部武器
+One Hit Break	一击破防
+One Hit Kill	一击必杀
+One Hit Stagger	一击击倒
+One Turn Construction	一回合建造
+One Turn Recruit	一回合招募
+One Turn Research	一回合研究
+Orbis Coin	奥比斯币
+POL	政治（POL）
+Perfect Reload	完美装填
+Phys. Atk.	物理攻击
+Phys. Def.	物理防御
+Physical Attack	物理攻击
+Physical Defense	物理防御
+Pierce Count	穿透次数
+Prestige	威望
+Prestige Multiplier (In Battle)	威望倍率（战斗中）
+Projectile Count	弹幕数量
+Projectile Launch System No Cooldown	弹射系统无冷却
+Purity	纯净
+Radiant Goddess Stone	光芒神女石
+Ranged Weapon	远程武器
+Rapid Fire	快速射击
+Rare Tech Chance	稀有科技几率
+Reading Speed	阅读速度
+Reincarnation Shop: Infinite Points	轮回商店：无限点数
+Religious Influence	宗教影响力
+Remnant Dust Multiplier	遗迹之尘倍率
+Research Speed	研究速度
+Ricochet	跳弹
+Righteousness	正义
+Rite Power	仪式之力
+STR	力量（STR）
+STR Soul Level	力量之魂等级
+Sanctity	圣洁
+Save Location	保存位置
+Scholar Official	文官
+Selected Item: Edit Amount	选中物品：修改数量
+Selected Item: Edit Shelf Life	选中物品：修改保质期
+Self Control	自控力
+Set AI Speed	设置 AI 速度
+Set Character Speed	设置角色速度
+Set Dice Value	设置骰子点数
+Set FOV	设置视野角度
+Set Flashlight Brightness	设置手电亮度
+Set Fly Height	设置飞行高度
+Set Fly Speed	设置飞行速度
+Set Game Speed	设置游戏速度
+Set Gravity	设置重力
+Set Jump Height	设置跳跃高度
+Set Move Speed	设置移动速度
+Set Movement Speed	设置移动速度
+Set New Child Gender (1=M, 2=F)	设置新生子女性别（1=男，2=女）
+Set Player Speed	设置玩家速度
+Set Sprint Speed	设置冲刺速度
+Set Swim Speed	设置游泳速度
+Sha-Chi Consumption Rate	沙气消耗速度
+Sha-Chi Essence Gain Rate	沙气精华获取速度
+Shape Grinder	塑形研磨器
+Shield	护盾
+Shield Damage Multiplier	护盾伤害倍率
+Shield Defense Multiplier	护盾防御倍率
+Shop Items Won’t Decrease	商店物品不减少
+Short Weapon Puncture	短兵器刺击
+Short Weapon Slash	短兵器斩击
+Skill Point Multiplier	技能点倍率
+Skill Proficiency Multiplier	技能熟练度倍率
+Skill XP Multiplier	技能经验倍率
+Skills (All)	技能（全部）
+Social Ability	社交能力
+Social Action Won’t Decrease	社交行动次数不减少
+Soil	土壤
+Speed	速度
+Spirit	灵力
+Staff & Guests: Max Drink	员工与客人：饮水全满
+Staff & Guests: Max Energy	员工与客人：精力全满
+Staff & Guests: Max Food	员工与客人：食物全满
+Staff & Guests: Max Toilet Comfort	员工与客人：如厕舒适度全满
+Staff: Exp Multiplier	员工：经验倍率
+Staff: Infinite Exp	员工：无限经验
+Staff: Max Energy	员工：精力全满
+Staff: Max Happiness	员工：幸福度全满
+Staff: Max Pay Satisfaction	员工：薪资满意度全满
+Stagger Multiplier	破防倍率
+Stamina	体力
+Stealth Mode	潜行模式
+Stigma Awaken Stone	圣痕觉醒石
+Street Cred Multiplier	街头声望倍率
+Strength	力量
+Super Accuracy	超高命中
+Super Damage/One Hit Kill	超高伤害/一击必杀
+Super Damage/One Hit Kills	超高伤害/一击必杀
+Super Jump	超级跳跃
+Super Lethal Gauge Damage	处决槽伤害爆炸
+Super Shield Damage/One Hit Breaks	超高护盾伤害/一击破防
+Super Stamina Damage	超高体力伤害
+Surgery Speed	手术速度
+Surgery Success Rate	手术成功率
+Taming	驯养
+Taming Speed	驯养速度
+Taming Success Rate	驯养成功率
+Teleport	传送
+Teleport To Saved Location	传送至已保存位置
+Teleport To Waypoint Location	传送至路径点
+Teleport to Marker Location	传送至标记位置
+Teleport to Saved Location	传送至已保存位置
+Teleport to Waypoint	传送至路径点
+Thunder	雷
+Time Pass Speed	时间流逝速度
+Treatment Quality	治疗质量
+Treatment Speed	治疗速度
+Undo Teleport	撤销传送
+Units: Edit HP (Strength)	单位：修改生命（强度）
+Units: Fast Move	单位：快速移动
+Units: Infinite Morale	单位：无限士气
+Unlock 66 Days Difficulty	解锁“66 天”难度
+Unlock All Agents	解锁全部特工
+Unlock All Chapters	解锁全部章节
+Unlock All Levels	解锁全部关卡
+Unlock All Missions	解锁全部任务
+Unlock All Rooms & Items	解锁全部房间与物品
+Velos Coin	维洛斯币
+WILL	意志（WILL）
+Water	水
+Whirling Thoughts	纷乱思绪
+Wind	风
+Wood	木
+XP Multiplier	经验值倍率
+Zero Drug Resistance	药物抗性归零
+Zero Stress	压力归零
+Zero Warehouse Weight	仓库负重归零
+Zero Weight	负重归零
+Edit Player Stats	修改玩家属性
+Edit Selected Character Abilities	修改选中角色能力
+Edit Religion Modifiers	修改宗教修正
+Selected Character Bonus Stats	选中角色加成属性
+Edit Character Stats	修改角色属性
+Edit Selected Character Skill Level	修改选中角色技能等级
+Edit Selected Character Stats	修改选中角色属性
+Edit All Character Stats	修改全部角色属性
+Edit Weapon Stats	修改武器属性
+Edit Divine Tech Stats	修改神技属性
+Obtain/Edit Items	获取/修改物品
+Edit Player Base Stats	修改玩家基础属性
+Edit Player Spiritual Roots	修改玩家灵根
+Edit Character	修改角色
+Edit Main Pawn Stats	修改主角随从属性
+Edit Player & Companion Stats	修改玩家与同伴属性
+Note: single player mode only.	注意：仅限单人模式。
+Note: Single Player Only.	注意：仅限单人模式。
+This game uses EasyAntiCheat protection, in order to launch this game without EAC, please follow these instructions:	本作使用 EasyAntiCheat 反作弊，若要在不启动 EAC 的情况下运行游戏，请按以下步骤操作：
