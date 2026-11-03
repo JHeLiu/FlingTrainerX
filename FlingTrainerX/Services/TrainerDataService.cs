@@ -1,72 +1,23 @@
 using System.IO;
-using System.Net.Http;
-using System.Security.Cryptography;
-using System.Text;
 using System.Text.Json;
-using System.Windows.Media;
-using System.Windows.Media.Imaging;
 using FlingTrainerX.Models;
 
 namespace FlingTrainerX.Services;
 
-/// <summary>数据加载 / 本地缓存 / 收藏状态。</summary>
+/// <summary>数据同步 / 收藏状态。</summary>
 public static class TrainerDataService
 {
-    private static readonly string DataDir = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "FlingTrainerX");
-
-    private static readonly string CacheFile = Path.Combine(DataDir, "library.json");
+    private static readonly string DataDir = AppPaths.LegacyDir;
     private static readonly string StateFile = Path.Combine(DataDir, "state.json");
-    private static readonly string ImageDir = Path.Combine(DataDir, "images");
 
-    // 图片同样要走浏览器 UA，否则 CDN 会按 UA 拒绝
-    private static readonly HttpClient ImgHttp =
-        UserAgentProvider.CreateHttpClient(TrainerWeb.Site, TimeSpan.FromSeconds(30));
-
-    /// <summary>当前内存中的库，供详情页补全下载/图片后回写缓存。</summary>
+    /// <summary>当前内存中的库，供详情页补全下载数据后使用。</summary>
     public static TrainerLibrary? CurrentLibrary { get; set; }
-
-    public static string BundledFile =>
-        Path.Combine(AppContext.BaseDirectory, "Assets", "trainers.json");
 
     private static readonly JsonSerializerOptions JsonOpts = new()
     {
         PropertyNameCaseInsensitive = true,
         WriteIndented = true
     };
-
-    public static TrainerLibrary LoadLocal()
-    {
-        foreach (var path in new[] { CacheFile, BundledFile })
-        {
-            try
-            {
-                if (!File.Exists(path)) continue;
-                var lib = JsonSerializer.Deserialize<TrainerLibrary>(File.ReadAllText(path), JsonOpts);
-                if (lib?.Items.Count > 0) return lib;
-            }
-            catch
-            {
-                // 缓存损坏时回退到内置数据
-            }
-        }
-
-        return new TrainerLibrary();
-    }
-
-    /// <summary>把当前内存里的库（含翻页累加的数据）写回缓存。</summary>
-    public static void SaveCache(TrainerLibrary lib)
-    {
-        try
-        {
-            Directory.CreateDirectory(DataDir);
-            File.WriteAllText(CacheFile, JsonSerializer.Serialize(lib, JsonOpts));
-        }
-        catch
-        {
-            // 缓存写入失败不影响本次使用
-        }
-    }
 
     /// <summary>从官网拉取最新列表，并复用本地的封面 / 中文名 / 下载表。返回 null 表示失败。</summary>
     public static async Task<TrainerLibrary?> RefreshAsync(TrainerLibrary current, CancellationToken ct = default)
@@ -80,23 +31,21 @@ public static class TrainerDataService
             foreach (var it in items)
             {
                 if (!old.TryGetValue(it.Id, out var prev)) continue;
-                it.TitleCn = prev.TitleCn;
-                it.Poster = prev.Poster;
                 it.Image = prev.Image;
                 if (it.Downloads.Count == 0) it.Downloads = prev.Downloads;
                 if (it.Images.Count == 0) it.Images = prev.Images;
+                MergeLocal(it, prev);
             }
 
-            var lib = new TrainerLibrary
+            SaveCache(items);
+
+            return new TrainerLibrary
             {
                 Source = TrainerWeb.Site,
                 FetchedAt = DateTime.Now.ToString("yyyy-MM-dd HH:mm"),
                 Pages = 1,
                 Items = items
             };
-
-            SaveCache(lib);
-            return lib;
         }
         catch
         {
@@ -104,100 +53,123 @@ public static class TrainerDataService
         }
     }
 
-    // ---------- 图片（本地直接读，网络图后台下载并缓存） ----------
+    // ---------- 首页卡片缓存（SQLite） ----------
 
-    /// <summary>同步读取本地封面；文件不存在返回 null。</summary>
-    public static ImageSource? LoadLocalImage(string? path, int decodeWidth = 0)
+    /// <summary>
+    /// 启动时先把上次抓到的卡片读出来，界面立刻有内容；随后再向官网刷新。
+    /// 没有缓存（第一次运行）返回 null。
+    /// </summary>
+    public static TrainerLibrary? LoadCachedLibrary()
+    {
+        var items = AppDatabase.Instance.LoadCache();
+        if (items.Count == 0) return null;
+
+        return new TrainerLibrary
+        {
+            Source = TrainerWeb.Site,
+            FetchedAt = AppDatabase.Instance.LatestCacheTime()?.ToString("yyyy-MM-dd HH:mm") ?? "",
+            Pages = 1,
+            Items = items
+        };
+    }
+
+    /// <summary>把抓到的卡片写进缓存表（有则更新，无则插入）。</summary>
+    public static void SaveCache(IEnumerable<TrainerItem> items) => AppDatabase.Instance.SaveCacheRange(items);
+
+    // ---------- 翻页进度 ----------
+
+    /// <summary>
+    /// 已经翻到第几页。缓存表里存的只是卡片，没有「这是第几页」这种信息，
+    /// 不记下来的话下次启动只能从第 2 页重新翻，前几页全是重复内容，滚到底也看不到新东西。
+    /// 放在 dbs\library.page，一个数字，坏了就当没有。
+    /// </summary>
+    private static string PageCursorFile => Path.Combine(AppPaths.DbDir, "library.page");
+
+    /// <summary>读上次翻到的页码；没有/读不出返回 1。</summary>
+    public static int LoadPageCursor()
     {
         try
         {
-            if (string.IsNullOrWhiteSpace(path) || path.StartsWith("http", StringComparison.OrdinalIgnoreCase))
-                return null;
-
-            var full = Path.IsPathRooted(path)
-                ? path
-                : Path.Combine(AppContext.BaseDirectory, "Assets", path);
-            return File.Exists(full) ? Decode(full, decodeWidth) : null;
+            var text = File.Exists(PageCursorFile) ? File.ReadAllText(PageCursorFile).Trim() : "";
+            return int.TryParse(text, out var page) && page > 0 ? page : 1;
         }
         catch
         {
-            return null;
+            return 1;
         }
     }
 
-    /// <summary>异步加载介绍图：先查磁盘缓存，再后台下载解码（不阻塞 UI 线程）。</summary>
-    public static async Task<ImageSource?> LoadImageAsync(string? pathOrUrl, int decodeWidth = 0)
+    /// <summary>记下已经翻到第几页。</summary>
+    public static void SavePageCursor(int page)
     {
-        if (string.IsNullOrWhiteSpace(pathOrUrl)) return null;
-
-        if (!pathOrUrl.StartsWith("http", StringComparison.OrdinalIgnoreCase))
-            return await Task.Run(() => LoadLocalImage(pathOrUrl, decodeWidth)).ConfigureAwait(false);
-
-        var cached = CachePathOf(pathOrUrl);
         try
         {
-            if (File.Exists(cached)) return await Task.Run(() => Decode(cached, decodeWidth));
-
-            Directory.CreateDirectory(ImageDir);
-            var bytes = await ImgHttp.GetByteArrayAsync(pathOrUrl).ConfigureAwait(false);
-            await File.WriteAllBytesAsync(cached, bytes).ConfigureAwait(false);
-            return await Task.Run(() => Decode(cached, decodeWidth));
+            File.WriteAllText(PageCursorFile, page.ToString());
         }
         catch
         {
-            return null;
+            // 写不进去就算了，最多下次多翻几页重复内容
         }
     }
 
-    private static string CachePathOf(string url)
+    /// <summary>单条回写（封面落盘、下载完成时用）。</summary>
+    public static void SaveCache(TrainerItem item) => AppDatabase.Instance.SaveCache(item);
+
+    /// <summary>
+    /// 刷新后新对象里没有本地路径，从旧对象按 ID / URL 搬过来，
+    /// 否则已经下好的封面和程序在界面上会「消失」。
+    /// </summary>
+    public static void MergeLocal(TrainerItem fresh, TrainerItem? prev)
     {
-        var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(url)))[..16];
-        var ext = Path.GetExtension(url.Split('?')[0]);
-        if (ext.Length is 0 or > 5) ext = ".img";
-        return Path.Combine(ImageDir, hash + ext);
+        if (prev is null) return;
+
+        if (string.IsNullOrWhiteSpace(fresh.CoverPath)) fresh.CoverPath = prev.CoverPath;
+        if (fresh.ImagePaths.Count == 0 && prev.ImagePaths.Count > 0) fresh.ImagePaths = prev.ImagePaths;
+        if (fresh.Images.Count == 0 && prev.Images.Count > 0) fresh.Images = prev.Images;
+
+        // 列表接口不返回下载表，缓存里那份（带本地路径）原样接过来，
+        // 否则刷新一次「启动程序」就又变灰了
+        if (fresh.Downloads.Count == 0)
+        {
+            fresh.Downloads = prev.Downloads;
+            return;
+        }
+
+        var local = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var bytes = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
+        foreach (var file in prev.Downloads)
+        {
+            if (!string.IsNullOrWhiteSpace(file.LocalPath)) local[file.Url] = file.LocalPath;
+            if (file.ActualBytes > 0) bytes[file.Url] = file.ActualBytes;
+        }
+
+        foreach (var file in fresh.Downloads)
+        {
+            if (string.IsNullOrWhiteSpace(file.LocalPath) && local.TryGetValue(file.Url, out var path))
+                file.LocalPath = path;
+            if (file.ActualBytes <= 0 && bytes.TryGetValue(file.Url, out var size))
+                file.ActualBytes = size;
+        }
     }
 
-    private static readonly SemaphoreSlim CoverGate = new(4);
-
-    /// <summary>把官网截图缓存到本地并设为卡片封面（后台执行，不阻塞滚动）。</summary>
-    public static async Task EnsureCoverAsync(TrainerItem item)
+    /// <summary>详情页重新读到下载表后，把本地路径补回去（按 URL 对齐）。</summary>
+    public static void MergeLocalDownloads(TrainerItem item, List<TrainerDownload> fresh)
     {
-        if (item.HasPoster || string.IsNullOrWhiteSpace(item.ImageUrl)) return;
-
-        await CoverGate.WaitAsync().ConfigureAwait(false);
-        try
+        var local = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var bytes = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
+        foreach (var file in item.Downloads)
         {
-            var local = CachePathOf(item.ImageUrl);
-            if (!File.Exists(local))
-            {
-                Directory.CreateDirectory(ImageDir);
-                var bytes = await ImgHttp.GetByteArrayAsync(item.ImageUrl).ConfigureAwait(false);
-                await File.WriteAllBytesAsync(local, bytes).ConfigureAwait(false);
-            }
+            if (!string.IsNullOrWhiteSpace(file.LocalPath)) local[file.Url] = file.LocalPath;
+            if (file.ActualBytes > 0) bytes[file.Url] = file.ActualBytes;
+        }
 
-            item.SetPoster(local);
-        }
-        catch
+        foreach (var file in fresh)
         {
-            // 忽略单张封面失败
+            if (string.IsNullOrWhiteSpace(file.LocalPath) && local.TryGetValue(file.Url, out var path))
+                file.LocalPath = path;
+            if (file.ActualBytes <= 0 && bytes.TryGetValue(file.Url, out var size))
+                file.ActualBytes = size;
         }
-        finally
-        {
-            CoverGate.Release();
-        }
-    }
-
-    private static ImageSource? Decode(string file, int decodeWidth)
-    {
-        var bmp = new BitmapImage();
-        bmp.BeginInit();
-        bmp.UriSource = new Uri(file, UriKind.Absolute);
-        bmp.CacheOption = BitmapCacheOption.OnLoad;
-        bmp.CreateOptions = BitmapCreateOptions.IgnoreColorProfile;
-        if (decodeWidth > 0) bmp.DecodePixelWidth = decodeWidth;
-        bmp.EndInit();
-        bmp.Freeze();
-        return bmp;
     }
 
     // ---------- 收藏夹（SQLite / SqlSugar 单例） ----------
@@ -223,9 +195,11 @@ public static class TrainerDataService
 
         foreach (var row in AppDatabase.Instance.GetAll())
         {
-            if (!seen.Add(row.TrainerId)) continue;
+            // 主键是字符串，转回数字 ID 再和内存里的库对齐
+            if (!int.TryParse(row.TrainerId, out var id)) continue;
+            if (!seen.Add(id)) continue;
 
-            if (byId.TryGetValue(row.TrainerId, out var live))
+            if (byId.TryGetValue(id, out var live))
             {
                 result.Add(live);
             }

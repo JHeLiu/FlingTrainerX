@@ -5,7 +5,10 @@
 
     <!-- 卡片尺寸：运行时按窗口宽度算出一行 5 张的实际像素值，这里只是设计期默认值 -->
     <sys:Double x:Key="CardW">178</sys:Double>
-    <sys:Double x:Key="CardH">244</sys:Double>
+    <sys:Double x:Key="CardH">208</sys:Double>
+
+    <!-- 卡片下半部的文字区高度：封面 = 卡高 − 这个值，正好是 16:9 -->
+    <GridLength x:Key="CardInfoH">58</GridLength>
 
     <!-- ============ 调色板 ============ -->
     <Color x:Key="C.BgDeep">#FF080E16</Color>
@@ -30,11 +33,6 @@
     <SolidColorBrush x:Key="B.Cyan" Color="#FF2DD4E8" />
     <SolidColorBrush x:Key="B.Green" Color="#FF34D399" />
 
-    <LinearGradientBrush x:Key="B.Logo" StartPoint="0,0" EndPoint="1,1">
-        <GradientStop Color="#FF4F8DFF" Offset="0" />
-        <GradientStop Color="#FF2DD4E8" Offset="1" />
-    </LinearGradientBrush>
-
     <!-- 卡片底部压暗，保证标题可读 -->
     <LinearGradientBrush x:Key="B.CardScrim" StartPoint="0,0" EndPoint="0,1">
         <GradientStop Color="#000E1825" Offset="0.28" />
@@ -42,10 +40,12 @@
         <GradientStop Color="#F20C1520" Offset="1" />
     </LinearGradientBrush>
 
+    <!-- 详情页头图只压下半部分：整张图压得太狠会看不出画面 -->
+    <!-- 横幅底部压暗：只在最下方压一点，让白色标题可读，上面尽量保留原图 -->
     <LinearGradientBrush x:Key="B.BannerScrim" StartPoint="0,0" EndPoint="0,1">
-        <GradientStop Color="#00101825" Offset="0" />
-        <GradientStop Color="#99101825" Offset="0.55" />
-        <GradientStop Color="#FF101A27" Offset="1" />
+        <GradientStop Color="#00070E17" Offset="0" />
+        <GradientStop Color="#1A070E17" Offset="0.55" />
+        <GradientStop Color="#7A070E17" Offset="1" />
     </LinearGradientBrush>
 
     <FontFamily x:Key="F.Ui">Microsoft YaHei UI, Segoe UI</FontFamily>
@@ -54,7 +54,6 @@
     <conv:ImagePathConverter x:Key="ImgConv" />
     <conv:BoolToVisibilityConverter x:Key="BoolToVis" />
     <conv:TextToVisibilityConverter x:Key="TextToVis" />
-    <conv:PosterBlurConverter x:Key="BlurConv" />
 
     <!-- ============ 文本 ============ -->
     <Style x:Key="T.Base" TargetType="TextBlock">
@@ -258,6 +257,43 @@
                         <Trigger Property="IsPressed" Value="True">
                             <Setter TargetName="b" Property="Background" Value="#FF111C29" />
                         </Trigger>
+                        <!-- 不可用（比如还没下载好时点不了「启动」）时整体压暗 -->
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter Property="Opacity" Value="0.4" />
+                            <Setter Property="Cursor" Value="Arrow" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style x:Key="LibraryTabButton" TargetType="Button">
+        <Setter Property="Height" Value="32" />
+        <Setter Property="Padding" Value="13,0" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="Focusable" Value="False" />
+        <Setter Property="Foreground" Value="{StaticResource B.TextDim}" />
+        <Setter Property="FontFamily" Value="{StaticResource F.Ui}" />
+        <Setter Property="FontSize" Value="11.5" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border x:Name="b" CornerRadius="8" Padding="{TemplateBinding Padding}"
+                            Background="#FF15212F" BorderThickness="1" BorderBrush="{StaticResource B.Border}">
+                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="b" Property="Background" Value="#FF1B2A3C" />
+                            <Setter TargetName="b" Property="BorderBrush" Value="#FF2E4560" />
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter TargetName="b" Property="Background" Value="#FF244A72" />
+                            <Setter TargetName="b" Property="BorderBrush" Value="#FF3974AE" />
+                            <Setter Property="Foreground" Value="#FFEAF4FF" />
+                            <Setter Property="Cursor" Value="Arrow" />
+                        </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
             </Setter.Value>
@@ -288,16 +324,6 @@
                 </ControlTemplate>
             </Setter.Value>
         </Setter>
-    </Style>
-
-    <!-- 卡片上的胶囊按钮（纯装饰，整卡可点） -->
-    <Style x:Key="Pill" TargetType="Border">
-        <Setter Property="CornerRadius" Value="15" />
-        <Setter Property="Height" Value="30" />
-        <Setter Property="Width" Value="98" />
-        <Setter Property="Background" Value="#FF16283D" />
-        <Setter Property="BorderThickness" Value="1" />
-        <Setter Property="BorderBrush" Value="#FF2F5F96" />
     </Style>
 
     <!-- 收藏夹卡片左上角的「取消收藏」小按钮 -->
@@ -395,6 +421,9 @@
         <Setter Property="VirtualizingPanel.IsVirtualizing" Value="True" />
         <Setter Property="VirtualizingPanel.VirtualizationMode" Value="Recycling" />
         <Setter Property="VirtualizingPanel.ScrollUnit" Value="Pixel" />
+        <!--  不预创建视口外的行，避免屏幕外卡片提前创建图片画刷  -->
+        <Setter Property="VirtualizingPanel.CacheLength" Value="0" />
+        <Setter Property="VirtualizingPanel.CacheLengthUnit" Value="Page" />
         <Setter Property="ScrollViewer.IsDeferredScrollingEnabled" Value="False" />
         <Setter Property="Template">
             <Setter.Value>
@@ -420,14 +449,17 @@
 
     <!-- ============ 搜索框 ============ -->
     <Style x:Key="SearchBox" TargetType="TextBox">
-        <Setter Property="Height" Value="38" />
+        <!--  不要写死 Height：TextBox 内部会把文字往下挤几个像素，
+              只有让它按自身内容高度居中（VerticalAlignment=Center），文字才和左边的图标同轴  -->
         <Setter Property="FontFamily" Value="{StaticResource F.Ui}" />
         <Setter Property="FontSize" Value="12.5" />
         <Setter Property="Foreground" Value="{StaticResource B.Text}" />
         <Setter Property="CaretBrush" Value="{StaticResource B.AccentLight}" />
+        <Setter Property="VerticalAlignment" Value="Center" />
         <Setter Property="VerticalContentAlignment" Value="Center" />
         <Setter Property="Background" Value="Transparent" />
         <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="Padding" Value="0" />
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="TextBox">
@@ -590,6 +622,126 @@
                 </ControlTemplate>
             </Setter.Value>
         </Setter>
+    </Style>
+
+    <!-- 下载表格「状态」列里的细进度条：位置窄，滚动块按列宽来回扫，保证一直看得见 -->
+    <Style x:Key="MiniProgress" TargetType="ProgressBar">
+        <Setter Property="Height" Value="3" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="Background" Value="#FF26333F" />
+        <Setter Property="Foreground" Value="{StaticResource B.Accent}" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ProgressBar">
+                    <Border CornerRadius="2" Background="{TemplateBinding Background}" ClipToBounds="True">
+                        <Grid>
+                            <Border x:Name="PART_Track" />
+                            <Border x:Name="PART_Indicator" HorizontalAlignment="Left" CornerRadius="2">
+                                <Border.Background>
+                                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                                        <GradientStop Color="#FF3B82F6" Offset="0" />
+                                        <GradientStop Color="#FF2DD4E8" Offset="1" />
+                                    </LinearGradientBrush>
+                                </Border.Background>
+                            </Border>
+
+                            <!--  服务器不给总大小时来回扫动，区间贴着状态列宽度（约 76px）  -->
+                            <Canvas x:Name="MiniHost" ClipToBounds="True" Visibility="Collapsed">
+                                <Rectangle x:Name="MiniShine" Width="46" Height="{TemplateBinding Height}"
+                                           RadiusX="2" RadiusY="2">
+                                    <Rectangle.Fill>
+                                        <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                                            <GradientStop Color="#003B82F6" Offset="0" />
+                                            <GradientStop Color="#FF2DD4E8" Offset="0.5" />
+                                            <GradientStop Color="#003B82F6" Offset="1" />
+                                        </LinearGradientBrush>
+                                    </Rectangle.Fill>
+                                    <Rectangle.RenderTransform>
+                                        <TranslateTransform x:Name="MiniMove" X="-46" />
+                                    </Rectangle.RenderTransform>
+                                </Rectangle>
+                            </Canvas>
+                        </Grid>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsIndeterminate" Value="True">
+                            <Setter TargetName="PART_Indicator" Property="Visibility" Value="Collapsed" />
+                            <Setter TargetName="MiniHost" Property="Visibility" Value="Visible" />
+                            <Trigger.EnterActions>
+                                <BeginStoryboard x:Name="MiniStory">
+                                    <Storyboard RepeatBehavior="Forever">
+                                        <DoubleAnimation Storyboard.TargetName="MiniMove"
+                                                         Storyboard.TargetProperty="X"
+                                                         From="-46" To="82"
+                                                         Duration="0:0:1.1" AutoReverse="True" />
+                                    </Storyboard>
+                                </BeginStoryboard>
+                            </Trigger.EnterActions>
+                            <Trigger.ExitActions>
+                                <StopStoryboard BeginStoryboardName="MiniStory" />
+                            </Trigger.ExitActions>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- 软件截图：一张图占满整行，高度由图片比例决定；悬停不加描边（只保留手型光标） -->
+    <Style x:Key="ShotCard" TargetType="Button">
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="Focusable" Value="False" />
+        <Setter Property="Margin" Value="0,0,0,14" />
+        <Setter Property="HorizontalAlignment" Value="Stretch" />
+        <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border x:Name="Frame" CornerRadius="10" Background="#FF0B1320" ClipToBounds="True">
+                        <ContentPresenter HorizontalAlignment="Stretch" VerticalAlignment="Top" />
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- 下载表格的一行：鼠标划过 / 被选中（选中的行就是右侧「启动程序」要启动的那个文件） -->
+    <Style x:Key="DownloadRowItem" TargetType="Border">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="CornerRadius" Value="8" />
+        <Setter Property="BorderThickness" Value="0,0,0,1" />
+        <Setter Property="BorderBrush" Value="#FF172432" />
+        <Setter Property="Padding" Value="0" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Style.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+                <Setter Property="Background" Value="#FF16273A" />
+            </Trigger>
+            <!--  放在悬停之后：鼠标停在被选中的行上时，仍然显示选中色  -->
+            <DataTrigger Binding="{Binding IsSelected}" Value="True">
+                <Setter Property="Background" Value="#FF1C3149" />
+                <Setter Property="BorderBrush" Value="#FF2F5578" />
+            </DataTrigger>
+        </Style.Triggers>
+    </Style>
+
+    <!-- 下载状态文字：未下载（灰）/ 正在下载（蓝）/ 已下载（绿） -->
+    <Style x:Key="StatusText" TargetType="TextBlock">
+        <Setter Property="FontFamily" Value="{StaticResource F.Ui}" />
+        <Setter Property="FontSize" Value="10.5" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="Foreground" Value="#FF7C90A6" />
+        <Style.Triggers>
+            <DataTrigger Binding="{Binding StateKind}" Value="Active">
+                <Setter Property="Foreground" Value="#FF6FB1FF" />
+            </DataTrigger>
+            <DataTrigger Binding="{Binding StateKind}" Value="Done">
+                <Setter Property="Foreground" Value="{StaticResource B.Green}" />
+            </DataTrigger>
+            <DataTrigger Binding="{Binding StateKind}" Value="Failed">
+                <Setter Property="Foreground" Value="#FFF07878" />
+            </DataTrigger>
+        </Style.Triggers>
     </Style>
 
     <!-- 下载行右侧的小按钮：下载 / 取消 / 重试 -->

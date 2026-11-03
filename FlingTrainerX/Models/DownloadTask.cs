@@ -21,6 +21,8 @@ public sealed class DownloadTask : INotifyPropertyChanged
 
     public DownloadTask(TrainerItem item, TrainerDownload file)
     {
+        Item = item;
+        FileRef = file;
         TrainerId = item.Id;
         GameTitle = item.DisplayTitle;
         ArticleUrl = item.Url;
@@ -29,8 +31,17 @@ public sealed class DownloadTask : INotifyPropertyChanged
         Ext = string.IsNullOrWhiteSpace(file.Ext) ? "zip" : file.Ext;
         SiteDate = file.Date;
         SizeHint = file.Size;
-        ExpectedBytes = ParseSize(file.Size);
+
+        // 优先用上次真实下下来的字节数（官网表格里那个大小其实是压缩包大小，会偏小），
+        // 没有历史才退回按「931 KB」这种文案估算
+        ExpectedBytes = file.ActualBytes > 0 ? file.ActualBytes : ParseSize(file.Size);
     }
+
+    /// <summary>所属游戏；下完后要把本地路径写回这条记录并落库。</summary>
+    public TrainerItem Item { get; }
+
+    /// <summary>官网下载表里的那一行，下载完成后回填 <see cref="TrainerDownload.LocalPath"/>。</summary>
+    public TrainerDownload FileRef { get; }
 
     public int TrainerId { get; }
     public string GameTitle { get; }
@@ -41,7 +52,10 @@ public sealed class DownloadTask : INotifyPropertyChanged
     public string SiteDate { get; }
     public string SizeHint { get; }
 
-    /// <summary>官网标注的大小，服务器不给 Content-Length 时用它当进度条分母（约等于）。</summary>
+    /// <summary>
+    /// 进度分母的兜底值：上次真实下载的字节数，或者官网标注的大小（压缩包大小，偏小）。
+    /// 服务器不给 Content-Length 时用它，界面会标个「≈」。
+    /// </summary>
     public long ExpectedBytes { get; }
 
     private DownloadState _state = DownloadState.Queued;
@@ -69,7 +83,9 @@ public sealed class DownloadTask : INotifyPropertyChanged
             Notify(nameof(ProgressText));
             Notify(nameof(Indeterminate));
             Notify(nameof(DetailText));
+            Notify(nameof(SizePairText));
             Notify(nameof(RemainingText));
+            Notify(nameof(CanLaunch));
         }
     }
 
@@ -84,6 +100,7 @@ public sealed class DownloadTask : INotifyPropertyChanged
             Notify(nameof(Received));
             Notify(nameof(Progress));
             Notify(nameof(ProgressText));
+            Notify(nameof(SizePairText));
             Notify(nameof(DetailText));
             Notify(nameof(RemainingText));
         }
@@ -100,6 +117,8 @@ public sealed class DownloadTask : INotifyPropertyChanged
             Notify(nameof(Total));
             Notify(nameof(Progress));
             Notify(nameof(ProgressText));
+            Notify(nameof(SizePairText));
+            Notify(nameof(DetailText));
             Notify(nameof(Indeterminate));
         }
     }
@@ -126,6 +145,7 @@ public sealed class DownloadTask : INotifyPropertyChanged
             if (_savePath == value) return;
             _savePath = value;
             Notify(nameof(SavePath));
+            Notify(nameof(CanLaunch));
         }
     }
 
@@ -144,30 +164,50 @@ public sealed class DownloadTask : INotifyPropertyChanged
 
     // ---------- 展示用 ----------
 
-    /// <summary>进度分母：只认服务器给的真实长度。官网是 PHP 流式转发，基本都拿不到总大小。</summary>
+    /// <summary>进度分母：优先服务器给的真实长度，拿不到就用官网表格里标注的大小（约等于）。</summary>
     private long Denominator => Total > 0 ? Total : ExpectedBytes;
 
-    /// <summary>拿不到总大小时不装进度，走滚动条（否则会一直超过 100%）。</summary>
-    public bool Indeterminate => State == DownloadState.Running && Total <= 0;
+    /// <summary>总大小是估算值时，界面上标个「≈」。</summary>
+    private bool SizeApprox => Total <= 0;
+
+    /// <summary>连官网大小都没有时才装不了进度，走滚动条。</summary>
+    public bool Indeterminate => State == DownloadState.Running && Denominator <= 0;
 
     public double Progress
     {
         get
         {
             if (State == DownloadState.Completed) return 1;
-            if (Total <= 0) return 0;
-            return Math.Min(0.999, _received / (double)Total);
+            if (Denominator <= 0) return 0;
+
+            // 估算出来的总量可能比真实文件略小/略大，先按 99.5% 收住，下完再跳 100%
+            return Math.Min(0.995, _received / (double)Denominator);
         }
     }
 
     public string ProgressText => State switch
     {
         DownloadState.Completed => "100%",
-        DownloadState.Running => Total > 0 ? $"{Progress * 100:0}%" : "",
+        DownloadState.Running => Denominator > 0 ? $"{Progress * 100:0}%" : "",
         DownloadState.Failed => "失败",
         DownloadState.Canceled => "已取消",
         _ => "等待中"
     };
+
+    /// <summary>状态列下面那行：已下载 / 总大小；总量是官网表格估算的就带个「≈」。</summary>
+    public string SizePairText
+    {
+        get
+        {
+            if (State == DownloadState.Completed)
+                return _received > 0 ? Human(_received) : Human(Denominator);
+
+            if (Denominator <= 0) return _received > 0 ? Human(_received) : "";
+
+            var total = (SizeApprox ? "≈" : "") + Human(Denominator);
+            return $"{Human(_received)} / {total}";
+        }
+    }
 
     public string StateText => State switch
     {
@@ -199,7 +239,8 @@ public sealed class DownloadTask : INotifyPropertyChanged
                     return "排队中，等待空闲下载位";
             }
 
-            var size = Total > 0 ? $"{Human(_received)} / {Human(Total)}"
+            var size = Denominator > 0
+                ? $"{Human(_received)} / {(SizeApprox ? "≈" : "")}{Human(Denominator)}"
                 : (_received == 0 ? "正在连接服务器…" : $"已下载 {Human(_received)}");
 
             var parts = new List<string> { size };
@@ -229,6 +270,10 @@ public sealed class DownloadTask : INotifyPropertyChanged
     public bool IsActive => State is DownloadState.Queued or DownloadState.Running;
     public bool IsFinished => State is DownloadState.Completed or DownloadState.Failed or DownloadState.Canceled;
     public bool IsCompleted => State == DownloadState.Completed;
+
+    /// <summary>下完并且文件还在，才能点「启动」。</summary>
+    public bool CanLaunch => State == DownloadState.Completed && SavePath.Length > 0 &&
+                             System.IO.File.Exists(SavePath);
     public bool CanCancel => State is DownloadState.Queued or DownloadState.Running;
     public bool CanRetry => State is DownloadState.Failed or DownloadState.Canceled;
 

@@ -22,9 +22,24 @@ public static class TrainerWeb
 
     private static readonly HtmlParser Parser = new();
 
+    /// <summary>
+    /// 列表接口字段。_embed 把特色图（官网头图 header.jpg）一起带回来，
+    /// 这样卡片封面不用再等正文首图，也不用去猜图片地址。
+    /// </summary>
     private static string EndpointOf(int page) =>
         $"{ApiBase}?per_page={PageSize}&page={page}&orderby=modified&order=desc" +
-        "&_fields=id,date,modified,link,title,content";
+        "&_embed=wp:featuredmedia" +
+        "&_fields=id,date,modified,link,title,content,_links,_embedded";
+
+    /// <summary>
+    /// 官网自带搜索的接口形式。官网搜索页（<c>/?s=关键词</c>）用的就是 WP 的 <c>search</c> 参数，
+    /// 结果顺序也和搜索页一致（按最后修改时间倒序），所以这里跟列表走同一套排序。
+    /// </summary>
+    private static string SearchEndpointOf(string keyword, int page) =>
+        $"{ApiBase}?per_page={PageSize}&page={page}&orderby=modified&order=desc" +
+        $"&search={Uri.EscapeDataString(keyword)}" +
+        "&_embed=wp:featuredmedia" +
+        "&_fields=id,date,modified,link,title,content,_links,_embedded";
 
     private static readonly string[] Platforms =
     {
@@ -59,11 +74,45 @@ public static class TrainerWeb
         return items;
     }
 
-    /// <summary>抓取官网第 <paramref name="page"/> 页（1 起），返回文章与总页数。</summary>
-    public static async Task<(List<TrainerItem> Items, int TotalPages)> FetchPageAsync(
-        int page, CancellationToken ct = default)
+    /// <summary>
+    /// 按文章 ID 单独取头图。收藏夹里的老快照没存 Cover，
+    /// 又不在当前页时用它补一次，保证卡片封面和列表一致。失败返回空串。
+    /// </summary>
+    public static async Task<string> FetchCoverAsync(int id, CancellationToken ct = default)
     {
-        using var request = Request(EndpointOf(page), true);
+        try
+        {
+            using var request = Request(
+                $"{ApiBase}/{id}?_embed=wp:featuredmedia&_fields=id,_links,_embedded", true);
+            using var res = await Http.SendAsync(request, ct).ConfigureAwait(false);
+            res.EnsureSuccessStatusCode();
+
+            var json = await res.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+            using var doc = JsonDocument.Parse(json);
+            return FeaturedCover(doc.RootElement);
+        }
+        catch
+        {
+            return "";
+        }
+    }
+
+    /// <summary>抓取官网第 <paramref name="page"/> 页（1 起），返回文章与总页数。</summary>
+    public static Task<(List<TrainerItem> Items, int TotalPages)> FetchPageAsync(
+        int page, CancellationToken ct = default) => FetchListAsync(EndpointOf(page), ct);
+
+    /// <summary>
+    /// 官网搜索：契约同 <see cref="FetchPageAsync"/>，只是多了 <c>search</c> 条件。
+    /// 关键词按 URL 编码拼进查询串，中文/空格/符号都能直接用。
+    /// </summary>
+    public static Task<(List<TrainerItem> Items, int TotalPages)> SearchAsync(
+        string keyword, int page, CancellationToken ct = default)
+        => FetchListAsync(SearchEndpointOf(keyword, page), ct);
+
+    private static async Task<(List<TrainerItem> Items, int TotalPages)> FetchListAsync(
+        string url, CancellationToken ct)
+    {
+        using var request = Request(url, true);
         using var res = await Http.SendAsync(request, ct).ConfigureAwait(false);
         res.EnsureSuccessStatusCode();
 
@@ -215,6 +264,8 @@ public static class TrainerWeb
                 Modified = Short(post.GetProperty("modified").GetString()),
             };
 
+            item.ModifiedIso = post.GetProperty("modified").GetString() ?? "";
+
             var meta = ParseMeta(content);
             item.OptionCount = meta.Count;
             item.Version = meta.Version;
@@ -224,11 +275,53 @@ public static class TrainerWeb
             item.Images = ParseImages(content);
             item.ImageUrl = item.Images.FirstOrDefault() ?? "";
 
+            // 卡片封面用官网头图（header.jpg，460×215），正文首图是修改器界面截图，
+            // 只适合详情页的介绍图，所以两者分开存。
+            item.Cover = FeaturedCover(post);
+
             item.Groups = ParseGroups(content);
             list.Add(item);
         }
 
         return list;
+    }
+
+    /// <summary>卡片封面优先取的尺寸档（依次降级，都没有才用原图）。</summary>
+    private static readonly string[] CoverSizes = { "stylizer-medium", "alx-medium", "stylizer-large" };
+
+    /// <summary>
+    /// 取接口 _embedded.wp:featuredmedia 里的官网头图。官网自己引用的是 200×200 方形裁切，
+    /// 但头图本身是宽幅艺术图，这里按卡片需要的尺寸挑一档（520×292，约卡片宽的 2.7 倍），
+    /// 挑不到再退回原图 source_url。
+    /// </summary>
+    private static string FeaturedCover(JsonElement post)
+    {
+        if (!post.TryGetProperty("_embedded", out var embedded) ||
+            !embedded.TryGetProperty("wp:featuredmedia", out var media) ||
+            media.ValueKind != JsonValueKind.Array ||
+            media.GetArrayLength() == 0)
+        {
+            return "";
+        }
+
+        var first = media[0];
+
+        if (first.TryGetProperty("media_details", out var details) &&
+            details.TryGetProperty("sizes", out var sizes) &&
+            sizes.ValueKind == JsonValueKind.Object)
+        {
+            foreach (var key in CoverSizes)
+            {
+                if (sizes.TryGetProperty(key, out var size) &&
+                    size.TryGetProperty("source_url", out var sizedUrl) &&
+                    sizedUrl.GetString() is { Length: > 0 } url)
+                {
+                    return url;
+                }
+            }
+        }
+
+        return first.TryGetProperty("source_url", out var src) ? src.GetString() ?? "" : "";
     }
 
     /// <summary>
@@ -320,6 +413,7 @@ public static class TrainerWeb
     {
         var groups = new List<TrainerGroup>();
         TrainerGroup? current = null;
+        var describing = false;
 
         var root = RootOf(html);
         if (root is null) return groups;
@@ -341,9 +435,14 @@ public static class TrainerWeb
                 var cut = text.LastIndexOf('\u2013');
                 if (cut > 0 && cut + 2 < text.Length && text[cut + 1] == ' ')
                 {
+                    // 说明段落里被 en dash 误切开的那半句，不是真选项
+                    if (describing) continue;
+
                     var key = text[..cut].Trim();
                     var name = text[(cut + 2)..].Trim();
-                    if (key.Length == 0 || name.Length == 0) continue;
+
+                    // 抓到的空条目（只有空白或标点的占位行）不入库也不显示
+                    if (IsEmptyOption(key, name)) continue;
 
                     if (current is null)
                     {
@@ -355,6 +454,16 @@ public static class TrainerWeb
                 }
                 else
                 {
+                    // 整句的说明（例如「本作使用 EasyAntiCheat，请这样启动…」）不是分组标题，
+                    // 直接丢掉，跟着它的那半句也不当选项
+                    if (IsDescriptionLine(text))
+                    {
+                        current = null;
+                        describing = true;
+                        continue;
+                    }
+
+                    describing = false;
                     current = new TrainerGroup { Title = text };
                     groups.Add(current);
                 }
@@ -368,6 +477,20 @@ public static class TrainerWeb
         }
 
         return groups;
+    }
+
+    /// <summary>官网正文里的说明段落：一个长句子，而不是「Edit Player Stats」这种短分组名。</summary>
+    private static bool IsDescriptionLine(string text) => text.Length > 60 && text.Contains(' ');
+
+    /// <summary>
+    /// 空条目判定：快捷键或名字是空的，或者整条只有标点/空白（官网偶尔留这种占位行），
+    /// 这种数据抓下来也没意义，直接丢掉，不进缓存也不进界面。
+    /// </summary>
+    private static bool IsEmptyOption(string key, string name)
+    {
+        if (key.Length == 0 || name.Length == 0) return true;
+
+        return !key.Any(char.IsLetterOrDigit) || !name.Any(char.IsLetterOrDigit);
     }
 
     /// <summary>取元素文本，把 &lt;br&gt; 当换行（一个段落里常有多条选项）。</summary>

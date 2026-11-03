@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.IO;
 using System.Net.Http;
+using System.Net.Http.Headers;
 using FlingTrainerX.Models;
 
 namespace FlingTrainerX.Services;
@@ -23,7 +24,7 @@ public sealed class DownloadManager
     /// <summary>队列里的全部任务（含已完成，便于查看保存位置）。</summary>
     public ObservableCollection<DownloadTask> Tasks { get; } = new();
 
-    /// <summary>文件保存目录。</summary>
+    /// <summary>所有游戏文件夹的根目录：&lt;程序目录&gt;\f；每个文件实际存在 f\&lt;id&gt;\ 里。</summary>
     public string DownloadDir { get; }
 
     /// <summary>队列发生变化（新增 / 完成 / 失败）时触发，主窗口用它刷新角标。</summary>
@@ -53,27 +54,9 @@ public sealed class DownloadManager
 
     private DownloadManager()
     {
-        DownloadDir = ResolveDownloadDir();
+        DownloadDir = AppPaths.FilesDir;
         _http = UserAgentProvider.CreateHttpClient(TrainerWeb.Site, Timeout.InfiniteTimeSpan);
     }
-
-    /// <summary>默认存到「下载\FlingTrainerX」，系统没有下载目录就退到本地应用数据目录。</summary>
-    private static string ResolveDownloadDir()
-    {
-        try
-        {
-            var profile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-            var downloads = Path.Combine(profile, "Downloads");
-            return Directory.Exists(downloads) ? Path.Combine(downloads, "FlingTrainerX") : FallbackDir();
-        }
-        catch
-        {
-            return FallbackDir();
-        }
-    }
-
-    private static string FallbackDir() => Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "FlingTrainerX", "downloads");
 
     // ==================== 队列操作 ====================
 
@@ -196,8 +179,14 @@ public sealed class DownloadManager
 
             task.Total = response.Content.Headers.ContentLength ?? 0;
 
-            Directory.CreateDirectory(DownloadDir);
-            path = UniquePath(Path.Combine(DownloadDir, ResolveFileName(response, task)));
+            // 官网走 PHP 转发 + chunked，没有 Content-Length，进度分母只能从 zip 目录里问；
+            // 放到后台去问，不挡正文下载（问不到就退回官网表格里的大小）
+            if (task.Total <= 0)
+                _ = ProbePayloadSizeAsync(task, response.RequestMessage?.RequestUri, cts.Token);
+
+            // 每个游戏一个文件夹：f\<官网文章 ID>\
+            var dir = TrainerFiles.FolderFor(task.TrainerId);
+            path = UniquePath(Path.Combine(dir, ResolveFileName(response, task)));
             task.SavePath = path;
 
             await using var source = await response.Content.ReadAsStreamAsync(cts.Token);
@@ -232,6 +221,14 @@ public sealed class DownloadManager
             task.Received = received;
             task.Speed = 0;
             task.State = DownloadState.Completed;
+
+            // 本地路径写回缓存表（存相对程序目录的路径，程序搬家也不失效），
+            // 下次启动不用重新下，也能直接点「启动」
+            task.FileRef.LocalPath = AppPaths.Relative(path);
+
+            // 记下真实字节数，下次下同一个文件时进度条一开始就是准的
+            if (received > 0) task.FileRef.ActualBytes = received;
+            AppDatabase.Instance.SaveCache(task.Item);
         }
         catch (OperationCanceledException)
         {
@@ -254,6 +251,72 @@ public sealed class DownloadManager
             Notify();
             Pump();
         }
+    }
+
+    /// <summary>
+    /// 问一下真实文件有多大：官网的直链最终是 zip 里的 exe，响应又是 chunked、没有 Content-Length，
+    /// 只能取 zip 尾部 16KB 解析中央目录，把「解压后大小」当进度分母。
+    /// 探不到就静静返回，界面退回官网表格里的大小（带 ≈）。
+    /// </summary>
+    private async Task ProbePayloadSizeAsync(DownloadTask task, Uri? finalUri, CancellationToken token)
+    {
+        if (finalUri is null) return;
+
+        try
+        {
+            foreach (var candidate in ZipCandidates(finalUri))
+            {
+                var size = await ProbeZipAsync(candidate, token);
+                if (size <= 0) continue;
+
+                // 问到精确大小就直接换掉分母（可能已经收了一点数据，百分比会往回退一次，
+                // 但总好过一直按压缩包大小估算、下到一半就卡在 99%）
+                task.Total = size;
+                return;
+            }
+        }
+        catch
+        {
+            // 探不到就算了，进度退回官网表格里的大小（带 ≈）
+        }
+    }
+
+    /// <summary>
+    /// 可能的压缩包地址：exe 的路径形如
+    /// /uploads/trainer-files/2026/04/xxx.zip/Eastern Era....exe，
+    /// 而压缩包本身在 /uploads/2026/04/xxx.zip —— 两种都试一下。
+    /// </summary>
+    private static IEnumerable<string> ZipCandidates(Uri finalUri)
+    {
+        var url = finalUri.ToString();
+        var mark = url.IndexOf(".zip/", StringComparison.OrdinalIgnoreCase);
+        if (mark < 0) yield break;
+
+        var withZip = url[..(mark + 4)];
+
+        // 压缩包本体一般在 /uploads/<年>/<月>/xxx.zip，先试这个（少一跳重定向，快 1 秒）
+        var withoutFolder = withZip.Replace("/trainer-files/", "/", StringComparison.OrdinalIgnoreCase);
+        if (!string.Equals(withoutFolder, withZip, StringComparison.OrdinalIgnoreCase))
+            yield return withoutFolder;
+
+        yield return withZip;
+    }
+
+    /// <summary>取压缩包尾部 16KB，解析中央目录拿到解压后大小；拿不到返回 0。</summary>
+    private async Task<long> ProbeZipAsync(string zipUrl, CancellationToken token)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Get, zipUrl);
+        UserAgentProvider.ApplyHeaders(request, zipUrl);
+        request.Headers.Range = new RangeHeaderValue(null, 16 * 1024); // 末尾 16KB
+
+        using var response = await _http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, token);
+        if (!response.IsSuccessStatusCode) return 0;
+
+        var tail = await response.Content.ReadAsByteArrayAsync(token);
+        if (tail.Length == 0) return 0;
+
+        var fileSize = response.Content.Headers.ContentRange?.Length ?? tail.Length;
+        return ZipProbe.UncompressedSize(tail, fileSize - tail.Length);
     }
 
     /// <summary>服务器跳转后的真实文件名最准；拿不到就用表格里的名字 + 扩展名。</summary>

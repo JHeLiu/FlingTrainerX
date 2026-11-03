@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.IO;
 using System.Text.Json.Serialization;
 using FlingTrainerX.Services;
 
@@ -9,9 +10,6 @@ public sealed class TrainerOption
 {
     [JsonPropertyName("key")] public string Key { get; set; } = "";
     [JsonPropertyName("name")] public string Name { get; set; } = "";
-
-    /// <summary>界面显示用的中文名（对照表 → 规则拼接 → 原文兜底）。</summary>
-    [JsonIgnore] public string NameCn => TrainerZh.Of(Name);
 }
 
 /// <summary>官网详情页 Download 表格里的一行文件。</summary>
@@ -23,6 +21,41 @@ public sealed class TrainerDownload
     [JsonPropertyName("size")] public string Size { get; set; } = "";
     [JsonPropertyName("count")] public string Count { get; set; } = "";
     [JsonPropertyName("ext")] public string Ext { get; set; } = "";
+
+    /// <summary>
+    /// 下载到本机的文件，存的是**相对程序目录**的路径（<c>f\&lt;id&gt;\文件名</c>），
+    /// 换目录、换盘符后依然有效；没下过就是空。跟着缓存表一起存。
+    /// </summary>
+    [JsonPropertyName("localPath")] public string LocalPath { get; set; } = "";
+
+    /// <summary>
+    /// 上一次真正下下来时的字节数。官网的响应是 chunked、不给 Content-Length，
+    /// 有了这个数下次下载就能直接显示精确进度（表格里的「大小」是压缩包的大小，会偏小）。
+    /// </summary>
+    [JsonPropertyName("actualBytes")] public long ActualBytes { get; set; }
+
+    /// <summary>拼上当前程序目录后的绝对路径，运行 / 定位文件时用。</summary>
+    [JsonIgnore] public string FullPath => AppPaths.Resolve(LocalPath);
+
+    /// <summary>本地文件还在才认，避免用户手工删掉后界面上还写着「已下载」。</summary>
+    [JsonIgnore]
+    public bool HasLocalFile
+    {
+        get
+        {
+            try
+            {
+                // 注意：类里有 File 属性，这里必须写全名，否则会解析到属性上
+                return !string.IsNullOrWhiteSpace(LocalPath) && System.IO.File.Exists(FullPath);
+            }
+            catch
+            {
+                return false;
+            }
+        }
+    }
+
+    [JsonIgnore] public string LocalFileName => HasLocalFile ? Path.GetFileName(FullPath) : "";
 
     /// <summary>下载次数，按千分位显示；解析失败时原样返回。</summary>
     [JsonIgnore]
@@ -44,9 +77,6 @@ public sealed class TrainerGroup
     [JsonPropertyName("items")] public List<TrainerOption> Items { get; set; } = new();
 
     [JsonIgnore] public int Count => Items.Count;
-
-    /// <summary>分组标题的中文（"常规" 这类本来就是中文的直接返回）。</summary>
-    [JsonIgnore] public string TitleCn => TrainerZh.Of(Title);
 }
 
 /// <summary>一款游戏的修改器（对应 flingtrainer.com 上的一篇文章）。</summary>
@@ -54,48 +84,70 @@ public sealed class TrainerItem : INotifyPropertyChanged
 {
     public event PropertyChangedEventHandler? PropertyChanged;
 
-    /// <summary>后台把封面缓存到本地后调用，卡片会就地刷新图片。</summary>
-    public void SetPoster(string path)
-    {
-        Poster = path;
-        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Poster)));
-        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(HasPoster)));
-        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CoverSource)));
-        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsOfficialPoster)));
-        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsScreenshotCover)));
-    }
-
     [JsonPropertyName("id")] public int Id { get; set; }
     [JsonPropertyName("slug")] public string Slug { get; set; } = "";
     [JsonPropertyName("title")] public string Title { get; set; } = "";
-    [JsonPropertyName("titleCn")] public string TitleCn { get; set; } = "";
     [JsonPropertyName("url")] public string Url { get; set; } = "";
     [JsonPropertyName("published")] public string Published { get; set; } = "";
     [JsonPropertyName("updated")] public string Updated { get; set; } = "";
     [JsonPropertyName("modified")] public string Modified { get; set; } = "";
+
+    /// <summary>官网原始的修改时间（带时分秒），缓存排序用；界面上显示的是 <see cref="Modified"/>。</summary>
+    [JsonPropertyName("modifiedIso")] public string ModifiedIso { get; set; } = "";
     [JsonPropertyName("version")] public string Version { get; set; } = "";
     [JsonPropertyName("platforms")] public List<string> Platforms { get; set; } = new();
     [JsonPropertyName("optionCount")] public int OptionCount { get; set; }
     [JsonPropertyName("image")] public string Image { get; set; } = "";
-    [JsonPropertyName("poster")] public string Poster { get; set; } = "";
+
+    /// <summary>官网头图（接口特色图，520×292 宽幅艺术图），卡片的正式封面。</summary>
+    [JsonPropertyName("cover")] public string Cover { get; set; } = "";
     [JsonPropertyName("imageUrl")] public string ImageUrl { get; set; } = "";
     [JsonPropertyName("images")] public List<string> Images { get; set; } = new();
+
+    private string _coverPath = "";
+
+    /// <summary>
+    /// 封面在本机的路径，存相对程序目录的路径（<c>f\&lt;id&gt;\cover.jpg</c>）。有了它就不再走网络。
+    /// </summary>
+    [JsonPropertyName("coverPath")]
+    public string CoverPath
+    {
+        get => _coverPath;
+        set
+        {
+            if (_coverPath == value) return;
+            _coverPath = value ?? "";
+            Raise(nameof(CoverPath));
+            Raise(nameof(CoverSource));
+            Raise(nameof(HasCover));
+            Raise(nameof(BannerSource));
+        }
+    }
+
+    /// <summary>封面在本机的绝对路径（拼上当前程序目录）。</summary>
+    [JsonIgnore] public string CoverFullPath => AppPaths.Resolve(_coverPath);
+
+    private List<string> _imagePaths = new();
+
+    /// <summary>
+    /// 介绍截图在本机的相对路径，和 <see cref="Images"/> 一一对应（下载失败的位置留空）。
+    /// </summary>
+    [JsonPropertyName("imagePaths")]
+    public List<string> ImagePaths
+    {
+        get => _imagePaths;
+        set
+        {
+            _imagePaths = value ?? new();
+            Raise(nameof(ImagePaths));
+        }
+    }
     [JsonPropertyName("downloads")] public List<TrainerDownload> Downloads { get; set; } = new();
     [JsonPropertyName("groups")] public List<TrainerGroup> Groups { get; set; } = new();
 
-    [JsonIgnore] public bool HasCn => !string.IsNullOrWhiteSpace(TitleCn);
-    [JsonIgnore] public bool HasPoster => !string.IsNullOrWhiteSpace(Poster);
     [JsonIgnore] public bool HasDownloads => Downloads.Count > 0;
 
-    /// <summary>封面是不是 Steam 官方竖版海报（Pack 目录里的）。</summary>
-    [JsonIgnore]
-    public bool IsOfficialPoster =>
-        HasPoster && Poster.Replace('\\', '/').StartsWith("Posters/", StringComparison.OrdinalIgnoreCase);
-
-    /// <summary>封面是官网截图兜底时，卡片会额外压暗一层，保证标题可读。</summary>
-    [JsonIgnore] public bool IsScreenshotCover => HasPoster && !IsOfficialPoster;
-
-    /// <summary>没有封面时卡片上的水印字母。</summary>
+    /// <summary>没有封面地址时卡片上的水印字母。</summary>
     [JsonIgnore]
     public string Initials
     {
@@ -110,14 +162,11 @@ public sealed class TrainerItem : INotifyPropertyChanged
 
     [JsonIgnore]
     public string PlatformText => Platforms is { Count: > 0 }
-        ? string.Join(" · ", Platforms.Select(TrainerZh.Platform))
+        ? string.Join(" · ", Platforms)
         : "";
 
-    /// <summary>卡片/标题上显示的主标题：优先中文名。</summary>
-    [JsonIgnore] public string DisplayTitle => HasCn ? TitleCn : CleanTitle;
-
-    /// <summary>副标题：有中文名时显示官网原名。</summary>
-    [JsonIgnore] public string SubTitle => HasCn ? CleanTitle : "FLiNG 修改器";
+    /// <summary>卡片/标题上显示的主标题：官网原始标题（去掉固定的 "Trainer" 后缀）。</summary>
+    [JsonIgnore] public string DisplayTitle => CleanTitle;
 
     [JsonIgnore] public string CleanTitle =>
         Title.Replace(" Trainer", "").Replace(" Enhanced", "").Trim();
@@ -138,29 +187,51 @@ public sealed class TrainerItem : INotifyPropertyChanged
     [JsonIgnore] public bool IsRecent =>
         DateTime.TryParse(UpdatedText.Replace('.', '-'), out var d) && (DateTime.Now - d).TotalDays <= 7;
 
-    /// <summary>卡片封面：优先竖版海报，其次本地缓存的官网截图（绝不返回网络地址，避免滚动时卡顿）。</summary>
+    /// <summary>
+    /// 卡片封面：优先用 f\&lt;id&gt;\ 里已经存好的本地图（存的是相对路径，这里拼成绝对路径），
+    /// 没有才退回官网地址。两种地址都交给同一个图片加载器，界面侧不用区分。
+    /// </summary>
     [JsonIgnore]
-    public string CoverSource =>
-        HasPoster ? Poster : (string.IsNullOrEmpty(Image) ? "" : Image);
+    public string CoverSource
+    {
+        get
+        {
+            if (LocalExists(CoverPath)) return CoverFullPath;
+            if (!string.IsNullOrWhiteSpace(Cover)) return Cover;
+            if (!string.IsNullOrWhiteSpace(ImageUrl)) return ImageUrl;
+            return Image;
+        }
+    }
+
+    [JsonIgnore] public bool HasCover => !string.IsNullOrWhiteSpace(CoverSource);
+
+    /// <summary>封面是否已经落到本地（界面上用来显示「已缓存」角标）。</summary>
+    [JsonIgnore] public bool HasLocalCover => LocalExists(CoverPath);
+
+    private static bool LocalExists(string? path)
+    {
+        try
+        {
+            return !string.IsNullOrWhiteSpace(path) && File.Exists(AppPaths.Resolve(path));
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    /// <summary>给 <see cref="CoverPath"/> / <see cref="ImagePaths"/> 这类运行时才变的字段发通知。</summary>
+    public void Raise(string name) =>
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
 
     [JsonIgnore] public string OptionCountText => $"{OptionCount} 项修改";
 
     [JsonIgnore] public int RealOptionCount =>
         OptionCount > 0 ? OptionCount : Groups.Sum(g => g.Items.Count);
 
-    /// <summary>详情页顶部的横幅：优先竖版海报，其次本地截图，最后官网图。</summary>
+    /// <summary>详情页顶部的横幅：官网头图，没有才退回正文截图。</summary>
     [JsonIgnore]
-    public string BannerSource =>
-        HasPoster ? Poster : (!string.IsNullOrWhiteSpace(Image) ? Image : ImageUrl);
-
-    /// <summary>官网正文里的介绍截图：优先本地缓存（内置数据自带），否则用正文里的网络图。</summary>
-    [JsonIgnore]
-    public string IntroImage =>
-        !string.IsNullOrWhiteSpace(Image)
-            ? Image
-            : (Images.FirstOrDefault(i => !string.IsNullOrWhiteSpace(i)) ?? ImageUrl);
-
-    [JsonIgnore] public bool HasIntroImage => !string.IsNullOrWhiteSpace(IntroImage);
+    public string BannerSource => CoverSource;
 
     [JsonIgnore]
     public string DownloadSummary => Downloads.Count == 0 ? "暂无下载" : $"{Downloads.Count} 个文件";
@@ -173,7 +244,7 @@ public sealed class TrainerItem : INotifyPropertyChanged
         .FirstOrDefault() ?? "—";
 }
 
-/// <summary>trainers.json 的根对象。</summary>
+/// <summary>内存中的游戏库（全部来自官网实时抓取，不落盘）。</summary>
 public sealed class TrainerLibrary
 {
     [JsonPropertyName("source")] public string Source { get; set; } = "https://flingtrainer.com/";

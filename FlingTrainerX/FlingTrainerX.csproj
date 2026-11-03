@@ -4,27 +4,29 @@
     <OutputType>WinExe</OutputType>
     <TargetFramework>net10.0-windows</TargetFramework>
     <Nullable>enable</Nullable>
-    <ImplicitUsings>enable</ImplicitUsings>
+    <ImplicitUsings>disable</ImplicitUsings>
     <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
+    <!-- DPI is configured by the WPF application manifest; WinForms is used only for NotifyIcon. -->
+    <NoWarn>$(NoWarn);WFO0003</NoWarn>
     <RootNamespace>FlingTrainerX</RootNamespace>
-    <AssemblyName>FlingTrainerX</AssemblyName>
+    <!-- 程序集/可执行文件名就用中文，桌面、开始菜单里的快捷方式名才会跟着对 -->
+    <AssemblyName>风灵月影宗储物袋</AssemblyName>
+    <AssemblyTitle>风灵月影宗储物袋</AssemblyTitle>
+    <Product>风灵月影宗储物袋</Product>
+    <Description>风灵月影宗储物袋 · FLiNG 修改器库</Description>
+    <Company>风灵月影宗</Company>
+    <Version>1.0.0</Version>
+    <!-- exe / 任务栏 / 桌面快捷方式统一用这个多尺寸图标 -->
+    <ApplicationIcon>Assets\app.ico</ApplicationIcon>
     <!-- PerMonitorV2：高 DPI 与多屏混合缩放的关键，清单位于 app.manifest -->
     <ApplicationManifest>app.manifest</ApplicationManifest>
   </PropertyGroup>
 
   <ItemGroup>
-    <Content Include="Assets\trainers.json">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
-    <Content Include="Assets\option-zh.tsv">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
-    <Content Include="Assets\Covers\*.png">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
-    <Content Include="Assets\Posters\*.jpg">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
+    <!-- 侧栏 Logo 与窗口图标（WPF 的 Window.Icon 用 PNG 解得更干净） -->
+    <Resource Include="Assets\logo.png" />
   </ItemGroup>
 
   <ItemGroup>
