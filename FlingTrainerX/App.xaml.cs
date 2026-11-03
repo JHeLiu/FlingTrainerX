@@ -44,6 +44,53 @@ namespace FlingTrainerX
             mainWindow.Show();
 
 #if DEBUG
+            // 托盘自检（仅 Debug）：<程序>.exe --tray-check <目录>
+            var trayIndex = Array.IndexOf(e.Args, "--tray-check");
+            if (trayIndex >= 0 && trayIndex + 1 < e.Args.Length && MainWindow is MainWindow trayWindow)
+            {
+                var trayDir = e.Args[trayIndex + 1];
+                Dispatcher.BeginInvoke(DispatcherPriority.ApplicationIdle, new Action(async () =>
+                {
+                    await trayWindow.RunTrayCheckAsync(trayDir);
+                    Shutdown();
+                }));
+            }
+
+            // 卡片自适应自检（仅 Debug）：<程序>.exe --layout-check <目录>
+            var layoutIndex = Array.IndexOf(e.Args, "--layout-check");
+            if (layoutIndex >= 0 && layoutIndex + 1 < e.Args.Length && MainWindow is MainWindow layoutWindow)
+            {
+                var layoutDir = e.Args[layoutIndex + 1];
+                Dispatcher.BeginInvoke(DispatcherPriority.ApplicationIdle, new Action(async () =>
+                {
+                    await layoutWindow.RunLayoutCheckAsync(layoutDir);
+                    Shutdown();
+                }));
+            }
+
+            // 清除缓存自检（仅 Debug）：<程序>.exe --clear-check <目录>
+            var clearIndex = Array.IndexOf(e.Args, "--clear-check");
+            if (clearIndex >= 0 && clearIndex + 1 < e.Args.Length && MainWindow is MainWindow clearWindow)
+            {
+                var clearDir = e.Args[clearIndex + 1];
+                Dispatcher.BeginInvoke(DispatcherPriority.ApplicationIdle, new Action(async () =>
+                {
+                    await clearWindow.RunClearCacheCheckAsync(clearDir);
+                    Shutdown();
+                }));
+            }
+
+            // 托盘退出自检（仅 Debug）：<程序>.exe --tray-exit <目录>
+            var exitIndex = Array.IndexOf(e.Args, "--tray-exit");
+            if (exitIndex >= 0 && exitIndex + 1 < e.Args.Length && MainWindow is MainWindow exitWindow)
+            {
+                var exitDir = e.Args[exitIndex + 1];
+                Dispatcher.BeginInvoke(DispatcherPriority.ApplicationIdle, new Action(async () =>
+                {
+                    await exitWindow.RunTrayExitCheckAsync(exitDir);
+                }));
+            }
+
             // 开发期自检（仅 Debug）：<程序>.exe --capture <目录>，跑一遍主要界面并截图后退出
             var index = Array.IndexOf(e.Args, "--capture");
             if (index < 0 || index + 1 >= e.Args.Length) return;

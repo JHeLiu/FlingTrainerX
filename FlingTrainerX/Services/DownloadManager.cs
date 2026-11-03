@@ -164,7 +164,8 @@ public sealed class DownloadManager
 
     private async Task DownloadAsync(DownloadTask task)
     {
-        var cts = new CancellationTokenSource();
+        // 与「清除缓存」的静音联动：一静音就立刻取消在途下载，半成品文件会被删掉
+        var cts = CancellationTokenSource.CreateLinkedTokenSource(AppDatabase.CacheMuteToken);
         _running[task.Key] = cts;
 
         var path = "";
@@ -201,6 +202,9 @@ public sealed class DownloadManager
 
             while (true)
             {
+                // 「一键清除缓存」期间别再往 f 里写：按取消处理，半成品文件会被删掉
+                if (AppDatabase.CacheMuted) cts.Cancel();
+
                 var read = await source.ReadAsync(buffer.AsMemory(), cts.Token);
                 if (read <= 0) break;
 

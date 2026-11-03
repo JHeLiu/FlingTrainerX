@@ -3,9 +3,9 @@
                     xmlns:sys="clr-namespace:System;assembly=System.Runtime"
                     xmlns:conv="clr-namespace:FlingTrainerX.Converters">
 
-    <!-- 卡片尺寸：运行时按窗口宽度算出一行 5 张的实际像素值，这里只是设计期默认值 -->
-    <sys:Double x:Key="CardW">178</sys:Double>
-    <sys:Double x:Key="CardH">208</sys:Double>
+    <!-- 卡片尺寸：版心固定，一行恒定 5 张；这里只是加载完数据前 / 设计期的默认值，运行时按版心宽度算 -->
+    <sys:Double x:Key="CardW">223</sys:Double>
+    <sys:Double x:Key="CardH">183</sys:Double>
 
     <!-- 卡片下半部的文字区高度：封面 = 卡高 − 这个值，正好是 16:9 -->
     <GridLength x:Key="CardInfoH">58</GridLength>
@@ -258,6 +258,41 @@
                             <Setter TargetName="b" Property="Background" Value="#FF111C29" />
                         </Trigger>
                         <!-- 不可用（比如还没下载好时点不了「启动」）时整体压暗 -->
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter Property="Opacity" Value="0.4" />
+                            <Setter Property="Cursor" Value="Arrow" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- 危险操作按钮（清除缓存这类不可撤销的动作）：暗红描边，平时不抢眼，悬停才亮起来 -->
+    <Style x:Key="DangerBtn" TargetType="Button">
+        <Setter Property="Height" Value="34" />
+        <Setter Property="Padding" Value="16,0" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="Focusable" Value="False" />
+        <Setter Property="Foreground" Value="#FFF08A96" />
+        <Setter Property="FontFamily" Value="{StaticResource F.Ui}" />
+        <Setter Property="FontSize" Value="12" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border x:Name="b" CornerRadius="9" Padding="{TemplateBinding Padding}"
+                            Background="#FF221318" BorderThickness="1" BorderBrush="#FF4A2028">
+                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="b" Property="Background" Value="#FF33191F" />
+                            <Setter TargetName="b" Property="BorderBrush" Value="#FF7A2C39" />
+                            <Setter Property="Foreground" Value="#FFFFB3BC" />
+                        </Trigger>
+                        <Trigger Property="IsPressed" Value="True">
+                            <Setter TargetName="b" Property="Background" Value="#FF1B0F13" />
+                        </Trigger>
                         <Trigger Property="IsEnabled" Value="False">
                             <Setter Property="Opacity" Value="0.4" />
                             <Setter Property="Cursor" Value="Arrow" />

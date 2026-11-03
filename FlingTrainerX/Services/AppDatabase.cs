@@ -169,6 +169,30 @@ public sealed class AppDatabase
     /// <summary>建库/建表失败时为 false，收藏功能退化为本次会话内的内存集合。</summary>
     public bool IsAvailable { get; }
 
+    /// <summary>
+    /// 「清除缓存」期间短暂静音：还在跑的封面下载 / 缓存写入先别落盘，
+    /// 否则刚删完又被写回来。清完由调用方 <see cref="UnmuteCache"/> 恢复。
+    /// </summary>
+    private static CancellationTokenSource _cacheMuteCts = new();
+
+    public static bool CacheMuted { get; private set; }
+
+    /// <summary>静音的那一刻会取消，用来立刻掐断正在传输的图片/文件下载。</summary>
+    public static CancellationToken CacheMuteToken => _cacheMuteCts.Token;
+
+    public static void MuteCache()
+    {
+        CacheMuted = true;
+        _cacheMuteCts.Cancel();
+    }
+
+    public static void UnmuteCache()
+    {
+        _cacheMuteCts.Dispose();
+        _cacheMuteCts = new CancellationTokenSource();
+        CacheMuted = false;
+    }
+
     public string? LastError { get; private set; }
 
     private AppDatabase()
@@ -438,7 +462,7 @@ public sealed class AppDatabase
     /// <summary>写入或刷新一条卡片缓存（主键冲突时覆盖）。</summary>
     public bool SaveCache(TrainerItem item)
     {
-        if (item.Id <= 0) return false;
+        if (item.Id <= 0 || CacheMuted) return false;
         var row = TrainerCacheRow.From(item);
 
         return Run(db =>
@@ -460,6 +484,8 @@ public sealed class AppDatabase
     /// <summary>批量写缓存：一次查已存在的 ID，再分别批量 insert / update。</summary>
     public int SaveCacheRange(IEnumerable<TrainerItem> items)
     {
+        if (CacheMuted) return 0;
+
         var rows = items.Where(i => i.Id > 0).Select(TrainerCacheRow.From).ToList();
         if (rows.Count == 0) return 0;
 

@@ -30,6 +30,9 @@ public partial class TrainerDetailView : System.Windows.Controls.UserControl
     public event EventHandler? CloseRequested;
     public event EventHandler? FavoriteChanged;
 
+    /// <summary>修改器已经成功启动（本程序该让位了：收到后缩到右下角托盘）。</summary>
+    public event EventHandler? Launched;
+
     public TrainerDetailView(TrainerItem item, bool isFavorite)
     {
         InitializeComponent();
@@ -503,7 +506,16 @@ public partial class TrainerDetailView : System.Windows.Controls.UserControl
             return;
         }
 
-        ShowToast(TrainerFiles.Launch(path) ? $"已启动 {Path.GetFileName(path)}" : "启动失败，可点「定位」手动运行");
+        if (!TrainerFiles.Launch(path))
+        {
+            ShowToast("启动失败，可点「定位」手动运行");
+            return;
+        }
+
+        ShowToast($"已启动 {Path.GetFileName(path)}");
+
+        // 修改器弹到前台了，本程序自动缩进托盘，别挡着游戏
+        Launched?.Invoke(this, EventArgs.Empty);
     }
 
     private DownloadTask StartDownload(DownloadRowVm row)
@@ -534,6 +546,9 @@ public partial class TrainerDetailView : System.Windows.Controls.UserControl
 
     /// <summary>自检用：下载第一条文件。</summary>
     public void DownloadFirst() => Download_Click(this, new RoutedEventArgs());
+
+    /// <summary>自检用：走一遍「启动程序」的完整流程（含启动成功后的收进托盘）。</summary>
+    public void LaunchFile(string path) => LaunchLocal(path);
 #endif
 
     /// <summary>右侧「下载最新文件」：下第一条（官网按时间倒序）。</summary>

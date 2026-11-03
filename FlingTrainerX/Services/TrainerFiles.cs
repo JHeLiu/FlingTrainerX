@@ -40,6 +40,7 @@ public static class TrainerFiles
             if (File.Exists(existing)) return AppPaths.Relative(existing);
         }
 
+        var temp = "";
         try
         {
             var dir = FolderFor(trainerId);
@@ -47,19 +48,26 @@ public static class TrainerFiles
 
             if (File.Exists(path) && new FileInfo(path).Length > 0) return AppPaths.Relative(path);
 
+            // 「一键清除缓存」期间静音：连临时文件都别往 f 里写
+            if (AppDatabase.CacheMuted) return "";
+
+            // 静音的一刻会取消这个 token，正在传输的下载立刻断开，
+            // 不会留着一个被占用的 .part 让目录删不掉
+            using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, AppDatabase.CacheMuteToken);
+
             using var request = new HttpRequestMessage(HttpMethod.Get, url);
             UserAgentProvider.ApplyHeaders(request, TrainerWeb.Site);
 
-            using var response = await Http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct)
+            using var response = await Http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, linked.Token)
                 .ConfigureAwait(false);
             response.EnsureSuccessStatusCode();
 
             // 先写 .part 再改名：中途失败不会留下半张图被当成「已缓存」
-            var temp = path + ".part";
+            temp = path + ".part";
             await using (var file = new FileStream(temp, FileMode.Create, FileAccess.Write, FileShare.None,
                              81920, FileOptions.Asynchronous))
             {
-                await response.Content.CopyToAsync(file, ct).ConfigureAwait(false);
+                await response.Content.CopyToAsync(file, linked.Token).ConfigureAwait(false);
             }
 
             if (File.Exists(path)) File.Delete(path);
@@ -69,6 +77,11 @@ public static class TrainerFiles
         }
         catch
         {
+            // 取消 / 中途失败都别把 .part 残骸留在 f 里
+            if (temp.Length > 0)
+            {
+                try { if (File.Exists(temp)) File.Delete(temp); } catch { /* 忽略清理失败 */ }
+            }
             return "";
         }
     }

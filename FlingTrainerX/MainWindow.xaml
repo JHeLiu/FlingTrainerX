@@ -9,11 +9,9 @@
     Icon="/Assets/logo.png"
     Width="1440"
     Height="880"
-    MinWidth="1100"
-    MinHeight="680"
     Background="{StaticResource B.BgDeep}"
     FontFamily="{StaticResource F.Ui}"
-    ResizeMode="CanResize"
+    ResizeMode="NoResize"
     ShowInTaskbar="True"
     SnapsToDevicePixels="True"
     TextOptions.TextFormattingMode="Display"
@@ -301,22 +299,11 @@
                         <Button
                             Click="Minimize_Click"
                             Style="{StaticResource IconBtn}"
-                            ToolTip="最小化">
+                            ToolTip="最小化到托盘">
                             <TextBlock
                                 FontFamily="{StaticResource F.Icon}"
                                 FontSize="11"
                                 Text="&#xE921;" />
-                        </Button>
-                        <Button
-                            x:Name="MaxButton"
-                            Click="Maximize_Click"
-                            Style="{StaticResource IconBtn}"
-                            ToolTip="最大化">
-                            <TextBlock
-                                x:Name="MaxGlyph"
-                                FontFamily="{StaticResource F.Icon}"
-                                FontSize="11"
-                                Text="&#xE922;" />
                         </Button>
                         <Button
                             Click="Close_Click"
@@ -331,10 +318,13 @@
                 </Grid>
 
                 <!--  主体区  -->
-                <Grid Grid.Row="1">
+                <Grid x:Name="MainArea" Grid.Row="1">
 
-                    <!--  游戏卡片区  -->
-                    <Grid Margin="26,4,26,0">
+                    <!--  游戏卡片区：固定版心（最大 1360），再宽的屏幕整块居中 -->
+                    <Grid
+                        x:Name="CardArea"
+                        Margin="26,4,26,0"
+                        HorizontalAlignment="Center">
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="*" />
@@ -380,7 +370,7 @@
                                 Text="—" />
                         </StackPanel>
 
-                        <!--  卡片列表：按行切分（一行 5 张）+ 虚拟化滚动  -->
+                        <!--  卡片列表：固定一行 5 张 + 虚拟化滚动  -->
                         <ListBox
                             x:Name="CardList"
                             Grid.Row="1"
@@ -604,6 +594,66 @@
                                     TextWrapping="Wrap" />
                             </StackPanel>
                         </Grid>
+                        <!--  ==================== 设置 ====================  -->
+                        <Grid
+                            x:Name="SettingsPanel"
+                            Grid.Row="1"
+                            Visibility="Collapsed">
+                            <Grid VerticalAlignment="Top">
+                                <Grid.ColumnDefinitions>
+                                    <!--  设置项一行最多 760 宽，再宽就留白，别把按钮甩到屏幕最右边  -->
+                                    <ColumnDefinition Width="*" MaxWidth="760" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+
+                                <Border
+                                    Grid.Column="0"
+                                    Padding="18,14"
+                                    Background="{StaticResource B.Panel}"
+                                    BorderBrush="{StaticResource B.BorderSoft}"
+                                    BorderThickness="1"
+                                    CornerRadius="12">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+
+                                        <StackPanel VerticalAlignment="Center" Orientation="Horizontal">
+                                            <Border
+                                                Width="32"
+                                                Height="32"
+                                                Background="#FF17283C"
+                                                CornerRadius="9">
+                                                <TextBlock
+                                                    HorizontalAlignment="Center"
+                                                    VerticalAlignment="Center"
+                                                    FontFamily="{StaticResource F.Icon}"
+                                                    FontSize="14"
+                                                    Foreground="{StaticResource B.AccentLight}"
+                                                    Text="&#xE74D;" />
+                                            </Border>
+                                            <TextBlock
+                                                Margin="11,0,0,0"
+                                                VerticalAlignment="Center"
+                                                FontSize="13"
+                                                FontWeight="SemiBold"
+                                                Foreground="#FFDCE7F4"
+                                                Text="清除缓存" />
+                                        </StackPanel>
+
+                                        <Button
+                                            x:Name="ClearCacheButton"
+                                            Grid.Column="1"
+                                            VerticalAlignment="Center"
+                                            Click="ClearCache_Click"
+                                            Content="一键清除缓存"
+                                            Style="{StaticResource DangerBtn}" />
+                                    </Grid>
+                                </Border>
+                            </Grid>
+                        </Grid>
+
                         <!--  ==================== 下载队列 ====================  -->
                         <Grid
                             x:Name="QueuePanel"
@@ -875,6 +925,68 @@
                         <TranslateTransform x:Name="DetailSlide" Y="10" />
                     </ContentControl.RenderTransform>
                 </ContentControl>
+            </Grid>
+            <!--  ==================== 确认框 ====================  -->
+            <!--  点遮罩（弹框外面那片半透明区域）视为取消；点在弹框上不算  -->
+            <Grid
+                x:Name="ConfirmLayer"
+                Grid.ColumnSpan="2"
+                Background="#5C080D15"
+                MouseLeftButtonDown="ConfirmLayer_MouseLeftButtonDown"
+                Visibility="Collapsed">
+                <Border
+                    Width="440"
+                    Padding="24,22"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    Background="#FF101B28"
+                    BorderBrush="{StaticResource B.Border}"
+                    BorderThickness="1"
+                    CornerRadius="14">
+                    <Border.Effect>
+                        <DropShadowEffect
+                            BlurRadius="28"
+                            Direction="270"
+                            Opacity="0.45"
+                            ShadowDepth="10"
+                            Color="#FF000000" />
+                    </Border.Effect>
+                    <StackPanel>
+                        <TextBlock
+                            x:Name="ConfirmTitle"
+                            FontSize="15"
+                            FontWeight="SemiBold"
+                            Foreground="#FFE6EFF8"
+                            Text="确认操作？" />
+                        <TextBlock
+                            x:Name="ConfirmBody"
+                            Margin="0,10,0,0"
+                            FontSize="12"
+                            Foreground="{StaticResource B.TextDim}"
+                            LineHeight="20"
+                            TextWrapping="Wrap" />
+                        <StackPanel
+                            Margin="0,20,0,0"
+                            HorizontalAlignment="Right"
+                            Orientation="Horizontal">
+                            <Button
+                                Height="32"
+                                Padding="18,0"
+                                Click="ConfirmCancel_Click"
+                                Content="取消"
+                                FontSize="12"
+                                Style="{StaticResource GhostBtn}" />
+                            <Button
+                                x:Name="ConfirmOkButton"
+                                Height="32"
+                                Margin="10,0,0,0"
+                                Padding="18,0"
+                                Click="ConfirmOk_Click"
+                                Content="确定"
+                                Style="{StaticResource DangerBtn}" />
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
             </Grid>
         </Grid>
     </Border>

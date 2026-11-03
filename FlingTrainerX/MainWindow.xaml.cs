@@ -23,11 +23,27 @@ public partial class MainWindow : Window
     private enum ViewMode { Library, Favorites, Queue, Settings }
     private enum LibraryTab { Recent, Popular }
 
-    /// <summary>一行放 5 张卡片。</summary>
-    private const int CardsPerRow = 5;
+    /// <summary>
+    /// 固定版心：以 1920×1080 全屏为设计基准（右栏 1658 可用 → 版心 1460，一行 5 张、每张 279）。
+    /// 屏幕再宽也不再放大，多出来的宽度平均留在两侧；窗口缩小时整块等比缩小。
+    /// </summary>
+    private const double MaxContentWidth = 1460;
+
+    /// <summary>版心左右各留的边距（和 XAML 里 CardArea 的 Margin 保持一致）。</summary>
+    private const double ContentSideMargin = 26;
+
+    /// <summary>左侧栏宽度 + 外框描边，用来从窗口宽度反推右栏可用宽度。</summary>
+    private const double SidebarWidth = 210;
+
+    /// <summary>卡片宽度的上下限：1080 屏也不会挤成一团，满载也就 280，不会变成大图。</summary>
+    private const double MinCardWidth = 130;
+    private const double MaxCardWidth = 280;
 
     /// <summary>卡片之间留的空隙（像素）。</summary>
     private const double CardGap = 12;
+
+    /// <summary>行与行之间的空隙，和 DataTemplate 里那个 ItemsControl 的 Margin 保持一致。</summary>
+    private const double CardRowGap = 12;
 
     /// <summary>卡片下半部的标题区高度；封面高度 = 卡宽 × 9/16，正好和官网头图同比例，不裁不变形。</summary>
     private const double CardInfoHeight = 58;
@@ -35,8 +51,8 @@ public partial class MainWindow : Window
     /// <summary>窗口四角圆角半径（DWM 原生圆角 + 内容裁剪用同一套数值）。</summary>
     private const double ShellCornerRadius = 12;
 
-    /// <summary>窗口能被拖到的最小尺寸，再小布局就挤了。</summary>
-    private const double MinWindowWidth = 1100;
+    /// <summary>窗口能被拖到的最小尺寸；再小布局就挤了（版心按 1080 宽屏设计）。</summary>
+    private const double MinWindowWidth = 1080;
     private const double MinWindowHeight = 680;
 
     private TrainerLibrary _library = new();
@@ -85,11 +101,17 @@ public partial class MainWindow : Window
 
     private double _cardW;
     private double _cardH;
+
+    /// <summary>正在还原滚动位置：这期间的 ScrollChanged 不是用户滚的，别触发翻页。</summary>
+    private bool _resplitAdjusting;
     private ScrollViewer? _listScroll;
     private readonly WinForms.NotifyIcon _trayIcon;
     private readonly TrayMenuWindow _trayMenu;
     private readonly Drawing.Icon _trayIconImage;
     private bool _exitRequested;
+
+    /// <summary>缩进托盘之前的窗口状态（普通 / 最大化），从托盘回来时按它还原。</summary>
+    private WindowState _stateBeforeTray = WindowState.Normal;
 
     public MainWindow()
     {
@@ -111,10 +133,12 @@ public partial class MainWindow : Window
         };
         _trayIcon.MouseUp += (_, e) =>
         {
+            // 右键 → 小菜单（打开主界面 / 退出程序）；左键 → 直接把主界面叫回来
             if (e.Button == WinForms.MouseButtons.Right)
-                Dispatcher.BeginInvoke(new Action(_trayMenu.ShowAtCursor));
+                Dispatcher.BeginInvoke(new Action(() => _trayMenu.ShowAtCursor()));
+            else if (e.Button == WinForms.MouseButtons.Left)
+                Dispatcher.BeginInvoke(new Action(ShowMainWindow));
         };
-        _trayIcon.DoubleClick += (_, _) => Dispatcher.BeginInvoke(new Action(ShowMainWindow));
 
         // 不再读取任何本地数据（无内置种子、无列表缓存），启动后立即向官网请求
         _library = new TrainerLibrary();
@@ -163,12 +187,13 @@ public partial class MainWindow : Window
         var width = Math.Min(1440, Math.Max(900, workWidth - 32));
         var height = Math.Min(880, Math.Max(520, workHeight - 32));
 
+        // 窗口是固定尺寸，只有工作区放不下时才缩到放得下（1080p + 150% 缩放这类场景）
         // 最大化时 WindowChrome 会把窗口向外撑出一个边框宽度（左上角跑到 -7,-7），
         // 上限如果正好卡在工作区大小，撑出来的部分会被截掉，右边和下边就会漏出一条桌面缝隙
         MaxWidth = workWidth + 40;
         MaxHeight = workHeight + 40;
-        MinWidth = Math.Min(MinWindowWidth, workWidth);
-        MinHeight = Math.Min(MinWindowHeight, workHeight);
+        MinWidth = Math.Min(MinWindowWidth, width);
+        MinHeight = Math.Min(MinWindowHeight, height);
         Width = Math.Max(MinWidth, width);
         Height = Math.Max(MinHeight, height);
     }
@@ -216,6 +241,12 @@ public partial class MainWindow : Window
 
     [DllImport("user32.dll")]
     private static extern uint GetDpiForWindow(IntPtr hwnd);
+
+    [DllImport("user32.dll")]
+    private static extern bool IsWindowVisible(IntPtr hwnd);
+
+    [DllImport("user32.dll")]
+    private static extern bool SetCursorPos(int x, int y);
 
     private const int WmGetMinMaxInfo = 0x0024;
 
@@ -335,13 +366,10 @@ public partial class MainWindow : Window
             new Rect(0, 0, Shell.ActualWidth, Shell.ActualHeight), radius, radius);
     }
 
-    /// <summary>最大化 / 还原时同步圆角、描边与右上角图标。</summary>
+    /// <summary>窗口尺寸固定，状态变化只处理圆角与描边（缩进托盘 / 恢复时保持圆角）。</summary>
     private void OnWindowStateChanged(object? sender, EventArgs e)
     {
         var maxed = WindowState == WindowState.Maximized;
-
-        MaxGlyph.Text = maxed ? "\uE923" : "\uE922";
-        MaxButton.ToolTip = maxed ? "向下还原" : "最大化";
 
         // 铺满屏幕时圆角和描边都要收掉，否则屏幕边缘会露出一圈亮线
         Shell.CornerRadius = new CornerRadius(maxed ? 0 : ShellCornerRadius);
@@ -486,7 +514,9 @@ public partial class MainWindow : Window
             await gate.WaitAsync().ConfigureAwait(false);
             try
             {
-                if (await TrainerFiles.CacheCoverAsync(item).ConfigureAwait(false))
+                if (AppDatabase.CacheMuted) return;   // 正在清缓存，别往 f 里写
+
+                if (await TrainerFiles.CacheCoverAsync(item).ConfigureAwait(false) && !AppDatabase.CacheMuted)
                     AppDatabase.Instance.SaveCache(item);
             }
             finally
@@ -543,25 +573,73 @@ public partial class MainWindow : Window
 
     // ==================== 卡片尺寸 ====================
 
-    /// <summary>按可用宽度算出「一行 5 张」的卡片尺寸，高度按固定比例跟随，保证不变形。</summary>
+    /// <summary>
+    /// 固定版心布局：内容区最宽 <see cref="MaxContentWidth"/>，多出来的宽度平均留在两侧。
+    /// 一行恒定 5 张，卡片宽度只随窗口宽度等比变化（1080 窗口 ≈ 151，1440 窗口 ≈ 223，
+    /// 1920 全屏及以上锁死在 279），高度按封面 16:9 + 固定标题区跟随，永不变形。
+    /// </summary>
     private void UpdateCardMetrics()
     {
-        var avail = CardList.ActualWidth - CardList.Padding.Left - CardList.Padding.Right - 8;
-        if (avail <= 0) avail = 920;
+        // 直接拿窗口宽度反推，不依赖子控件排版：Window.SizeChanged 触发时子控件拿到的
+        // ActualWidth 还可能是上一帧的，按它算会差一档
+        var slot = ActualWidth - SidebarWidth - ContentSideMargin * 2;
+        if (slot < 200) slot = 1440 - SidebarWidth - ContentSideMargin * 2; // 还没真正显示时按默认窗口算
 
-        var w = Math.Floor((avail - CardGap * (CardsPerRow - 1)) / CardsPerRow);
-        w = Math.Clamp(w, 128, 260);
+        var contentW = Math.Min(MaxContentWidth, slot);
+
+        // 显式给宽度 + 居中，宽屏上才能把整块摆在中间
+        // （Width 默认是 NaN，NaN 参与比较恒为 false，必须先判 NaN 再判差值）
+        if (double.IsNaN(CardArea.Width) || Math.Abs(CardArea.Width - contentW) > 0.5)
+            CardArea.Width = contentW;
+
+        // 减去列表右侧给滚动条留的 6 和一点余量
+        var avail = contentW - 14;
+        var w = Math.Floor((avail - CardGap * (CardRow.Capacity - 1)) / CardRow.Capacity);
+        w = Math.Clamp(w, MinCardWidth, MaxCardWidth);
 
         // 封面按 16:9 撑满上半部（官网头图就是这个比例），下半部固定放文字
         var h = Math.Round(w * 9d / 16d) + CardInfoHeight;
 
+        var oldRowHeight = _cardH + CardRowGap;
         if (Math.Abs(w - _cardW) < 0.5 && Math.Abs(h - _cardH) < 0.5) return;
 
         _cardW = w;
         _cardH = h;
+
         Resources["CardW"] = w;
         Resources["CardH"] = h;
         Resources["CardInfoH"] = new GridLength(CardInfoHeight);
+
+        // 行高跟着变了：停在原来那一行，别让画面弹回顶部
+        KeepRowAnchor(oldRowHeight);
+    }
+
+    /// <summary>
+    /// 行高变了（窗口缩放）之后，按「原来停在第几行」把滚动位置换算过去，
+    /// 避免改窗口大小时内容一下子跳走。行数不变，所以不用重新分行。
+    /// </summary>
+    private void KeepRowAnchor(double oldRowHeight)
+    {
+        if (_items.Count == 0 || oldRowHeight <= 0) return;
+
+        var scroll = _listScroll ??= FindScrollViewer(CardList);
+        if (scroll is null) return;
+
+        var anchorRow = scroll.VerticalOffset / oldRowHeight;
+        var target = Math.Max(0, anchorRow * (_cardH + CardRowGap));
+
+        Dispatcher.BeginInvoke(DispatcherPriority.ContextIdle, new Action(() =>
+        {
+            // 先让新行高真正排完，ScrollViewer 的 Extent 更新之后再滚
+            CardList.UpdateLayout();
+
+            _resplitAdjusting = true;
+            scroll.ScrollToVerticalOffset(target);
+            _resplitAdjusting = false;
+
+            // 自己挪的位置不算「用户往下滚」，别顺手触发了翻页
+            _lastTriggerOffset = target;
+        }));
     }
 
     // ==================== 数据渲染 ====================
@@ -595,7 +673,7 @@ public partial class MainWindow : Window
                 break;
             case ViewMode.Favorites:
                 SectionTitle.Text = "收藏夹";
-                SectionSubtitle.Text = "收藏保存在本地 SQLite 数据库，重装/重启都不会丢";
+                SectionSubtitle.Text = "";
                 break;
             case ViewMode.Queue:
                 SectionTitle.Text = "下载队列";
@@ -604,9 +682,14 @@ public partial class MainWindow : Window
                 break;
             case ViewMode.Settings:
                 SectionTitle.Text = "设置";
-                SectionSubtitle.Text = "数据源与缓存";
+                SectionSubtitle.Text = "";
                 break;
         }
+
+        // 没有副标题时连那 5px 间距一起收掉，标题下面不留空档
+        SectionSubtitle.Visibility = string.IsNullOrWhiteSpace(SectionSubtitle.Text)
+            ? Visibility.Collapsed
+            : Visibility.Visible;
 
         // 收藏夹视图下，卡片左上角会多出一个「取消收藏」按钮
         CardList.Tag = _mode == ViewMode.Favorites;
@@ -616,6 +699,7 @@ public partial class MainWindow : Window
         RecentTabButton.IsEnabled = _libraryTab != LibraryTab.Recent;
         PopularTabButton.IsEnabled = _libraryTab != LibraryTab.Popular;
         QueuePanel.Visibility = _mode == ViewMode.Queue ? Visibility.Visible : Visibility.Collapsed;
+        SettingsPanel.Visibility = _mode == ViewMode.Settings ? Visibility.Visible : Visibility.Collapsed;
 
         if (_mode == ViewMode.Queue)
         {
@@ -629,22 +713,7 @@ public partial class MainWindow : Window
         if (_mode == ViewMode.Settings)
         {
             CardList.Visibility = Visibility.Collapsed;
-            EmptyState.Visibility = Visibility.Visible;
-
-            EmptyGlyph.Text = "\uE713";
-            EmptyTitle.Text = "数据与缓存";
-            EmptyDesc.TextAlignment = TextAlignment.Left;
-            EmptyDesc.MaxWidth = 680;
-            EmptyDesc.Text =
-                $"数据源：{TrainerWeb.Site}（列表与详情实时抓取，抓到的卡片写入本地缓存表）\n" +
-                $"卡片缓存：trainer_cache 表 · 已缓存 {AppDatabase.Instance.CacheCount()} 款\n" +
-                $"图片与文件：<程序目录>\\f\\<文章ID>\\ · 封面与截图落盘，路径存在缓存表里\n" +
-                $"文件目录：{DownloadManager.Instance.DownloadDir}\n" +
-                $"数据库：{AppDatabase.DatabaseFile}\n" +
-                $"数据库状态：{(AppDatabase.Instance.IsAvailable ? "已就绪" : "不可用 · " + AppDatabase.Instance.LastError)}\n" +
-                $"浏览器 UA：{UserAgentProvider.UserAgent}\n" +
-                $"高 DPI 模式：PerMonitorV2 · 当前缩放 {VisualTreeHelper.GetDpi(this).DpiScaleX * 100:0}%";
-
+            EmptyState.Visibility = Visibility.Collapsed;
             UpdateFooter();
             return;
         }
@@ -785,7 +854,8 @@ public partial class MainWindow : Window
         // 只认「用户真的往下滚了」这一种变化。一页刚刚插进来时内容高度会变，
         // ScrollViewer 也会发 ScrollChanged，但 VerticalChange 是 0——旧代码把这种也算进去，
         // 于是插完一页立刻又满足「到底了」，几页连着自动加载，看着像一次性全拉下来。
-        if (e.VerticalChange <= 0) return;
+        // 改窗口宽度时按行号还原滚动位置也不该算用户滚动。
+        if (_resplitAdjusting || e.VerticalChange <= 0) return;
 
         AskForNextPage(e.VerticalOffset, e.ViewportHeight, e.ExtentHeight);
     }
@@ -1106,6 +1176,7 @@ public partial class MainWindow : Window
     {
         UpdateQueueBadge();
         SectionSubtitle.Text = DownloadManager.Instance.SummaryText;
+        SectionSubtitle.Visibility = Visibility.Visible;   // 别被「收藏夹/设置没有副标题」那次折叠带过来
         UpdateFooter();
     }
 
@@ -1260,6 +1331,9 @@ public partial class MainWindow : Window
         var view = new TrainerDetailView(item, isFavorite);
         view.CloseRequested += (_, _) => CloseDetail();
         view.FavoriteChanged += (_, _) => OnFavoriteChanged(item, view.IsFavorite);
+
+        // 启动修改器成功 → 本程序自动收进托盘（右下角图标，右键可「打开主界面 / 退出程序」）
+        view.Launched += (_, _) => HideForLaunchedApp();
         view.FitTo(RootGrid.ActualWidth, RootGrid.ActualHeight);
 
         DetailHost.Content = view;
@@ -1398,42 +1472,208 @@ public partial class MainWindow : Window
         }
     }
 
+    // ==================== 设置 · 清除缓存 ====================
+
+    /// <summary>正在等用户点「确定 / 取消」的确认框；同一时间只允许一个。</summary>
+    private TaskCompletionSource<bool>? _confirm;
+
+    /// <summary>一键清除缓存：先问一句，确认后清 SQLite 的卡片缓存 + 删掉 f 目录下的所有内容。</summary>
+    private async void ClearCache_Click(object sender, RoutedEventArgs e)
+    {
+        if (_confirm is not null) return;   // 连点两下只弹一个框
+
+        var active = DownloadManager.Instance.Tasks.Count(t => t.IsActive);
+        var body = "将删除 SQLite 里的全部卡片缓存，以及 f 目录下的所有图片和已下载的修改器。" +
+                   (active > 0 ? $"\n\n当前还有 {active} 个下载任务，会先被取消。" : "") +
+                   "\n\n收藏夹不受影响，清除后无法恢复。";
+
+        if (!await ConfirmAsync("清除本地缓存？", body, "清除")) return;
+
+        ClearCacheButton.IsEnabled = false;
+        AppDatabase.MuteCache();            // 掐断在途下载，别让缓存写入和落盘又填回来
+        try
+        {
+            // 1) 先停掉正在下的任务，免得一边删一边又写回来
+            foreach (var task in DownloadManager.Instance.Tasks.Where(t => t.IsActive).ToList())
+                DownloadManager.Instance.Cancel(task);
+
+            // 2) 等首页加载 / 封面下载 / 被取消的任务收尾（否则刚删完又被写回去）
+            for (var i = 0; i < 40 &&
+                 (_firstLoading || _loadingMore || DownloadManager.Instance.ActiveCount > 0); i++)
+                await Task.Delay(100);
+
+            // 3) 清空 SQLite 里的卡片缓存表（收藏夹那张表不动）+ 删掉 f 目录下的所有内容
+            var rows = AppDatabase.Instance.ClearCache();
+            var (files, bytes, failed) = DeleteContents(AppPaths.FilesDir);
+
+            // 4) 已经在传输中的封面可能还会落盘，多扫几轮直到连续一轮没东西可删
+            for (var attempt = 0; attempt < 10; attempt++)
+            {
+                await Task.Delay(400);
+                rows += AppDatabase.Instance.ClearCache();
+
+                var (extraFiles, extraBytes, extraFailed) = DeleteContents(AppPaths.FilesDir);
+                files += extraFiles;
+                bytes += extraBytes;
+                failed = extraFailed;
+
+                if (extraFiles == 0 && extraFailed == 0) break;   // 这一轮没东西可删 = 真的空了
+            }
+
+            StatusText.Text = $"已清除缓存 · {rows} 条缓存记录 · {files} 个文件（{DownloadTask.Human(bytes)}）" +
+                              (failed > 0 ? $" · {failed} 项被占用，已跳过" : "");
+        }
+        catch (Exception ex)
+        {
+            StatusText.Text = $"清除失败：{ex.Message}";
+        }
+        finally
+        {
+            // 再静音一小会儿，别让马上又开始的下一次下载把刚清掉的东西立刻写回来
+            await Task.Delay(800);
+            AppDatabase.UnmuteCache();
+            ClearCacheButton.IsEnabled = true;
+        }
+    }
+
+    /// <summary>
+    /// 删掉目录下的全部内容（保留目录本身）。单个文件被占用时跳过、不中断，
+    /// 返回删掉的文件数、总字节数和失败项数。
+    /// </summary>
+    private static (int files, long bytes, int failed) DeleteContents(string root)
+    {
+        if (!Directory.Exists(root)) return (0, 0, 0);
+
+        var files = 0;
+        var bytes = 0L;
+        var failed = 0;
+
+        // 子目录（f\<id>\）整棵删掉
+        foreach (var dir in Directory.EnumerateDirectories(root).ToList())
+        {
+            try
+            {
+                var info = new DirectoryInfo(dir);
+                var count = 0;
+                var size = 0L;
+                foreach (var file in info.EnumerateFiles("*", SearchOption.AllDirectories))
+                {
+                    count++;
+                    size += file.Length;
+                }
+
+                info.Delete(recursive: true);
+                files += count;
+                bytes += size;
+            }
+            catch
+            {
+                failed++;
+            }
+        }
+
+        // 根目录下散着的文件
+        foreach (var path in Directory.EnumerateFiles(root).ToList())
+        {
+            try
+            {
+                bytes += new FileInfo(path).Length;
+                File.Delete(path);
+                files++;
+            }
+            catch
+            {
+                failed++;
+            }
+        }
+
+        return (files, bytes, failed);
+    }
+
+    /// <summary>弹出确认框，等用户点「确定」（true）或「取消 / 点遮罩 / Esc」（false）。</summary>
+    private Task<bool> ConfirmAsync(string title, string body, string okText)
+    {
+        ConfirmTitle.Text = title;
+        ConfirmBody.Text = body;
+        ConfirmOkButton.Content = okText;
+        ConfirmLayer.Visibility = Visibility.Visible;
+
+        _confirm = new TaskCompletionSource<bool>();
+        ConfirmOkButton.Focus();
+        return _confirm.Task;
+    }
+
+    private void CloseConfirm(bool result)
+    {
+        ConfirmLayer.Visibility = Visibility.Collapsed;
+
+        var pending = _confirm;
+        _confirm = null;
+        pending?.TrySetResult(result);
+    }
+
+    private void ConfirmOk_Click(object sender, RoutedEventArgs e) => CloseConfirm(true);
+
+    private void ConfirmCancel_Click(object sender, RoutedEventArgs e) => CloseConfirm(false);
+
+    private void ConfirmLayer_MouseLeftButtonDown(object sender, MouseButtonEventArgs e) => CloseConfirm(false);
+
     // ==================== 窗口 ====================
 
     private void TitleBar_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
-        if (e.ClickCount == 2)
-        {
-            ToggleMaximize();
-            return;
-        }
-
+        // 窗口是固定尺寸（不能拉大缩小），双击标题栏也不做最大化，只负责拖动
         if (e.ButtonState == MouseButtonState.Pressed)
         {
             try { DragMove(); } catch { /* 忽略拖动异常 */ }
         }
     }
 
-    private void Minimize_Click(object sender, RoutedEventArgs e) => MinimizeToTray();
-
-    private void Maximize_Click(object sender, RoutedEventArgs e) => ToggleMaximize();
-
-    private void ToggleMaximize()
-        => WindowState = WindowState == WindowState.Maximized ? WindowState.Normal : WindowState.Maximized;
+    private void Minimize_Click(object sender, RoutedEventArgs e) => HideToTray();
 
     private void Close_Click(object sender, RoutedEventArgs e) => Close();
 
-    private void MinimizeToTray()
+    /// <summary>
+    /// 收进托盘：不是「最小化」，是把窗口真正藏起来（SW_HIDE 那一档）——
+    /// 任务栏按钮、Alt+Tab 条目、屏幕左下角那截小窗一起消失，只剩右下角的托盘图标。
+    /// </summary>
+    private void HideToTray()
     {
-        ShowInTaskbar = false;
-        WindowState = WindowState.Minimized;
+        // 记一下藏之前是普通还是最大化，回来时原样还原
+        if (WindowState != WindowState.Minimized) _stateBeforeTray = WindowState;
+
+        // 只调 Hide()：可见性交给系统，任务栏按钮会被真正移除。
+        // 别再写 ShowInTaskbar=false —— 那个属性会重建任务栏按钮，反而在左下角留下残影
+        Hide();
+    }
+
+    /// <summary>
+    /// 「启动程序」成功之后把自己收进托盘：停 0.6 秒，一来让 Toast 露个脸，
+    /// 二来等修改器的窗口先拿到前台，不跟它抢焦点。收进去就是静默的，不弹任何提示。
+    /// </summary>
+    private void HideForLaunchedApp()
+    {
+        if (_exitRequested) return;
+
+        var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(600) };
+        timer.Tick += (_, _) =>
+        {
+            timer.Stop();
+            if (_exitRequested) return;
+
+            // 直接藏，不弹气泡 / 系统通知：托盘图标本来就在，别再打扰一次
+            HideToTray();
+        };
+        timer.Start();
     }
 
     private void ShowMainWindow()
     {
-        ShowInTaskbar = true;
         if (!IsVisible) Show();
-        if (WindowState == WindowState.Minimized) WindowState = WindowState.Normal;
+
+        // 隐藏期间窗口状态可能被系统压成 Minimized，按藏之前的样子（普通 / 最大化）还原
+        if (WindowState == WindowState.Minimized) WindowState = _stateBeforeTray;
+
         Activate();
     }
 
@@ -1453,7 +1693,7 @@ public partial class MainWindow : Window
         }
 
         e.Cancel = true;
-        MinimizeToTray();
+        HideToTray();
     }
 
     private void OnWindowClosed(object? sender, EventArgs e)
@@ -1466,7 +1706,12 @@ public partial class MainWindow : Window
 
     private void OnPreviewKeyDown(object sender, System.Windows.Input.KeyEventArgs e)
     {
-        if (e.Key == Key.Escape && _detailOpen)
+        if (e.Key == Key.Escape && _confirm is not null)
+        {
+            CloseConfirm(false);
+            e.Handled = true;
+        }
+        else if (e.Key == Key.Escape && _detailOpen)
         {
             CloseDetail();
             e.Handled = true;
@@ -1487,6 +1732,277 @@ public partial class MainWindow : Window
 
 #if DEBUG
     // ==================== 开发期自检（--capture，仅 Debug 编译） ====================
+
+    /// <summary>
+    /// 托盘自检：模拟「启动程序成功 → 收进托盘」、拍托盘右键菜单、再从托盘恢复主界面，
+    /// 把每一步的窗口状态写进 tray-state.txt，顺带整屏截一张看托盘图标在不在。
+    /// </summary>
+    public async Task RunTrayCheckAsync(string dir)
+    {
+        Directory.CreateDirectory(dir);
+        var log = Path.Combine(dir, "tray-state.txt");
+        File.WriteAllText(log, "");
+
+        for (var i = 0; i < 200 && _firstLoading; i++) await Task.Delay(100);
+        await Task.Delay(1500);
+
+        void Note(string step)
+        {
+            // OS 级可见性：只有它是 False，才算真的「跟系统隐藏一样」，任务栏按钮才会消失
+            var hwnd = new WindowInteropHelper(this).Handle;
+            var osVisible = hwnd != IntPtr.Zero && IsWindowVisible(hwnd);
+
+            File.AppendAllText(log,
+                $"{step}: OsVisible={osVisible} IsVisible={IsVisible} State={WindowState} " +
+                $"InTaskbar={ShowInTaskbar} TrayIconVisible={_trayIcon.Visible}\n");
+        }
+
+        Note("01-startup");
+
+        // 1) 详情页点「启动程序」：真的启动一个 exe，成功后主界面应自动缩进托盘
+        var item = _library.Items.FirstOrDefault(i => i.Groups.Count > 0) ?? _library.Items.FirstOrDefault();
+        if (item is not null)
+        {
+            OpenDetail(item);
+            await Task.Delay(900);
+        }
+
+        // 借 cmd.exe 当「修改器」：复制一份改名，启动后按名字精确回收，不碰用户的进程
+        var beforeW = ActualWidth;
+        var beforeH = ActualHeight;
+
+        var fake = Path.Combine(dir, "TestTrainer.exe");
+        var launchedByName = "TestTrainer";
+        try
+        {
+            File.Copy(Path.Combine(Environment.SystemDirectory, "cmd.exe"), fake, true);
+            if (DetailHost.Content is TrainerDetailView launcher) launcher.LaunchFile(fake);
+            else HideForLaunchedApp();
+        }
+        catch
+        {
+            HideForLaunchedApp();
+        }
+
+        await Task.Delay(1800);
+        Note("02-after-launch-hide");
+
+        foreach (var process in System.Diagnostics.Process.GetProcessesByName(launchedByName))
+        {
+            try { process.Kill(); } catch { /* 已经退了 */ }
+        }
+
+        // 2) 右键托盘图标弹出的菜单
+        _trayMenu.ShowAtCursor();
+        await Task.Delay(700);
+        SaveShotOf(_trayMenu, Path.Combine(dir, "tray-menu.png"));
+
+        // 把鼠标挪到第一项上，拍一张悬停态（拍完还原鼠标位置）
+        var saved = WinForms.Cursor.Position;
+        var hoverPoint = _trayMenu.PointToScreen(new System.Windows.Point(70, 42));
+        SetCursorPos((int)hoverPoint.X, (int)hoverPoint.Y);
+        await Task.Delay(400);
+        SaveShotOf(_trayMenu, Path.Combine(dir, "tray-menu-hover.png"));
+        SetCursorPos(saved.X, saved.Y);
+
+        CaptureScreen(Path.Combine(dir, "tray-screen.png"));
+        _trayMenu.Hide();
+        await Task.Delay(300);
+
+        // 3) 菜单里的「打开主界面」
+        ShowMainWindow();
+        await Task.Delay(900);
+        Note("03-after-open-main");
+        File.AppendAllText(log, $"窗口尺寸 {beforeW:F0}x{beforeH:F0} → {ActualWidth:F0}x{ActualHeight:F0}\n");
+        SaveShot(Path.Combine(dir, "tray-restored.png"));
+    }
+
+    /// <summary>
+    /// 自检：先藏进托盘，再从托盘「退出程序」——验证隐藏状态下点退出，进程真的会退干净
+    /// （隐藏窗口如果挡住了关窗流程，这条命令就会一直挂着）。
+    /// </summary>
+    public async Task RunTrayExitCheckAsync(string dir)
+    {
+        Directory.CreateDirectory(dir);
+        var log = Path.Combine(dir, "tray-exit.txt");
+        for (var i = 0; i < 200 && _firstLoading; i++) await Task.Delay(100);
+        await Task.Delay(800);
+
+        HideToTray();
+        var hwnd = new WindowInteropHelper(this).Handle;
+        File.AppendAllText(log,
+            $"hidden: OsVisible={(hwnd != IntPtr.Zero && IsWindowVisible(hwnd))} TrayIconVisible={_trayIcon.Visible}\n");
+
+        await Task.Delay(600);
+        ExitFromTray();
+        File.AppendAllText(log, "exit-called\n");
+    }
+
+    /// <summary>
+    /// 自检：收藏夹 / 设置页的版式，以及「一键清除缓存」整条链路
+    /// （点按钮 → 弹确认框 → 点确定 → 真清 SQLite + 真删 f 目录）。
+    /// </summary>
+    public async Task RunClearCacheCheckAsync(string dir)
+    {
+        Directory.CreateDirectory(dir);
+        var log = Path.Combine(dir, "clear.txt");
+        File.WriteAllText(log, "");
+
+        for (var i = 0; i < 200 && _firstLoading; i++) await Task.Delay(100);
+        await Task.Delay(1500);
+
+        // 首屏的封面还在陆续落盘，先等它们安静下来（正常使用时点按钮也是这个时机）
+        for (var i = 0; i < 60 && DownloadManager.Instance.ActiveCount > 0; i++) await Task.Delay(100);
+        await Task.Delay(2500);
+
+        // 先造两个假文件，验证 f 目录真的被清空（含子目录与根目录下的散文件）
+        var probe = AppPaths.FilesFor(990001);
+        File.WriteAllText(Path.Combine(probe, "probe.bin"), new string('x', 4096));
+        File.WriteAllText(Path.Combine(AppPaths.FilesDir, "loose.txt"), "loose");
+
+        NavList.SelectedIndex = 1;               // 收藏夹
+        await Task.Delay(700);
+        SaveShot(Path.Combine(dir, "page-favorites.png"));
+
+        NavList.SelectedIndex = 3;               // 设置
+        await Task.Delay(700);
+        SaveShot(Path.Combine(dir, "page-settings.png"));
+
+        var rowsBefore = AppDatabase.Instance.CacheCount();
+        var filesBefore = Directory.GetFiles(AppPaths.FilesDir, "*", SearchOption.AllDirectories).Length;
+        var bytesBefore = Directory.GetFiles(AppPaths.FilesDir, "*", SearchOption.AllDirectories)
+            .Sum(p => new FileInfo(p).Length);
+
+        ClearCacheButton.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
+        await Task.Delay(600);
+        SaveShot(Path.Combine(dir, "confirm.png"));
+
+        ConfirmOkButton.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
+
+        // 按钮恢复可用 = 清除流程（含多轮扫尾 + 解除静音）真正跑完，最多等 12 秒
+        for (var i = 0; i < 120 && !ClearCacheButton.IsEnabled; i++) await Task.Delay(100);
+        await Task.Delay(1200);   // 解除静音后再观察一会儿，确认没有文件被重新写回来
+
+        var rowsAfter = AppDatabase.Instance.CacheCount();
+        var filesAfter = Directory.GetFiles(AppPaths.FilesDir, "*", SearchOption.AllDirectories).Length;
+        var dirsAfter = Directory.GetDirectories(AppPaths.FilesDir).Length;
+
+        File.AppendAllText(log,
+            $"清除前：缓存 {rowsBefore} 条 / f 目录 {filesBefore} 个文件（{DownloadTask.Human(bytesBefore)}）\n" +
+            $"清除后：缓存 {rowsAfter} 条 / f 目录 {filesAfter} 个文件 / {dirsAfter} 个子目录\n" +
+            $"确认框：{(ConfirmLayer.Visibility == Visibility.Visible ? "仍打开" : "已关闭")}\n" +
+            $"状态栏：{StatusText.Text}\n");
+
+        SaveShot(Path.Combine(dir, "after-clear.png"));
+    }
+
+    /// <summary>
+    /// 自检：把窗口从 1080 一路摆到 3840 宽，记录每档的版心宽度、卡片尺寸、行数，
+    /// 用来核对「固定版心 + 一行 5 张」在 1080 / 2K / 4K 上的表现。
+    /// </summary>
+    public async Task RunLayoutCheckAsync(string dir)
+    {
+        Directory.CreateDirectory(dir);
+        var log = Path.Combine(dir, "layout.txt");
+        File.WriteAllText(log, "");
+
+        for (var i = 0; i < 200 && _firstLoading; i++) await Task.Delay(100);
+        await Task.Delay(2000);
+
+        // 这台机器的屏幕可能不大：放开尺寸限制，只验证布局算法
+        MinWidth = 320;
+        MinHeight = 320;
+        MaxWidth = 6000;
+        MaxHeight = 3000;
+
+        foreach (var width in new[] { 1080, 1280, 1440, 1920, 2560, 3840 })
+        {
+            Width = width;
+            Height = 860;
+            await Task.Delay(650);
+
+            var perRow = _rows.Count > 0 ? _rows[0].Items.Count : 0;
+            var leftGap = Math.Max(0, (MainArea.ActualWidth - CardArea.ActualWidth) / 2);
+            File.AppendAllText(log,
+                $"窗口 {width,5} / 实际 {ActualWidth,5:F0} / 右栏 {MainArea.ActualWidth,5:F0} → " +
+                $"版心 {CardArea.ActualWidth,5:F0}（两侧各留 {leftGap,4:F0}） " +
+                $"卡片 {_cardW}x{_cardH} 首行 {perRow} 条 / 共 {_rows.Count} 行\n");
+
+            if (width is 1080 or 1440 or 1920 or 3840) SaveShot(Path.Combine(dir, $"layout-{width}.png"));
+        }
+
+        // 滚到中间再改宽度，验证行高变化后仍停在原来那一行
+        Width = 1440;
+        await Task.Delay(500);
+        _listScroll ??= FindScrollViewer(CardList);
+        _listScroll?.ScrollToVerticalOffset(400);
+        await Task.Delay(400);
+        var before = _listScroll?.VerticalOffset ?? 0;
+
+        Width = 2560;
+        await Task.Delay(900);
+        var after = _listScroll?.VerticalOffset ?? 0;
+
+        File.AppendAllText(log,
+            $"改宽度前后滚动位置：{before:F0} → {after:F0}（行高 {CardRowGap + _cardH:F0}，" +
+            $"等效行号 {after / (CardRowGap + _cardH):F2}）\n");
+    }
+
+    /// <summary>把任意窗口渲染成 PNG（用于托盘小菜单这种独立窗口）。</summary>
+    private static void SaveShotOf(Window window, string path)
+    {
+        try
+        {
+            var dpi = VisualTreeHelper.GetDpi(window);
+            var width = (int)Math.Round(window.ActualWidth * dpi.DpiScaleX);
+            var height = (int)Math.Round(window.ActualHeight * dpi.DpiScaleY);
+            if (width <= 0 || height <= 0) return;
+
+            var bitmap = new RenderTargetBitmap(width, height,
+                96 * dpi.DpiScaleX, 96 * dpi.DpiScaleY, PixelFormats.Pbgra32);
+            bitmap.Render(window);
+
+            var encoder = new PngBitmapEncoder();
+            encoder.Frames.Add(BitmapFrame.Create(bitmap));
+            using var stream = File.Create(path);
+            encoder.Save(stream);
+        }
+        catch
+        {
+            // 截图失败不影响自检
+        }
+    }
+
+    /// <summary>整屏截图：用来核对右下角托盘区里有没有那只图标；顺带截一条任务栏，看还有没有程序按钮。</summary>
+    private static void CaptureScreen(string path)
+    {
+        try
+        {
+            var bounds = WinForms.Screen.PrimaryScreen?.Bounds;
+            if (bounds is null) return;
+
+            using var bitmap = new Drawing.Bitmap(bounds.Value.Width, bounds.Value.Height);
+            using (var graphics = Drawing.Graphics.FromImage(bitmap))
+                graphics.CopyFromScreen(bounds.Value.Location, Drawing.Point.Empty, bounds.Value.Size);
+            bitmap.Save(path, Drawing.Imaging.ImageFormat.Png);
+
+            // 任务栏那条单独裁一份：整屏缩略图里那几个像素看不清
+            var stripHeight = Math.Min(80, bounds.Value.Height / 4);
+            using var strip = new Drawing.Bitmap(bounds.Value.Width, stripHeight);
+            using (var graphics = Drawing.Graphics.FromImage(strip))
+                graphics.DrawImage(bitmap,
+                    new Drawing.Rectangle(0, 0, strip.Width, strip.Height),
+                    new Drawing.Rectangle(0, bitmap.Height - stripHeight, bitmap.Width, stripHeight),
+                    Drawing.GraphicsUnit.Pixel);
+
+            strip.Save(Path.Combine(Path.GetDirectoryName(path) ?? "", "tray-taskbar.png"),
+                Drawing.Imaging.ImageFormat.Png);
+        }
+        catch
+        {
+            // 截图失败不影响自检
+        }
+    }
 
     /// <summary>跑一遍主要界面并把窗口渲染成 PNG，用于核对 DPI 与布局。</summary>
     public async Task CaptureTourAsync(string dir)

@@ -18,9 +18,13 @@ handing you off to a browser.
 
 ## Features
 
-- **5-per-row card wall with UI virtualization** — `ListBox + VirtualizingStackPanel`
+- **Fixed-width card wall, 5 per row, with UI virtualization** — the window is a fixed
+  1440×880 (no resize, only hide-to-tray), and the card area uses a fixed content width:
+  always **5 cards × 223 px** with 26 px side padding. If the work area is narrower than 1440,
+  the whole window shrinks to fit (cards down to 130 px) instead of re-flowing columns.
+  `ListBox + VirtualizingStackPanel`
   (`VirtualizationMode=Recycling`, `ScrollUnit=Pixel`, `CacheLength=1` page); only the visible rows
-  are realized: with 384 games across 77 rows the visual tree never holds more than **8–14 rows
+  are realized: with 384 games the visual tree never holds more than **8–14 rows
   (40–70 cards)**, no matter how far you scroll.
   Each card is a 16:9 cover (top corners rounded, bottom flush with the title strip) plus the
   title, the whole card is clickable, and hovering zooms the cover 1.08× inside its rounded clip.
