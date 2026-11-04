@@ -33,7 +33,8 @@ namespace FlingTrainerX
             or "--detail-check" or "--tray-check" or "--layout-check" or "--tray-exit"
             or "--page-check" or "--scroll-check" or "--name-check" or "--name-sync-check"
             or "--name-fill-check" or "--search-check" or "--suggest-click-check"
-            or "--invite-check" or "--about-check" or "--card-tip-check");
+            or "--about-check" or "--sync-ui-check"
+            or "--sync-run-check" or "--name-setting-check" or "--empty-sync-check");
 #endif
 
         /// <summary>
@@ -311,26 +312,14 @@ namespace FlingTrainerX
                 }));
             }
 
-            // 卡片标题悬停提示自检（仅 Debug）：<程序>.exe --card-tip-check <目录>
-            var cardTipIndex = Array.IndexOf(e.Args, "--card-tip-check");
-            if (cardTipIndex >= 0 && cardTipIndex + 1 < e.Args.Length && MainWindow is MainWindow cardTipWindow)
+            // 空库首页的「同步数据」按钮自检（仅 Debug）：<程序>.exe --empty-sync-check <目录>
+            var emptySyncIndex = Array.IndexOf(e.Args, "--empty-sync-check");
+            if (emptySyncIndex >= 0 && emptySyncIndex + 1 < e.Args.Length && MainWindow is MainWindow emptySyncWindow)
             {
-                var cardTipDir = e.Args[cardTipIndex + 1];
+                var emptySyncDir = e.Args[emptySyncIndex + 1];
                 Dispatcher.BeginInvoke(DispatcherPriority.ApplicationIdle, new Action(async () =>
                 {
-                    await cardTipWindow.RunCardTipCheckAsync(cardTipDir);
-                    Shutdown();
-                }));
-            }
-
-            // 首次打开 / 没有中文名时的询问框自检（仅 Debug）：<程序>.exe --invite-check <目录>
-            var inviteIndex = Array.IndexOf(e.Args, "--invite-check");
-            if (inviteIndex >= 0 && inviteIndex + 1 < e.Args.Length && MainWindow is MainWindow inviteWindow)
-            {
-                var inviteDir = e.Args[inviteIndex + 1];
-                Dispatcher.BeginInvoke(DispatcherPriority.ApplicationIdle, new Action(async () =>
-                {
-                    await inviteWindow.RunInviteCheckAsync(inviteDir);
+                    await emptySyncWindow.RunEmptySyncCheckAsync(emptySyncDir);
                     Shutdown();
                 }));
             }
@@ -348,13 +337,51 @@ namespace FlingTrainerX
             }
 
             // 详情页开关动画 + 点遮罩关闭自检（仅 Debug）：<程序>.exe --detail-check <目录>
-            var detailIndex = Array.IndexOf(e.Args, "--detail-check");
-            if (detailIndex >= 0 && detailIndex + 1 < e.Args.Length && MainWindow is MainWindow detailWindow)
+            var detailIndex = Array.IndexOf(e.Args, "--detail-check");            if (detailIndex >= 0 && detailIndex + 1 < e.Args.Length && MainWindow is MainWindow detailWindow)
             {
                 var detailDir = e.Args[detailIndex + 1];
                 Dispatcher.BeginInvoke(DispatcherPriority.ApplicationIdle, new Action(async () =>
                 {
                     await detailWindow.RunDetailCheckAsync(detailDir);
+                    Shutdown();
+                }));
+            }
+
+            // 「数据更新」设置卡片 + 同步弹框自检（仅 Debug）：<程序>.exe --sync-ui-check <目录>
+            var syncUiIndex = Array.IndexOf(e.Args, "--sync-ui-check");
+            if (syncUiIndex >= 0 && syncUiIndex + 1 < e.Args.Length && MainWindow is MainWindow syncUiWindow)
+            {
+                var syncUiDir = e.Args[syncUiIndex + 1];
+                Dispatcher.BeginInvoke(DispatcherPriority.ApplicationIdle, new Action(async () =>
+                {
+                    await syncUiWindow.RunSyncUiCheckAsync(syncUiDir);
+                    Shutdown();
+                }));
+            }
+
+            // 真跑一次「同步全部数据」再取消（仅 Debug）：<程序>.exe --sync-run-check <目录> [秒数]
+            var syncRunIndex = Array.IndexOf(e.Args, "--sync-run-check");
+            if (syncRunIndex >= 0 && syncRunIndex + 1 < e.Args.Length && MainWindow is MainWindow syncRunWindow)
+            {
+                var syncRunDir = e.Args[syncRunIndex + 1];
+                var syncRunSeconds = syncRunIndex + 2 < e.Args.Length &&
+                                     int.TryParse(e.Args[syncRunIndex + 2], out var parsed) ? parsed : 20;
+
+                Dispatcher.BeginInvoke(DispatcherPriority.ApplicationIdle, new Action(async () =>
+                {
+                    await syncRunWindow.RunSyncRunCheckAsync(syncRunDir, syncRunSeconds);
+                    Shutdown();
+                }));
+            }
+
+            // 设置页「同步中文名」按钮自检（仅 Debug）：<程序>.exe --name-setting-check <目录>
+            var nameSetIndex = Array.IndexOf(e.Args, "--name-setting-check");
+            if (nameSetIndex >= 0 && nameSetIndex + 1 < e.Args.Length && MainWindow is MainWindow nameSetWindow)
+            {
+                var nameSetDir = e.Args[nameSetIndex + 1];
+                Dispatcher.BeginInvoke(DispatcherPriority.ApplicationIdle, new Action(async () =>
+                {
+                    await nameSetWindow.RunNameSettingCheckAsync(nameSetDir);
                     Shutdown();
                 }));
             }

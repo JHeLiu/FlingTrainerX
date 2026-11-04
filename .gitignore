@@ -6,4 +6,4 @@ bin
 *.xml
 *.user
 .workbuddy
-/docs
+.docs

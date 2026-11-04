@@ -20,6 +20,11 @@ public static class TrainerDataService
     };
 
     /// <summary>从官网拉取最新列表，并复用本地的封面 / 中文名 / 下载表。返回 null 表示失败。</summary>
+    /// <remarks>
+    /// 首页已经改成只读本地 SQLite，正常流程不再调用它；
+    /// 现在拿官网数据统一走 <see cref="TrainerSyncService"/>（设置 → 数据更新），
+    /// 这里保留给需要「一次性把首页刷成官网第一页」的场合。
+    /// </remarks>
     public static async Task<TrainerLibrary?> RefreshAsync(TrainerLibrary current, CancellationToken ct = default)
     {
         try

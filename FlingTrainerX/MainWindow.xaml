@@ -205,38 +205,6 @@
                                 FontSize="9.5"
                                 Foreground="{StaticResource B.TextMute}"
                                 Text="—" />
-
-                            <!--  中文名：平时就这一行安静的入口，点开是同步进度面板  -->
-                            <Border
-                                x:Name="NameSyncLink"
-                                Margin="0,4,0,-2"
-                                Padding="0,3"
-                                Background="Transparent"
-                                Cursor="Hand"
-                                MouseLeftButtonUp="NameSyncLink_Click"
-                                ToolTip="Steam 中文名同步 · 点开看进度或手动跑一轮">
-                                <Border.Style>
-                                    <Style TargetType="Border">
-                                        <Setter Property="TextBlock.Foreground" Value="#FF7FB4FF" />
-                                        <Style.Triggers>
-                                            <Trigger Property="IsMouseOver" Value="True">
-                                                <Setter Property="TextBlock.Foreground" Value="#FFC6E0FF" />
-                                            </Trigger>
-                                        </Style.Triggers>
-                                    </Style>
-                                </Border.Style>
-                                <StackPanel Orientation="Horizontal">
-                                    <TextBlock
-                                        x:Name="NameSyncLinkText"
-                                        FontSize="9.5"
-                                        Text="中文名 —" />
-                                    <TextBlock
-                                        Margin="4,0,0,0"
-                                        FontSize="9"
-                                        Opacity="0.7"
-                                        Text="›" />
-                                </StackPanel>
-                            </Border>
                         </StackPanel>
                     </Border>
                 </Grid>
@@ -413,7 +381,7 @@
                         Orientation="Horizontal">
                         <!--
                             Steam 中文名后台同步的小胶囊：只有同步跑起来时才出现在刷新按钮左边，
-                            跑完自己收起来；平时想手动开一轮，用左下角「数据源」里那行中文名入口。
+                            跑完自己收起来；平时想手动开一轮，用「设置 → 数据更新」里的「同步中文名」。
                         -->
                         <Button
                             x:Name="NamePill"
@@ -471,7 +439,7 @@
                             x:Name="RefreshButton"
                             Click="Refresh_Click"
                             Style="{StaticResource IconBtn}"
-                            ToolTip="加载最新数据">
+                            ToolTip="重新读取本地数据（同步请到设置 → 数据更新）">
                             <TextBlock
                                 x:Name="RefreshGlyph"
                                 FontFamily="{StaticResource F.Icon}"
@@ -581,10 +549,7 @@
                                                     MouseEnter="Card_MouseEnter"
                                                     MouseLeave="Card_MouseLeave"
                                                     Style="{StaticResource CardButton}"
-                                                    Tag="{Binding}"
-                                                    ToolTip="{Binding DisplayTitle}"
-                                                    ToolTipService.InitialShowDelay="400"
-                                                    ToolTipService.ShowDuration="20000">
+                                                    Tag="{Binding}">
                                                     <Grid>
                                                         <Grid.RowDefinitions>
                                                             <RowDefinition Height="*" />
@@ -640,7 +605,7 @@
                                                             <!--
                                                                 标题最多两行（LineHeight 19 × 2 = 38），第三行整行裁掉；
                                                                 不能加 TextTrimming：它和 TextWrapping 一起用时会被压成单行省略。
-                                                                名字太长时鼠标悬停用 ToolTip 显示完整标题
+                                                                也不挂 ToolTip：卡片上已经有名字，鼠标划过再弹一层纯属打扰。
                                                             -->
                                                             <TextBlock
                                                                 MaxHeight="38"
@@ -650,10 +615,7 @@
                                                                 Foreground="White"
                                                                 LineHeight="19"
                                                                 Text="{Binding DisplayTitle}"
-                                                                TextWrapping="Wrap"
-                                                                ToolTip="{Binding DisplayTitle}"
-                                                                ToolTipService.InitialShowDelay="350"
-                                                                ToolTipService.ShowDuration="20000" />
+                                                                TextWrapping="Wrap" />
 
                                                             <!--
                                                                 更新时间 / 选项数两个标签：
@@ -750,6 +712,22 @@
                                     Text=""
                                     TextAlignment="Center"
                                     TextWrapping="Wrap" />
+
+                                <!--
+                                    本地一条数据都没有时唯一该做的事：这里直接给一个同步入口，
+                                    不用再让用户自己找「设置 → 数据更新」。
+                                -->
+                                <Button
+                                    x:Name="EmptySyncButton"
+                                    Height="36"
+                                    Margin="0,18,0,0"
+                                    Padding="20,0"
+                                    HorizontalAlignment="Center"
+                                    Click="EmptySync_Click"
+                                    Content="同步数据"
+                                    FontSize="12"
+                                    Style="{StaticResource PrimaryBtn}"
+                                    Visibility="Collapsed" />
                             </StackPanel>
                         </Grid>
                         <!--  ==================== 设置 ====================  -->
@@ -767,111 +745,237 @@
                                 VerticalScrollBarVisibility="Auto">
                                 <StackPanel Width="760" HorizontalAlignment="Left">
                                     <!--
+                                        版式参考系统「设置」页：分组标题放在卡片外面（小号灰字），
+                                        标题 + 副标题在左、操作按钮在右，一行一件事，行间用极淡的线分隔。
+                                    -->
+                                    <TextBlock
+                                        Margin="6,2,0,9"
+                                        FontSize="11.5"
+                                        FontWeight="SemiBold"
+                                        Foreground="#FF7E93A9"
+                                        Text="数据更新" />
+
+                                    <!--  首页只读本地 SQLite，所以「拿新数据」全部集中到这一组  -->
+                                    <!--
                                         设置卡片：底色要比页面底（#FF0E1825）明显亮一档、边框也要看得见，
                                         否则在 1080p / 100% 缩放的屏幕上整张卡几乎糊在背景里
                                     -->
                                     <Border
-                                        Padding="18,15"
+                                        Padding="20,4"
                                         Background="#FF2B4058"
                                         BorderBrush="#FF466280"
                                         BorderThickness="1"
                                         CornerRadius="12">
-                                        <Grid>
-                                            <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="*" />
-                                                <ColumnDefinition Width="Auto" />
-                                            </Grid.ColumnDefinitions>
+                                        <StackPanel>
+                                            <!--  同步全部数据：按官网分页从头翻到尾  -->
+                                            <Grid Margin="0,16">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
 
-                                            <StackPanel VerticalAlignment="Center" Orientation="Horizontal">
-                                                <Border
-                                                    Width="34"
-                                                    Height="34"
-                                                    Background="#FF344F6E"
-                                                    CornerRadius="9">
+                                                <StackPanel VerticalAlignment="Center">
                                                     <TextBlock
-                                                        HorizontalAlignment="Center"
-                                                        VerticalAlignment="Center"
-                                                        FontFamily="{StaticResource F.Icon}"
-                                                        FontSize="15"
-                                                        Foreground="#FF8FC6FF"
-                                                        Text="&#xE74D;" />
-                                                </Border>
-                                                <StackPanel Margin="12,0,0,0" VerticalAlignment="Center">
+                                                        FontSize="13.5"
+                                                        FontWeight="SemiBold"
+                                                        Foreground="#FFF0F6FD"
+                                                        Text="同步全部数据" />
+                                                    <TextBlock
+                                                        MaxWidth="470"
+                                                        Margin="0,4,0,0"
+                                                        HorizontalAlignment="Left"
+                                                        FontSize="10.5"
+                                                        Foreground="#FF8FA3BA"
+                                                        LineHeight="16"
+                                                        Text="从官网第一页翻到最后一页，官网没改动的会自动跳过；首次同步耗时较长。"
+                                                        TextWrapping="Wrap" />
+                                                </StackPanel>
+
+                                                <Button
+                                                    x:Name="SyncAllButton"
+                                                    Grid.Column="1"
+                                                    Height="34"
+                                                    Margin="24,0,0,0"
+                                                    Padding="16,0"
+                                                    VerticalAlignment="Center"
+                                                    Click="SyncAll_Click"
+                                                    Content="开始同步"
+                                                    FontSize="11.5"
+                                                    Style="{StaticResource PrimaryBtn}"
+                                                    ToolTip="一页一页翻到最后一页，官网没改动的会自动跳过" />
+                                            </Grid>
+
+                                            <Border Height="1" Background="#FF3A5570" />
+
+                                            <!--  同步已有数据：按本地库逐款重抓详情页  -->
+                                            <Grid Margin="0,16">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+
+                                                <StackPanel VerticalAlignment="Center">
+                                                    <TextBlock
+                                                        FontSize="13.5"
+                                                        FontWeight="SemiBold"
+                                                        Foreground="#FFF0F6FD"
+                                                        Text="同步已有数据" />
+                                                    <TextBlock
+                                                        MaxWidth="470"
+                                                        Margin="0,4,0,0"
+                                                        HorizontalAlignment="Left"
+                                                        FontSize="10.5"
+                                                        Foreground="#FF8FA3BA"
+                                                        LineHeight="16"
+                                                        Text="按本地库已有的游戏逐个重抓详情页，补全下载表与介绍图。"
+                                                        TextWrapping="Wrap" />
+                                                </StackPanel>
+
+                                                <Button
+                                                    x:Name="SyncExistingButton"
+                                                    Grid.Column="1"
+                                                    Height="34"
+                                                    Margin="24,0,0,0"
+                                                    Padding="16,0"
+                                                    VerticalAlignment="Center"
+                                                    Click="SyncExisting_Click"
+                                                    Content="开始同步"
+                                                    FontSize="11.5"
+                                                    Style="{StaticResource GhostBtn}"
+                                                    ToolTip="按本地库一款一款重抓详情页（下载表 / 介绍图），用于补全已有数据" />
+                                            </Grid>
+
+                                            <Border Height="1" Background="#FF3A5570" />
+
+                                            <!--  同步中文名：名单走官网 A-Z，名字走 Steam（原来的左下角入口搬过来了）  -->
+                                            <Grid Margin="0,16">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+
+                                                <StackPanel VerticalAlignment="Center">
+                                                    <TextBlock
+                                                        FontSize="13.5"
+                                                        FontWeight="SemiBold"
+                                                        Foreground="#FFF0F6FD"
+                                                        Text="同步中文名" />
+                                                    <TextBlock
+                                                        x:Name="NameSyncSettingDesc"
+                                                        MaxWidth="470"
+                                                        Margin="0,4,0,0"
+                                                        HorizontalAlignment="Left"
+                                                        FontSize="10.5"
+                                                        Foreground="#FF8FA3BA"
+                                                        LineHeight="16"
+                                                        Text="从 Steam 逐个换取游戏中文名，换过的会自动跳过。"
+                                                        TextWrapping="Wrap" />
+                                                </StackPanel>
+
+                                                <Button
+                                                    x:Name="NameSyncButton"
+                                                    Grid.Column="1"
+                                                    Height="34"
+                                                    Margin="24,0,0,0"
+                                                    Padding="16,0"
+                                                    VerticalAlignment="Center"
+                                                    Click="NameSyncSetting_Click"
+                                                    Content="开始同步"
+                                                    FontSize="11.5"
+                                                    Style="{StaticResource GhostBtn}"
+                                                    ToolTip="打开同步面板并开始换取中文名，已换到的不会重复请求" />
+                                            </Grid>
+                                        </StackPanel>
+                                    </Border>
+
+                                    <!--  ======== 通用：清缓存 + 免责声明 ========  -->
+                                    <TextBlock
+                                        Margin="6,22,0,9"
+                                        FontSize="11.5"
+                                        FontWeight="SemiBold"
+                                        Foreground="#FF7E93A9"
+                                        Text="通用" />
+
+                                    <Border
+                                        Padding="20,4"
+                                        Background="#FF2B4058"
+                                        BorderBrush="#FF466280"
+                                        BorderThickness="1"
+                                        CornerRadius="12">
+                                        <StackPanel>
+                                            <Grid Margin="0,16">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+
+                                                <StackPanel VerticalAlignment="Center">
                                                     <TextBlock
                                                         FontSize="13.5"
                                                         FontWeight="SemiBold"
                                                         Foreground="#FFF0F6FD"
                                                         Text="清除缓存" />
                                                     <TextBlock
-                                                        Margin="0,3,0,0"
+                                                        MaxWidth="470"
+                                                        Margin="0,4,0,0"
+                                                        HorizontalAlignment="Left"
                                                         FontSize="10.5"
                                                         Foreground="#FF8FA3BA"
-                                                        Text="删除本地缓存的卡片数据、图片和已下载文件" />
+                                                        LineHeight="16"
+                                                        Text="删除本地缓存的卡片数据、图片和已下载文件；收藏不受影响。"
+                                                        TextWrapping="Wrap" />
                                                 </StackPanel>
-                                            </StackPanel>
 
-                                            <Button
-                                                x:Name="ClearCacheButton"
-                                                Grid.Column="1"
-                                                Height="34"
-                                                VerticalAlignment="Center"
-                                                Click="ClearCache_Click"
-                                                Content="清除缓存"
-                                                Style="{StaticResource PrimaryBtn}" />
-                                        </Grid>
-                                    </Border>
-
-                                    <!--  ======== 免责声明（点击查看完整声明弹窗） ========  -->
-                                    <Border
-                                        Margin="0,12,0,0"
-                                        Padding="18,15"
-                                        Background="#FF2B4058"
-                                        BorderBrush="#FF466280"
-                                        BorderThickness="1"
-                                        CornerRadius="12">
-                                        <Grid>
-                                            <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="*" />
-                                                <ColumnDefinition Width="Auto" />
-                                            </Grid.ColumnDefinitions>
-
-                                            <StackPanel VerticalAlignment="Center" Orientation="Horizontal">
-                                                <Border
-                                                    Width="34"
+                                                <Button
+                                                    x:Name="ClearCacheButton"
+                                                    Grid.Column="1"
                                                     Height="34"
-                                                    Background="#FF344F6E"
-                                                    CornerRadius="9">
-                                                    <TextBlock
-                                                        HorizontalAlignment="Center"
-                                                        VerticalAlignment="Center"
-                                                        FontFamily="{StaticResource F.Icon}"
-                                                        FontSize="15"
-                                                        Foreground="#FF8FC6FF"
-                                                        Text="&#xE946;" />
-                                                </Border>
-                                                <StackPanel Margin="12,0,0,0" VerticalAlignment="Center">
+                                                    Margin="24,0,0,0"
+                                                    Padding="16,0"
+                                                    VerticalAlignment="Center"
+                                                    Click="ClearCache_Click"
+                                                    Content="清除缓存"
+                                                    FontSize="11.5"
+                                                    Style="{StaticResource GhostBtn}" />
+                                            </Grid>
+
+                                            <Border Height="1" Background="#FF3A5570" />
+
+                                            <Grid Margin="0,16">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+
+                                                <StackPanel VerticalAlignment="Center">
                                                     <TextBlock
                                                         FontSize="13.5"
                                                         FontWeight="SemiBold"
                                                         Foreground="#FFF0F6FD"
                                                         Text="免责声明" />
                                                     <TextBlock
-                                                        Margin="0,3,0,0"
+                                                        MaxWidth="470"
+                                                        Margin="0,4,0,0"
+                                                        HorizontalAlignment="Left"
                                                         FontSize="10.5"
                                                         Foreground="#FF8FA3BA"
-                                                        Text="软件性质与使用须知，使用前请务必阅读" />
+                                                        LineHeight="16"
+                                                        Text="软件性质与使用须知，使用前请务必阅读。"
+                                                        TextWrapping="Wrap" />
                                                 </StackPanel>
-                                            </StackPanel>
 
-                                            <Button
-                                                Grid.Column="1"
-                                                Height="34"
-                                                Padding="16,0"
-                                                VerticalAlignment="Center"
-                                                Click="About_Click"
-                                                Content="查看声明"
-                                                Style="{StaticResource GhostBtn}" />
-                                        </Grid>
+                                                <Button
+                                                    Grid.Column="1"
+                                                    Height="34"
+                                                    Margin="24,0,0,0"
+                                                    Padding="16,0"
+                                                    VerticalAlignment="Center"
+                                                    Click="About_Click"
+                                                    Content="查看声明"
+                                                    FontSize="11.5"
+                                                    Style="{StaticResource GhostBtn}" />
+                                            </Grid>
+                                        </StackPanel>
                                     </Border>
                                 </StackPanel>
                             </ScrollViewer>
@@ -1640,6 +1744,131 @@
                                     Visibility="Collapsed" />
                             </StackPanel>
                         </Grid>
+                    </StackPanel>
+                </Border>
+            </Grid>
+
+            <!--  ==================== 数据更新 · 同步进度（模态） ====================  -->
+            <!--
+                这是真正意义上的模态框：遮罩故意不挂任何鼠标事件，点它什么也不会发生；
+                Esc 在 OnPreviewKeyDown 里也被挡住。想离开只有「取消同步」，
+                同步本身跑在后台线程，取消靠 CancellationToken，不会把界面卡住。
+            -->
+            <Grid
+                x:Name="SyncLayer"
+                Grid.ColumnSpan="2"
+                Visibility="Collapsed">
+                <Rectangle Fill="#CC080D15" />
+
+                <Border
+                    Width="486"
+                    Padding="24,22"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    Background="#FF1D3249"
+                    BorderBrush="{StaticResource B.Border}"
+                    BorderThickness="1"
+                    CornerRadius="14">
+                    <Border.Effect>
+                        <DropShadowEffect
+                            BlurRadius="28"
+                            Direction="270"
+                            Opacity="0.45"
+                            ShadowDepth="10"
+                            Color="#FF000000" />
+                    </Border.Effect>
+                    <StackPanel>
+                        <StackPanel Orientation="Horizontal">
+                            <Border
+                                Width="34"
+                                Height="34"
+                                Background="#FF344F6E"
+                                CornerRadius="9">
+                                <TextBlock
+                                    HorizontalAlignment="Center"
+                                    VerticalAlignment="Center"
+                                    FontFamily="{StaticResource F.Icon}"
+                                    FontSize="15"
+                                    Foreground="#FF8FC6FF"
+                                    Text="&#xE895;" />
+                            </Border>
+                            <StackPanel Margin="12,0,0,0" VerticalAlignment="Center">
+                                <TextBlock
+                                    x:Name="SyncTitle"
+                                    FontSize="15"
+                                    FontWeight="SemiBold"
+                                    Foreground="#FFE6EFF8"
+                                    Text="同步全部数据" />
+                                <TextBlock
+                                    x:Name="SyncSubtitle"
+                                    Margin="0,3,0,0"
+                                    FontSize="10.5"
+                                    Foreground="#FF8FA3BA"
+                                    Text="正在从官网读取数据" />
+                            </StackPanel>
+                        </StackPanel>
+
+                        <Border
+                            Margin="0,18,0,0"
+                            Padding="14,12"
+                            Background="#FF24384F"
+                            CornerRadius="9">
+                            <TextBlock
+                                FontSize="11"
+                                Foreground="#FFA9C0D6"
+                                LineHeight="18"
+                                TextWrapping="Wrap"><Run Text="同步快慢完全取决于你的网络，有时快有时慢，不要着急哦。" /><LineBreak /><Run Text="如果实在过慢，可以开启 VPN 加速后再重新同步。" /></TextBlock>
+                        </Border>
+
+                        <TextBlock
+                            x:Name="SyncGameText"
+                            Margin="0,16,0,0"
+                            FontSize="12.5"
+                            Foreground="#FFF0F6FD"
+                            Text="正在准备…"
+                            TextTrimming="CharacterEllipsis" />
+                        <TextBlock
+                            x:Name="SyncPhaseText"
+                            Margin="0,4,0,0"
+                            FontSize="10.5"
+                            Foreground="#FF8FA3BA"
+                            Text=""
+                            TextTrimming="CharacterEllipsis" />
+
+                        <ProgressBar
+                            x:Name="SyncBar"
+                            Height="6"
+                            Margin="0,12,0,0"
+                            IsIndeterminate="True"
+                            Maximum="1"
+                            Minimum="0"
+                            Style="{StaticResource ThinProgress}"
+                            Value="0" />
+
+                        <Grid Margin="0,10,0,0">
+                            <TextBlock
+                                x:Name="SyncCountText"
+                                FontSize="10.5"
+                                Foreground="#FF8FA3BA"
+                                Text="" />
+                            <TextBlock
+                                x:Name="SyncPercentText"
+                                HorizontalAlignment="Right"
+                                FontSize="10.5"
+                                Foreground="#FF8FC2FF"
+                                Text="" />
+                        </Grid>
+
+                        <Button
+                            x:Name="SyncCancelButton"
+                            Height="32"
+                            Margin="0,18,0,0"
+                            Padding="18,0"
+                            HorizontalAlignment="Right"
+                            Click="SyncCancel_Click"
+                            Content="取消同步"
+                            FontSize="12"
+                            Style="{StaticResource GhostBtn}" />
                     </StackPanel>
                 </Border>
             </Grid>
