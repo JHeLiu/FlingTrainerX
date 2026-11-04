@@ -3,7 +3,7 @@
 - 自检截图统一存 .docs/，验证完删除临时目录
 
 ## 代码风格
-- WPF .NET 10（net10.0-windows），界面风格参考 Steam 客户端
+- 界面风格参考 Steam 客户端
 - 新增控件优先复用 Themes/Theme.xaml 里的现有样式
 - 不引入第三方 UI 库
 
