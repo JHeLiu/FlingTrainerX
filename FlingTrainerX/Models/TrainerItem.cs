@@ -174,13 +174,36 @@ public sealed class TrainerItem : INotifyPropertyChanged
     /// <summary>官网标注的最近更新时间（YYYY.MM.DD）。</summary>
     [JsonIgnore] public string UpdatedText => string.IsNullOrWhiteSpace(Updated) ? Modified : Updated;
 
-    /// <summary>卡片右上角的小角标，例如 "10.31"。</summary>
-    [JsonIgnore] public string UpdatedShort
+    /// <summary>卡片标题下方的更新时间标签，例如 "2026.10.31"（完整日期，不省年份）。</summary>
+    [JsonIgnore]
+    public string UpdatedShort
     {
         get
         {
             var t = UpdatedText.Replace('.', '-').Replace('/', '-');
-            return DateTime.TryParse(t, out var d) ? d.ToString("MM.dd") : UpdatedText;
+            return DateTime.TryParse(t, out var d) ? d.ToString("yyyy.MM.dd") : UpdatedText;
+        }
+    }
+
+    /// <summary>
+    /// 角标的悬停提示：写全日期，免得只看 "10.31" 分不清是哪一年。
+    /// 官网只给到日（没有时分），所以正常就是 "最后更新:2026.10.31"；
+    /// 万一以后带上时分，这里也不会把它吞掉。没有值时不挂提示（返回 null）。
+    /// </summary>
+    [JsonIgnore]
+    public string? UpdatedTip
+    {
+        get
+        {
+            var text = UpdatedText;
+            if (string.IsNullOrWhiteSpace(text)) return null;
+
+            var t = text.Replace('.', '-').Replace('/', '-');
+            if (!DateTime.TryParse(t, out var d)) return $"最后更新:{text}";
+
+            return d.TimeOfDay == TimeSpan.Zero
+                ? $"最后更新:{d:yyyy.MM.dd}"
+                : $"最后更新:{d:yyyy.MM.dd HH:mm}";
         }
     }
 
@@ -225,6 +248,9 @@ public sealed class TrainerItem : INotifyPropertyChanged
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
 
     [JsonIgnore] public string OptionCountText => $"{OptionCount} 项修改";
+
+    /// <summary>卡片标题区那个小标签的文字，例如 "30项"；没有数据时为空串（标签自动隐藏）。</summary>
+    [JsonIgnore] public string OptionCountTag => RealOptionCount > 0 ? $"{RealOptionCount}项" : "";
 
     [JsonIgnore] public int RealOptionCount =>
         OptionCount > 0 ? OptionCount : Groups.Sum(g => g.Items.Count);

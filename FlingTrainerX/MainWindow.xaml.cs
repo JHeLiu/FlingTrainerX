@@ -4,6 +4,7 @@ using System.IO;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
+using FlingTrainerX.Controls;
 using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
@@ -24,8 +25,9 @@ public partial class MainWindow : Window
     private enum LibraryTab { Recent, Popular }
 
     /// <summary>
-    /// 固定版心：以 1920×1080 全屏为设计基准（右栏 1658 可用 → 版心 1460，一行 5 张、每张 279）。
-    /// 屏幕再宽也不再放大，多出来的宽度平均留在两侧；窗口缩小时整块等比缩小。
+    /// 固定版心：窗口默认 1280×780，右栏可用约 1018 → 版心 1020，一行 5 张、每张 191；
+    /// 每页 15 条正好 3 行铺满一屏（不出滚动条）。窗口更宽时版心最多放到 1460，
+    /// 卡片能长多大由「3 行是否还装得下」决定（见 <see cref="UpdateCardMetrics"/>）。
     /// </summary>
     private const double MaxContentWidth = 1460;
 
@@ -42,11 +44,17 @@ public partial class MainWindow : Window
     /// <summary>卡片之间留的空隙（像素）。</summary>
     private const double CardGap = 12;
 
+    /// <summary>列表右侧给滚动条预留的宽度，和 CardListBox 的 Padding 保持一致。</summary>
+    private const double CardListGutter = 6;
+
     /// <summary>行与行之间的空隙，和 DataTemplate 里那个 ItemsControl 的 Margin 保持一致。</summary>
     private const double CardRowGap = 12;
 
-    /// <summary>卡片下半部的标题区高度；封面高度 = 卡宽 × 9/16，正好和官网头图同比例，不裁不变形。</summary>
-    private const double CardInfoHeight = 58;
+    /// <summary>
+    /// 卡片下半部的标题区高度：两行标题 + 一行「更新时间 / 选项数」标签。
+    /// 封面高度 = 卡宽 × 9/16，正好和官网头图同比例，不裁不变形。
+    /// </summary>
+    private const double CardInfoHeight = 84;
 
     /// <summary>窗口四角圆角半径（DWM 原生圆角 + 内容裁剪用同一套数值）。</summary>
     private const double ShellCornerRadius = 12;
@@ -69,26 +77,60 @@ public partial class MainWindow : Window
     private ViewMode _mode = ViewMode.Library;
     private LibraryTab _libraryTab = LibraryTab.Recent;
     private bool _detailOpen;
+
+    // 详情页开关动画：和「关于」弹窗同一套观感（淡入 + 轻微放大回弹），只是面板大、
+    // 所以起始缩放收到 0.96、回弹幅度收到 0.35，避免 1000 宽的面板晃得夸张。
+    private const double DetailScaleFrom = 0.96;
+    private static readonly TimeSpan DetailOpenTime = TimeSpan.FromMilliseconds(300);
+    private static readonly TimeSpan DetailCloseTime = TimeSpan.FromMilliseconds(220);
+    private static readonly TimeSpan DetailBackdropTime = TimeSpan.FromMilliseconds(240);
+
+    /// <summary>每次开关自增，用来识别「关闭动画播到一半又被重新打开」的情况。</summary>
+    private int _detailAnimToken;
     private bool _busy;
 
-    private int _nextPage = 1;
-    private bool _loadingMore;
-    private bool _noMore;
-    private bool _loadFailed;
+    /// <summary>
+    /// 上下分页的状态：当前页、官网总数、每页内容缓存。
+    /// 游戏库和搜索结果各一份，退出搜索后游戏库的页码进度不会被打乱。
+    /// </summary>
+    private sealed class Pager
+    {
+        public int Page = 1;
+        public int TotalPages = 1;
+        public int TotalCount;                                    // 官网 X-WP-Total，0 = 还没拿到
+        public bool Loading;
+        public bool Failed;
 
-    /// <summary>上次触发翻页时的滚动位置；用来保证「一次滚动只翻一页」。</summary>
-    private double _lastTriggerOffset;
+        /// <summary>上次想跳去但还没加载成功的页码（失败重试的目标）。</summary>
+        public int PendingPage;
+
+        public readonly Dictionary<int, List<TrainerItem>> Cache = new();
+
+        public void Reset()
+        {
+            Page = 1;
+            TotalPages = 1;
+            TotalCount = 0;
+            Loading = false;
+            Failed = false;
+            PendingPage = 0;
+            Cache.Clear();
+        }
+    }
+
+    private readonly Pager _libraryPager = new();
+
+    private readonly Pager _searchPager = new();
+
+    /// <summary>当前生效的分页状态：搜索时用搜索那份，否则用游戏库那份。</summary>
+    private Pager CurrentPager => Searching ? _searchPager : _libraryPager;
+
+    /// <summary>库的换代序号：清缓存 / 手动同步时自增，晚到的旧页响应直接丢掉。</summary>
+    private int _librarySeq;
 
     /// <summary>当前生效的官网搜索词；空串表示没在搜索，列表回到正常游戏库。</summary>
     private string _keyword = "";
 
-    /// <summary>官网搜索结果（翻页往后追加），和游戏库列表分开存。</summary>
-    private readonly List<TrainerItem> _results = new();
-
-    // 搜索结果的分页状态单独一份，退出搜索后游戏库的翻页进度不会被打乱
-    private int _searchPage = 1;
-    private bool _searchNoMore;
-    private bool _searchFailed;
     private bool _searching;
     private string? _searchError;
 
@@ -102,8 +144,27 @@ public partial class MainWindow : Window
     private double _cardW;
     private double _cardH;
 
-    /// <summary>正在还原滚动位置：这期间的 ScrollChanged 不是用户滚的，别触发翻页。</summary>
-    private bool _resplitAdjusting;
+    /// <summary>上一次算卡片尺寸时，是不是「一页 15 条装不下、要滚动」的状态。</summary>
+    private bool _cardScrollable;
+
+    // ==================== 搜索智能提示（本地游戏名库） ====================
+
+    /// <summary>打字停下来 160ms 再查库，避免每敲一个字都打一次 SQL。</summary>
+    private readonly DispatcherTimer _suggestTimer = new() { Interval = TimeSpan.FromMilliseconds(160) };
+
+    private List<GameNameRow> _suggests = new();
+
+    /// <summary>从提示里选了一条、正在回填搜索框：这时别再触发一次提示查询。</summary>
+    private bool _applyingSuggest;
+
+    // ==================== 游戏名库同步（官网全量 + Steam 中文名） ====================
+
+    private CancellationTokenSource? _nameSyncCts;
+    private bool _nameSyncRunning;
+
+    /// <summary>这次启动已经问过「要不要同步中文名」了，问过就不再打扰。</summary>
+    private bool _namePromptShown;
+
     private ScrollViewer? _listScroll;
     private readonly WinForms.NotifyIcon _trayIcon;
     private readonly TrayMenuWindow _trayMenu;
@@ -116,6 +177,9 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+
+        // 设置页「免责声明」卡片上显示的版本号
+        VersionBadge.Text = $"v{AppVersion}";
 
         var executablePath = Environment.ProcessPath;
         _trayIconImage = !string.IsNullOrWhiteSpace(executablePath)
@@ -143,14 +207,20 @@ public partial class MainWindow : Window
         // 不再读取任何本地数据（无内置种子、无列表缓存），启动后立即向官网请求
         _library = new TrainerLibrary();
         TrainerDataService.CurrentLibrary = _library;
-        _nextPage = 1;
         _favorites.AddRange(TrainerDataService.LoadFavorites(_library));
 
         CardList.ItemsSource = _rows;
         QueueList.ItemsSource = DownloadManager.Instance.Tasks;
         NavList.SelectedIndex = 0;
 
+        // 列表可视高度是「3 行装不装得下」的依据，但它要等排版跑完才有值：
+        // 挂一次 SizeChanged，让卡片尺寸在拿到真实视口后再收敛一次，
+        // 免得启动时按「视口 0 → 不压高度」算出个偏大的卡片，之后一直不复原
+        CardList.SizeChanged += (_, _) => UpdateCardMetrics();
+
         DownloadManager.Instance.Changed += (_, _) => OnDownloadsChanged();
+
+        _suggestTimer.Tick += SuggestTimer_Tick;
 
         Loaded += OnLoaded;
         Closing += OnWindowClosing;
@@ -158,6 +228,79 @@ public partial class MainWindow : Window
         SizeChanged += OnSizeChanged;
         StateChanged += OnWindowStateChanged;
         PreviewKeyDown += OnPreviewKeyDown;
+        PreviewMouseDown += OnPreviewMouseDown;
+        Deactivated += OnWindowDeactivated;
+    }
+
+    /// <summary>自检时才有的调试日志：记录提示弹窗是谁关掉的，正式运行不会写。</summary>
+#if DEBUG
+    private string? _selfCheckLog;
+#endif
+
+    [System.Diagnostics.Conditional("DEBUG")]
+    private void CheckLog(string text)
+    {
+#if DEBUG
+        if (_selfCheckLog is null) return;
+
+        try { File.AppendAllText(_selfCheckLog, $"{DateTime.Now:HH:mm:ss.fff} {text}\n"); }
+        catch { /* 自检日志写不进去也不影响流程 */ }
+#endif
+    }
+
+    /// <summary>
+    /// 提示列表改成 StaysOpen=True 之后，点窗口别处要自己收。
+    /// 两种点击要放行：搜索框（继续输入）和提示列表本身（要选中那一条）。
+    /// 注意 Popup 的点击也会走到这里 —— 它的内容虽然挂在独立窗口上，输入路由还是并进来的，
+    /// 这里要是不放行，就会先把列表清空，后面的 ListBox 只能拿到一个 null。
+    /// </summary>
+    private void OnPreviewMouseDown(object sender, MouseButtonEventArgs e)
+    {
+        if (!SuggestPopup.IsOpen) return;
+
+        if (e.OriginalSource is DependencyObject src)
+        {
+            if (SearchShell.IsAncestorOf(src)) return;
+
+            if (SuggestPopup.Child is Visual popupRoot &&
+                src is Visual visual &&
+                (ReferenceEquals(popupRoot, visual) || popupRoot.IsAncestorOf(visual)))
+            {
+                return;
+            }
+        }
+
+        CheckLog("OnPreviewMouseDown → CloseSuggest");
+        CloseSuggest();
+    }
+
+    /// <summary>
+    /// 切到别的程序时把提示收掉。Popup 是独立窗口，点它的那一瞬间主窗口也会收到一次 Deactivated，
+    /// 所以不能立刻关 —— 等一拍再看前台到底是谁：还是自己家的（主窗口或 Popup 窗口）就不动。
+    /// </summary>
+    private void OnWindowDeactivated(object? sender, EventArgs e)
+    {
+        if (!SuggestPopup.IsOpen) return;
+
+        Dispatcher.BeginInvoke(DispatcherPriority.Background, new Action(() =>
+        {
+            if (!SuggestPopup.IsOpen) return;
+
+            var foreground = GetForegroundWindow();
+            var main = new WindowInteropHelper(this).Handle;
+
+            var popup = IntPtr.Zero;
+            if (SuggestPopup.Child is FrameworkElement child &&
+                PresentationSource.FromVisual(child) is HwndSource source)
+            {
+                popup = source.Handle;
+            }
+
+            if (foreground == main || (popup != IntPtr.Zero && foreground == popup)) return;
+
+            CheckLog($"Deactivated → CloseSuggest（前台 {foreground}，主窗口 {main}，Popup {popup}）");
+            CloseSuggest();
+        }));
     }
 
     /// <summary>
@@ -184,8 +327,8 @@ public partial class MainWindow : Window
         var workHeight = (info.Work.Bottom - info.Work.Top) / scale;
         if (workWidth < 320 || workHeight < 240) return;
 
-        var width = Math.Min(1440, Math.Max(900, workWidth - 32));
-        var height = Math.Min(880, Math.Max(520, workHeight - 32));
+        var width = Math.Min(1280, Math.Max(900, workWidth - 32));
+        var height = Math.Min(780, Math.Max(520, workHeight - 32));
 
         // 窗口是固定尺寸，只有工作区放不下时才缩到放得下（1080p + 150% 缩放这类场景）
         // 最大化时 WindowChrome 会把窗口向外撑出一个边框宽度（左上角跑到 -7,-7），
@@ -247,6 +390,18 @@ public partial class MainWindow : Window
 
     [DllImport("user32.dll")]
     private static extern bool SetCursorPos(int x, int y);
+
+    [DllImport("user32.dll")]
+    private static extern bool SetForegroundWindow(IntPtr hwnd);
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr GetForegroundWindow();
+
+    [DllImport("user32.dll")]
+    private static extern void mouse_event(uint flags, uint dx, uint dy, uint data, UIntPtr extra);
+
+    private const uint MouseEventLeftDown = 0x0002;
+    private const uint MouseEventLeftUp = 0x0004;
 
     private const int WmGetMinMaxInfo = 0x0024;
 
@@ -407,18 +562,40 @@ public partial class MainWindow : Window
         UpdateQueueBadge();
 
         _ = LoadFirstPageAsync();
+
+        // 游戏名库为空就顺手抓一份（有数据直接跳过），搜索框的智能提示靠它
+        _ = SeedGameNamesAsync();
+    }
+
+    /// <summary>
+    /// 把一页的新数据并进内存库：同 ID 的用新对象**替换**（把本地路径搬过去），新的追加。
+    /// 换掉旧对象是为了让收藏夹 / 详情页拿到的永远是最新版本，不会停在启动时的缓存快照上。
+    /// </summary>
+    private void MergeIntoLibrary(IEnumerable<TrainerItem> items)
+    {
+        var index = new Dictionary<int, int>(_library.Items.Count);
+        for (var i = 0; i < _library.Items.Count; i++) index[_library.Items[i].Id] = i;
+
+        foreach (var item in items)
+        {
+            if (index.TryGetValue(item.Id, out var at))
+            {
+                TrainerDataService.MergeLocal(item, _library.Items[at]);
+                _library.Items[at] = item;
+            }
+            else
+            {
+                index[item.Id] = _library.Items.Count;
+                _library.Items.Add(item);
+            }
+        }
     }
 
     /// <summary>从 SQLite 缓存表里读回上次的卡片；首次运行没有缓存就跳过。</summary>
     private void LoadCachedCards()
     {
         var cached = TrainerDataService.LoadCachedLibrary();
-        if (cached is null || cached.Items.Count == 0)
-        {
-            // 没有缓存就从头翻页，别让上次留下的页码把前几页跳过去
-            TrainerDataService.SavePageCursor(1);
-            return;
-        }
+        if (cached is null || cached.Items.Count == 0) return;
 
         _library = cached;
         TrainerDataService.CurrentLibrary = _library;
@@ -426,66 +603,59 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
-    /// 向官网拉第一页：拿到的 24 条替换同 ID 的缓存条目，缓存里其余的（之前翻过的页）接在后面，
-    /// 这样刷新不会把已经看过的内容清空。抓到的数据同时写回缓存表。
+    /// 向官网拉第一页并登记进分页缓存。拿到的条目替换同 ID 的缓存条目
+    /// （保留本地路径），缓存里其余的（之前翻过的页）只用于收藏关联，
+    /// 列表本身按页展示。抓到的数据同时写回缓存表。
     /// </summary>
     private async Task LoadFirstPageAsync()
     {
-        var previous = _library.Items.ToList();
-        var byId = previous.ToDictionary(i => i.Id);
+        var seq = ++_librarySeq;
+        var hasCache = _library.Items.Count > 0;
 
         _firstLoading = true;
         _firstError = null;
-        if (previous.Count == 0) Render();
+        if (!hasCache) Render();
 
         var fetched = new List<TrainerItem>();
 
         try
         {
-            var (items, totalPages) = await TrainerWeb.FetchPageAsync(1);
+            var (items, totalPages, totalCount) = await TrainerWeb.FetchPageAsync(1);
+            if (seq != _librarySeq) return;
+
             fetched = items;
 
-            foreach (var item in items)
-            {
-                if (byId.TryGetValue(item.Id, out var prev)) TrainerDataService.MergeLocal(item, prev);
-            }
+            MergeIntoLibrary(items);
 
-            var seen = items.Select(i => i.Id).ToHashSet();
-            var merged = new List<TrainerItem>(items);
-            foreach (var prev in previous)
-            {
-                if (seen.Add(prev.Id)) merged.Add(prev);
-            }
+            _library.FetchedAt = DateTime.Now.ToString("yyyy-MM-dd HH:mm");
 
-            _library = new TrainerLibrary
-            {
-                Source = TrainerWeb.Site,
-                FetchedAt = DateTime.Now.ToString("yyyy-MM-dd HH:mm"),
-                Pages = 1,
-                Items = merged
-            };
-
-            _nextPage = Math.Max(2, TrainerDataService.LoadPageCursor() + 1);
-            _noMore = totalPages <= 1;
+            _libraryPager.Reset();
+            _libraryPager.Cache[1] = items;
+            _libraryPager.Page = 1;
+            _libraryPager.TotalPages = Math.Max(1, totalPages);
+            _libraryPager.TotalCount = totalCount;
 
             TrainerDataService.SaveCache(items);
         }
         catch (Exception ex)
         {
+            if (seq != _librarySeq) return;
+
             _firstError = ex.Message;
 
             // 有缓存就继续用缓存，只把失败写进状态栏；完全没数据才进空状态
-            if (previous.Count == 0)
+            if (!hasCache)
             {
                 _library = new TrainerLibrary();
-                _nextPage = 1;
-                _noMore = true;
+                _libraryPager.Reset();
             }
         }
         finally
         {
-            _firstLoading = false;
+            if (seq == _librarySeq) _firstLoading = false;
         }
+
+        if (seq != _librarySeq) return;
 
         TrainerDataService.CurrentLibrary = _library;
 
@@ -575,15 +745,15 @@ public partial class MainWindow : Window
 
     /// <summary>
     /// 固定版心布局：内容区最宽 <see cref="MaxContentWidth"/>，多出来的宽度平均留在两侧。
-    /// 一行恒定 5 张，卡片宽度只随窗口宽度等比变化（1080 窗口 ≈ 151，1440 窗口 ≈ 223，
-    /// 1920 全屏及以上锁死在 279），高度按封面 16:9 + 固定标题区跟随，永不变形。
+    /// 一行恒定 5 张，卡片宽度只随窗口宽度等比变化（1080 窗口 ≈ 151，1280 窗口 ≈ 191，
+    /// 更宽的屏幕锁死在 191），高度按封面 16:9 + 固定标题区跟随，永不变形。
     /// </summary>
     private void UpdateCardMetrics()
     {
         // 直接拿窗口宽度反推，不依赖子控件排版：Window.SizeChanged 触发时子控件拿到的
         // ActualWidth 还可能是上一帧的，按它算会差一档
         var slot = ActualWidth - SidebarWidth - ContentSideMargin * 2;
-        if (slot < 200) slot = 1440 - SidebarWidth - ContentSideMargin * 2; // 还没真正显示时按默认窗口算
+        if (slot < 200) slot = 1280 - SidebarWidth - ContentSideMargin * 2; // 还没真正显示时按默认窗口算
 
         var contentW = Math.Min(MaxContentWidth, slot);
 
@@ -592,10 +762,28 @@ public partial class MainWindow : Window
         if (double.IsNaN(CardArea.Width) || Math.Abs(CardArea.Width - contentW) > 0.5)
             CardArea.Width = contentW;
 
-        // 减去列表右侧给滚动条留的 6 和一点余量
-        var avail = contentW - 14;
-        var w = Math.Floor((avail - CardGap * (CardRow.Capacity - 1)) / CardRow.Capacity);
+        // 列表右侧给滚动条留了 6px（CardListBox 的 Padding），剩下的整条宽度由 5 张卡片 + 4 个间距精确分完，
+        // 这样第一张贴左、最后一张贴右，和上方标题的左右边缘对得上
+        var avail = Math.Max(0, contentW - CardListGutter);
+        var w = CardRowPanel.CardWidthOf(avail, CardRow.Capacity, CardGap);
         w = Math.Clamp(w, MinCardWidth, MaxCardWidth);
+
+        // 每页 15 条 = 3 行：卡片再宽也不能让 3 行撑出列表可视高度，
+        // 否则默认一屏就会冒出滚动条。窗口很高时才允许跟着放大（上限仍是 MaxCardWidth）。
+        // 留 4px 余量，避免取整后差一两像素刚好溢出。
+        // 超过一页（收藏夹、以后要是有更大的页）就不压了：按宽度自然排，让列表自己滚动，
+        // 否则条数越多卡片越小，越滚越难看清。
+        var viewport = CardList.ActualHeight;
+        if (viewport > 120 && _items.Count <= TrainerWeb.PageSize)
+        {
+            var maxRowH = (viewport - CardRowGap * 3 - 4) / 3;
+            var maxCover = maxRowH - CardInfoHeight;
+            if (maxCover > 0)
+            {
+                var hLimit = Math.Floor(maxCover * 16d / 9d);
+                w = Math.Min(w, Math.Max(MinCardWidth, hLimit));
+            }
+        }
 
         // 封面按 16:9 撑满上半部（官网头图就是这个比例），下半部固定放文字
         var h = Math.Round(w * 9d / 16d) + CardInfoHeight;
@@ -632,13 +820,7 @@ public partial class MainWindow : Window
         {
             // 先让新行高真正排完，ScrollViewer 的 Extent 更新之后再滚
             CardList.UpdateLayout();
-
-            _resplitAdjusting = true;
             scroll.ScrollToVerticalOffset(target);
-            _resplitAdjusting = false;
-
-            // 自己挪的位置不算「用户往下滚」，别顺手触发了翻页
-            _lastTriggerOffset = target;
         }));
     }
 
@@ -647,14 +829,29 @@ public partial class MainWindow : Window
     /// <summary>是否处于「官网搜索结果」状态。</summary>
     private bool Searching => _keyword.Length > 0;
 
-    // 列表接口没有浏览量字段，热门页用每款游戏的修改项目数作排序依据。
-    private IEnumerable<TrainerItem> SourceItems =>
-        _mode == ViewMode.Favorites ? _favorites
-        : Searching ? _results
-        : _libraryTab == LibraryTab.Popular
-            ? _library.Items.OrderByDescending(i => i.RealOptionCount)
-                .ThenByDescending(i => DateOrder(i.UpdatedText))
-            : _library.Items.OrderByDescending(i => DateOrder(i.UpdatedText));
+    // 列表接口没有浏览量字段，热门页用每款游戏的修改项目数作排序依据（当前页内排）。
+    private IEnumerable<TrainerItem> SourceItems
+    {
+        get
+        {
+            if (_mode == ViewMode.Favorites) return _favorites;
+
+            var pager = CurrentPager;
+            if (pager.Cache.TryGetValue(pager.Page, out var page))
+            {
+                return _libraryTab == LibraryTab.Popular
+                    ? page.OrderByDescending(i => i.RealOptionCount)
+                        .ThenByDescending(i => DateOrder(i.UpdatedText))
+                    : page;
+            }
+
+            // 第 1 页还没到手：搜索中 / 已经开始按页取数就先空着（显示加载状态），
+            // 本地缓存里有旧卡片就先顶一屏，避免启动时白屏
+            return Searching || _libraryPager.Cache.Count > 0 || _library.Items.Count == 0
+                ? Array.Empty<TrainerItem>()
+                : _library.Items.OrderByDescending(i => DateOrder(i.UpdatedText));
+        }
+    }
 
     private static DateTime DateOrder(string value) =>
         DateTime.TryParse(value.Replace('.', '-'), out var date) ? date : DateTime.MinValue;
@@ -665,11 +862,16 @@ public partial class MainWindow : Window
         {
             case ViewMode.Library when Searching:
                 SectionTitle.Text = "搜索结果";
-                SectionSubtitle.Text = $"官网搜索“{_keyword}” · 结果来自 flingtrainer.com";
+                SectionSubtitle.Text = _searchPager.TotalCount > 0
+                    ? $"“{_keyword}” · 共 {_searchPager.TotalCount} 款"
+                    : $"“{_keyword}”";
                 break;
             case ViewMode.Library:
                 SectionTitle.Text = "Steam 单机游戏库";
-                SectionSubtitle.Text = $"已经收录 {_library.Items.Count} 款游戏";
+                // 「已经收录」按官网总数（X-WP-Total）实时显示；当前页码在右下角分页栏和状态栏
+                SectionSubtitle.Text = _libraryPager.TotalCount > 0
+                    ? $"已经收录 {_libraryPager.TotalCount} 款游戏"
+                    : $"已经收录 {CachedGameCount()} 款游戏";
                 break;
             case ViewMode.Favorites:
                 SectionTitle.Text = "收藏夹";
@@ -706,7 +908,7 @@ public partial class MainWindow : Window
             CardList.Visibility = Visibility.Collapsed;
             EmptyState.Visibility = Visibility.Collapsed;
             RefreshQueue();
-            UpdateFooter();
+            UpdatePager();
             return;
         }
 
@@ -714,11 +916,11 @@ public partial class MainWindow : Window
         {
             CardList.Visibility = Visibility.Collapsed;
             EmptyState.Visibility = Visibility.Collapsed;
-            UpdateFooter();
+            UpdatePager();
             return;
         }
 
-        // 搜索走官网接口，结果已经在 _results 里，这里不再做本地过滤
+        // 列表按当前页取数（搜索与游戏库各自一份分页缓存）
         SetItems(SourceItems);
 
         // 首屏还没拿到数据：只有这一个状态需要特殊处理（数据全部实时拉取）
@@ -732,18 +934,18 @@ public partial class MainWindow : Window
             if (_firstLoading)
             {
                 EmptyGlyph.Text = "\uE895";
-                EmptyTitle.Text = "正在从官网读取游戏列表";
-                EmptyDesc.Text = "数据实时来自 flingtrainer.com，不读取本地缓存。";
+                EmptyTitle.Text = "正在读取游戏列表";
+                EmptyDesc.Text = "数据实时拉取，不读取本地缓存。";
             }
             else
             {
                 EmptyGlyph.Text = "\uE783";
                 EmptyTitle.Text = "读取失败";
-                EmptyDesc.Text = $"连不上 flingtrainer.com：{_firstError}\n\n" +
+                EmptyDesc.Text = $"连不上服务器：{_firstError}\n\n" +
                                  "检查网络后点右上角的「同步」按钮重试。";
             }
 
-            UpdateFooter();
+            UpdatePager();
             return;
         }
 
@@ -763,18 +965,18 @@ public partial class MainWindow : Window
             else if (Searching)
             {
                 EmptyGlyph.Text = "\uE721";
-                EmptyTitle.Text = _searching ? "正在搜索官网…" : "官网没有搜到";
+                EmptyTitle.Text = _searching ? "正在搜索…" : "没有搜到";
                 EmptyDesc.Text = _searching
-                    ? $"正在向 flingtrainer.com 查询“{_keyword}”"
+                    ? $"正在搜索“{_keyword}”"
                     : _searchError is not null
                         ? $"搜索失败：{_searchError}"
-                        : $"flingtrainer.com 上没有与“{_keyword}”相关的修改器，试试英文游戏名或换个关键词。";
+                        : $"没有找到与“{_keyword}”相关的修改器，试试英文游戏名或换个关键词。";
             }
             else
             {
                 EmptyGlyph.Text = "\uE721";
                 EmptyTitle.Text = "没有找到匹配的游戏";
-                EmptyDesc.Text = "游戏库是空的，点右上角的同步按钮从官网读一次。";
+                EmptyDesc.Text = "游戏库是空的，点右上角的同步按钮重新读取一次。";
             }
         }
         else
@@ -783,10 +985,10 @@ public partial class MainWindow : Window
             EmptyState.Visibility = Visibility.Collapsed;
         }
 
-        UpdateFooter();
+        UpdatePager();
     }
 
-    /// <summary>整体重建（搜索 / 切换视图）。</summary>
+    /// <summary>整体重建（换页 / 搜索 / 切换视图）。</summary>
     private void SetItems(IEnumerable<TrainerItem> items)
     {
         _items.Clear();
@@ -796,233 +998,166 @@ public partial class MainWindow : Window
         foreach (var row in CardRow.Split(_items))
             _rows.Add(row);
 
-        // 换了一整套内容，滚动位置与触发点都重新算
-        _lastTriggerOffset = 0;
-    }
-
-    /// <summary>翻页时只往最后一行塞，行满才新建一行，不重建已生成的卡片。</summary>
-    private void AppendItems(IEnumerable<TrainerItem> items)
-    {
-        foreach (var item in items)
+        // 条数跨过「一页装得下 / 装不下」这条线时，卡片尺寸规则要换一套（见 UpdateCardMetrics）
+        var scrollable = _items.Count > TrainerWeb.PageSize;
+        if (scrollable != _cardScrollable)
         {
-            _items.Add(item);
-
-            if (_rows.Count == 0 || _rows[^1].IsFull)
-                _rows.Add(new CardRow());
-
-            _rows[^1].Items.Add(item);
+            _cardScrollable = scrollable;
+            UpdateCardMetrics();
         }
     }
 
-    // ==================== 翻页加载 ====================
+    // ==================== 上下分页 ====================
 
-    /// <summary>游戏库和搜索结果都支持滚动翻页；收藏夹 / 队列 / 设置不翻页。</summary>
+    /// <summary>游戏库和搜索结果都走分页；收藏夹 / 队列 / 设置不分页。</summary>
     private bool CanPage => _mode == ViewMode.Library;
 
-    /// <summary>当前这一轮翻页是否已经到底（游戏库与搜索结果各记一份）。</summary>
-    private bool AtEnd
+    /// <summary>刷新右下角分页栏：总数、当前页码、上一页 / 下一页可用态、加载与重试。</summary>
+    private void UpdatePager()
     {
-        get => Searching ? _searchNoMore : _noMore;
-        set { if (Searching) _searchNoMore = value; else _noMore = value; }
+        var pager = CurrentPager;
+        var canShow = CanPage && (pager.Cache.Count > 0 || pager.Loading || pager.Failed);
+        PagerBar.Visibility = canShow ? Visibility.Visible : Visibility.Collapsed;
+        if (!canShow) return;
+
+        PagerTotalText.Text = pager.TotalCount > 0 ? $"共 {pager.TotalCount} 款" : "";
+        PagerTotalText.Visibility = pager.TotalCount > 0 ? Visibility.Visible : Visibility.Collapsed;
+        // 只显示当前页码：总数官网知道，但界面上不需要「第几 / 共几页」这种完整页码
+        PagerPageText.Text = $"第 {pager.Page} 页";
+        PagerPrev.IsEnabled = !pager.Loading && pager.Page > 1;
+        PagerNext.IsEnabled = !pager.Loading && pager.Page < pager.TotalPages;
+        PagerLoading.Visibility = pager.Loading ? Visibility.Visible : Visibility.Collapsed;
+        PagerRetry.Visibility = pager.Failed && !pager.Loading ? Visibility.Visible : Visibility.Collapsed;
     }
 
-    /// <summary>当前这一轮翻页是否失败（同上，各记一份）。</summary>
-    private bool PageFailed
+    private void PagerPrev_Click(object sender, RoutedEventArgs e) => _ = GoToPageAsync(CurrentPager.Page - 1);
+
+    private void PagerNext_Click(object sender, RoutedEventArgs e) => _ = GoToPageAsync(CurrentPager.Page + 1);
+
+    /// <summary>失败重试：目标还是「上次想去的那一页」，页码停在旧页不影响当前显示。</summary>
+    private void PagerRetry_Click(object sender, RoutedEventArgs e)
     {
-        get => Searching ? _searchFailed : _loadFailed;
-        set { if (Searching) _searchFailed = value; else _loadFailed = value; }
+        var pager = CurrentPager;
+        var target = pager.PendingPage > 0 ? pager.PendingPage : pager.Page + 1;
+        pager.Failed = false;
+        _ = GoToPageAsync(target);
     }
 
-    private void UpdateFooter()
+    /// <summary>页码变了：重排卡片、滚回顶部、刷新副标题 / 状态栏 / 分页栏。</summary>
+    private void ShowPageChanged()
     {
-        var show = CanPage && _items.Count > 0;
-        CardsFooter.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
-
-        FooterLoading.Visibility = _loadingMore ? Visibility.Visible : Visibility.Collapsed;
-        FooterRetry.Visibility = show && PageFailed && !_loadingMore ? Visibility.Visible : Visibility.Collapsed;
-        FooterRetry.IsHitTestVisible = true;
-        FooterEnd.Visibility = show && AtEnd && !_loadingMore && !PageFailed
-            ? Visibility.Visible
-            : Visibility.Collapsed;
-
-        CardsFooter.IsHitTestVisible = FooterRetry.Visibility == Visibility.Visible;
-        FooterEndText.Text = AtEnd ? $"已经到底了 · 共 {_items.Count} 款" : "继续滚动加载更多";
-    }
-
-    private void CardList_ScrollChanged(object sender, ScrollChangedEventArgs e)
-    {
-        // 只认「用户真的往下滚了」这一种变化。一页刚刚插进来时内容高度会变，
-        // ScrollViewer 也会发 ScrollChanged，但 VerticalChange 是 0——旧代码把这种也算进去，
-        // 于是插完一页立刻又满足「到底了」，几页连着自动加载，看着像一次性全拉下来。
-        // 改窗口宽度时按行号还原滚动位置也不该算用户滚动。
-        if (_resplitAdjusting || e.VerticalChange <= 0) return;
-
-        AskForNextPage(e.VerticalOffset, e.ViewportHeight, e.ExtentHeight);
-    }
-
-    /// <summary>已经贴着底了还继续滚轮时 Offset 不会变、也就没有 ScrollChanged，这里补一次判断。</summary>
-    private void CardList_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
-    {
-        if (e.Delta >= 0) return;
-
-        var sv = _listScroll ??= FindScrollViewer(CardList);
-        if (sv is null || sv.ScrollableHeight - sv.VerticalOffset > 1) return;
-
-        AskForNextPage(sv.VerticalOffset, sv.ViewportHeight, sv.ExtentHeight, userGesture: true);
+        Render();
+        ScrollToTop();
+        UpdateStats();
     }
 
     /// <summary>
-    /// 要不要再要一页。硬约束：上一次请求还没回来不加载、已经到底不加载、
-    /// 上次失败等用户点重试、同一次滚动只触发一页（必须再往下滚过上次触发点才会再要）。
+    /// 跳到第 <paramref name="target"/> 页：已经缓存过的页直接切换，
+    /// 没缓存的向官网请求（期间列表停留在当前页，分页栏显示加载状态）。
     /// </summary>
-    /// <param name="userGesture">
-    /// 用户主动滚轮到底：这时滚动位置本来就到顶了、不会再变，所以不受「滚动位置必须更靠下」的限制。
-    /// </param>
-    private void AskForNextPage(double offset, double viewport, double extent, bool userGesture = false)
+    private async Task GoToPageAsync(int target)
     {
-        if (!CanPage || _loadingMore || AtEnd || PageFailed) return;
-        if (extent <= viewport + 40) return;                // 撑不满一屏，没什么可翻的
-        if (offset + viewport < extent - 120) return;       // 离底部还差一行以上
-        if (!userGesture && offset <= _lastTriggerOffset + 0.5) return;  // 这次的位置没比上次触发点更靠下
+        var pager = CurrentPager;
+        target = Math.Clamp(target, 1, Math.Max(1, pager.TotalPages));
+        if (pager.Loading) return;
 
-        _lastTriggerOffset = offset;
-        _ = LoadNextPageAsync();
-    }
-
-    private void FooterRetry_Click(object sender, RoutedEventArgs e)
-    {
-        PageFailed = false;
-        _ = LoadNextPageAsync();
-    }
-
-    private async Task LoadNextPageAsync()
-    {
-        if (_loadingMore || AtEnd) return;
-
-        if (Searching)
+        if (pager.Cache.ContainsKey(target))
         {
-            await LoadNextSearchPageAsync();
+            pager.PendingPage = 0;
+            pager.Page = target;
+            pager.Failed = false;
+            ShowPageChanged();
             return;
         }
 
-        _loadingMore = true;
-        _loadFailed = false;
-        UpdateFooter();
-        StatusText.Text = $"正在加载第 {_nextPage} 页…";
+        pager.PendingPage = target;
+        pager.Loading = true;
+        pager.Failed = false;
+        UpdatePager();
+        StatusText.Text = Searching
+            ? $"正在加载搜索结果第 {target} 页…"
+            : $"正在加载第 {target} 页…";
 
-        try
-        {
-            // 一次只请求一页；如果整页都是启动时从缓存里读回来的（内容已经在列表里了），
-            // 就顺延到下一页，最多连找 5 页——不然用户滚到底也看不到任何新东西。
-            for (var attempt = 0; attempt < 5; attempt++)
-            {
-                var page = _nextPage;
-                var (items, totalPages) = await TrainerWeb.FetchPageAsync(page);
-
-                _library.Pages = page;
-                _nextPage = page + 1;
-                TrainerDataService.SavePageCursor(page);
-
-                if (items.Count == 0 || _nextPage > totalPages) _noMore = true;
-
-                var known = _library.Items.Select(i => i.Id).ToHashSet();
-                var added = items.Where(i => known.Add(i.Id)).ToList();
-                if (added.Count == 0)
-                {
-                    if (_noMore) break;
-                    continue;
-                }
-
-                foreach (var item in added)
-                    _library.Items.Add(item);
-
-                // 新的一页同样落库，下次启动直接读缓存
-                TrainerDataService.SaveCache(added);
-                _ = CacheCoversAsync(added);
-
-                if (CanPage)
-                {
-                    if (_libraryTab == LibraryTab.Popular) SetItems(SourceItems);
-                    else AppendItems(added);
-                    UpdateStats();
-                    StatusText.Text = $"已加载 {_library.Items.Count} 款游戏";
-                }
-
-                break;
-            }
-        }
-        catch
-        {
-            _loadFailed = true;
-            StatusText.Text = "加载下一页失败，可点击底部重试";
-        }
-        finally
-        {
-            _loadingMore = false;
-            UpdateFooter();
-        }
-    }
-
-    /// <summary>搜索结果滚动到底时再向官网要下一页（关键词不变，只翻 page）。</summary>
-    private async Task LoadNextSearchPageAsync()
-    {
-        // 与游戏库翻页共用同一把「正在翻页」的闸：同一时刻只允许一页在飞
-        if (_loadingMore || AtEnd) return;
-
-        _loadingMore = true;
-        _searchFailed = false;
-        UpdateFooter();
-        StatusText.Text = $"正在加载搜索结果第 {_searchPage} 页…";
-
+        var searching = Searching;
         var keyword = _keyword;
+        var searchSeq = _searchSeq;
+        var librarySeq = _librarySeq;
+
+        // 换了关键词 / 退出搜索 / 清了缓存 / 手动同步：这一页的响应作废
+        bool Stale() => searching ? searchSeq != _searchSeq : librarySeq != _librarySeq;
 
         try
         {
-            var (items, totalPages) = await TrainerWeb.SearchAsync(keyword, _searchPage);
+            var (items, totalPages, totalCount) = searching
+                ? await TrainerWeb.SearchAsync(keyword, target)
+                : await TrainerWeb.FetchPageAsync(target);
 
-            // 期间换了关键词 / 退出搜索：这一页直接丢掉
-            if (!Searching || _keyword != keyword) return;
+            if (Stale()) return;
 
-            var known = _results.Select(i => i.Id).ToHashSet();
-            var added = items.Where(i => known.Add(i.Id)).ToList();
-            _results.AddRange(added);
+            // 新页里既可能有见过的（把本地路径搬过去），也有全新的（并入内存库，收藏关联才找得到）
+            MergeIntoLibrary(items);
+            RelinkFavorites();
 
-            if (added.Count > 0)
-            {
-                AppendItems(added);
-                _ = CacheCoversAsync(added);
-            }
+            pager.Cache[target] = items;
+            pager.TotalPages = Math.Max(1, totalPages);
+            pager.TotalCount = totalCount;
+            pager.Page = target;
+            pager.PendingPage = 0;
 
-            _searchPage++;
-            if (items.Count == 0 || _searchPage > totalPages) _searchNoMore = true;
+            // 新的一页同样落库，下次启动直接读缓存
+            TrainerDataService.SaveCache(items);
+            _ = CacheCoversAsync(items);
+
+            ShowPageChanged();
         }
         catch
         {
-            _searchFailed = true;
-            StatusText.Text = "加载搜索下一页失败，可点击底部重试";
+            if (Stale()) return;
+            pager.Failed = true;
+            StatusText.Text = $"第 {target} 页加载失败，可点右下角的「重试」";
         }
         finally
         {
-            _loadingMore = false;
-            UpdateFooter();
+            pager.Loading = false;
+            if (!Stale()) UpdatePager();
         }
     }
 
     // ==================== 官网搜索 ====================
 
+    /// <summary>关键词里有没有汉字：有汉字的话官网（英文站）搜不到，要先在本地翻成英文名。</summary>
+    private static bool IsChinese(string text) =>
+        text.Any(c => (c >= 0x3400 && c <= 0x9FFF) || (c >= 0xF900 && c <= 0xFAFF));
+
     /// <summary>
-    /// 按回车才走这里：向 flingtrainer.com 的搜索接口要结果（和官网搜索页同一套结果与顺序）。
-    /// 输入过程中不会发请求，也不会动当前列表。
+    /// 按回车才走这里：向 flingtrainer.com 的搜索接口要第 1 页（和官网搜索页同一套结果与顺序）。
+    /// 输入过程中不会发请求，也不会动当前列表；后续页走右下角分页栏。
     /// </summary>
     private async Task SubmitSearchAsync()
     {
-        var keyword = SearchBox.Text.Trim();
+        var typed = SearchBox.Text.Trim();
 
         // 清空后回车 = 退出搜索，回到原来的游戏库
-        if (keyword.Length == 0)
+        if (typed.Length == 0)
         {
             ExitSearch();
             return;
+        }
+
+        // 官网接口按 URL 编码传关键词（见 TrainerWeb.SearchEndpointOf），
+        // 但官网只有英文内容，中文关键词发过去一定是空结果 ——
+        // 本地有中文名库，先把它翻成英文名，再拿英文名去官网搜（查询本身仍然走官网）。
+        var keyword = typed;
+        var translatedFrom = "";
+        if (IsChinese(typed) && AppDatabase.Instance.IsAvailable)
+        {
+            var english = AppDatabase.Instance.FindEnglishByChinese(typed);
+            if (!string.IsNullOrWhiteSpace(english) &&
+                !string.Equals(english.Trim(), typed, StringComparison.OrdinalIgnoreCase))
+            {
+                keyword = english.Trim();
+                translatedFrom = typed;
+            }
         }
 
         if (_searching) return;
@@ -1037,27 +1172,27 @@ public partial class MainWindow : Window
         var seq = ++_searchSeq;
 
         _keyword = keyword;
-        _results.Clear();
-        _searchPage = 1;
-        _searchNoMore = false;
-        _searchFailed = false;
+        _searchPager.Reset();
         _searchError = null;
         _searching = true;
 
         Render();
         ScrollToTop();
-        StatusText.Text = $"正在从官网搜索“{keyword}”…";
+        StatusText.Text = translatedFrom.Length > 0
+            ? $"正在搜索“{translatedFrom}” → {keyword}…"
+            : $"正在搜索“{keyword}”…";
 
         try
         {
-            var (items, totalPages) = await TrainerWeb.SearchAsync(keyword, 1);
+            var (items, totalPages, totalCount) = await TrainerWeb.SearchAsync(keyword, 1);
 
             // 期间又搜了别的关键词：这次的结果作废
             if (seq != _searchSeq) return;
 
-            _results.AddRange(items);
-            _searchPage = 2;
-            _searchNoMore = items.Count == 0 || totalPages <= 1;
+            _searchPager.Cache[1] = items;
+            _searchPager.Page = 1;
+            _searchPager.TotalPages = Math.Max(1, totalPages);
+            _searchPager.TotalCount = totalCount;
 
             if (items.Count > 0)
             {
@@ -1065,13 +1200,20 @@ public partial class MainWindow : Window
                 _ = CacheCoversAsync(items);
             }
 
-            StatusText.Text = $"官网搜索“{keyword}”· {items.Count} 款结果";
+            var label = translatedFrom.Length > 0 ? $"“{translatedFrom}” → {keyword}" : $"“{keyword}”";
+
+            StatusText.Text = totalCount > 0
+                ? $"搜索{label}"
+                : translatedFrom.Length > 0
+                    ? $"搜索{label} · 没有结果"
+                    : IsChinese(typed)
+                        ? $"搜索{label} · 没有结果（库里的名字是英文，可以试试英文名）"
+                        : $"搜索{label} · 没有结果";
         }
         catch (Exception ex)
         {
             if (seq != _searchSeq) return;
             _searchError = ex.Message;
-            _searchNoMore = true;
             StatusText.Text = $"搜索失败：{ex.Message}";
         }
         finally
@@ -1084,7 +1226,7 @@ public partial class MainWindow : Window
         }
     }
 
-    /// <summary>退出搜索：清掉结果，列表回到游戏库（翻页进度还停在原来那一页）。</summary>
+    /// <summary>退出搜索：清掉结果，列表回到游戏库（页码还停在原来那一页）。</summary>
     private void ExitSearch(bool clearText = false)
     {
         var was = Searching;
@@ -1092,10 +1234,7 @@ public partial class MainWindow : Window
         // 先把状态清干净，再去改输入框内容——否则 TextChanged 会再进来一次
         _searchSeq++;
         _keyword = "";
-        _results.Clear();
-        _searchPage = 1;
-        _searchNoMore = false;
-        _searchFailed = false;
+        _searchPager.Reset();
         _searching = false;
         _searchError = null;
 
@@ -1106,10 +1245,18 @@ public partial class MainWindow : Window
         if (!was) return;
 
         ScrollToTop();
-        StatusText.Text = $"已退出搜索 · 已加载 {_library.Items.Count} 款游戏";
+        UpdateStats();
     }
 
-    /// <summary>刷新左侧栏的同步时间与收藏数量。</summary>
+    /// <summary>
+    /// 「已经收录」的数字以 SQLite 缓存表为准，不用内存里那份列表：
+    /// 一键清除缓存之后库里已经是 0 条，内存里的卡片还没散，用内存数就会显示成几百款。
+    /// 数据库不可用（建库失败）时退回内存数量，至少不会一直报 0。
+    /// </summary>
+    private int CachedGameCount() =>
+        AppDatabase.Instance.IsAvailable ? AppDatabase.Instance.CacheCount() : _library.Items.Count;
+
+    /// <summary>刷新左侧栏的同步时间与收藏数量，状态栏写当前页码与官网总数。</summary>
     private void UpdateStats()
     {
         SidebarSyncText.Text = string.IsNullOrEmpty(_library.FetchedAt)
@@ -1118,10 +1265,21 @@ public partial class MainWindow : Window
 
         NavFavLabel.Text = _favorites.Count > 0 ? $"收藏夹 · {_favorites.Count}" : "收藏夹";
 
-        // 官网没有「一共多少款」这种总数可拿，这里只报已经真实加载到手的数量
-        StatusText.Text = Searching
-            ? $"官网搜索“{_keyword}”· 已加载 {_results.Count} 款"
-            : $"已经收录 {_library.Items.Count} 款游戏";
+        // 左下角「中文名 396 / 767」那行也一起跟着最新的库状态走
+        UpdateNameSyncLink();
+
+        if (Searching)
+        {
+            StatusText.Text = _searching
+                ? $"正在搜索“{_keyword}”…"
+                : _searchPager.TotalCount > 0
+                    ? $"搜索“{_keyword}”"
+                    : $"搜索“{_keyword}” · 没有结果";
+            return;
+        }
+
+        // 页码和官网总数都在右下角分页栏里，这里只报「本页加载了多少」
+        StatusText.Text = $"已加载 {_items.Count} 款游戏";
     }
 
     // ==================== 交互 ====================
@@ -1177,7 +1335,7 @@ public partial class MainWindow : Window
         UpdateQueueBadge();
         SectionSubtitle.Text = DownloadManager.Instance.SummaryText;
         SectionSubtitle.Visibility = Visibility.Visible;   // 别被「收藏夹/设置没有副标题」那次折叠带过来
-        UpdateFooter();
+        UpdatePager();
     }
 
     private void QueueCancel_Click(object sender, RoutedEventArgs e)
@@ -1203,6 +1361,12 @@ public partial class MainWindow : Window
     private void OpenDownloadDir_Click(object sender, RoutedEventArgs e)
         => DownloadManager.Instance.OpenFolder(null);
 
+    /// <summary>点左下角的 flingtrainer.com：用系统默认浏览器打开官网。</summary>
+    private void DataSourceLink_Click(object sender, MouseButtonEventArgs e)
+    {
+        OpenExternal("https://flingtrainer.com/");
+    }
+
     private void ClearFinished_Click(object sender, RoutedEventArgs e)
     {
         var count = DownloadManager.Instance.ClearFinished();
@@ -1212,7 +1376,6 @@ public partial class MainWindow : Window
 
     private void ScrollToTop()
     {
-        _lastTriggerOffset = 0;
         _listScroll ??= FindScrollViewer(CardList);
         _listScroll?.ScrollToTop();
     }
@@ -1238,14 +1401,166 @@ public partial class MainWindow : Window
         // 输入过程中不发请求、不动列表；但整段删空时直接退出搜索结果，回到原来的游戏库
         if (IsLoaded && Searching && SearchBox.Text.Trim().Length == 0)
             ExitSearch();
+
+        // 从提示里选了一条、正在回填：别再弹一次提示
+        if (_applyingSuggest) return;
+
+        QueueSuggest();
     }
 
-    /// <summary>回车才向官网搜索（不用边打字边搜）；Esc 清空并退出搜索。</summary>
-    private void SearchBox_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)
+    // ==================== 搜索智能提示（走本地 SQLite） ====================
+    //
+    // 提示只做「帮你把名字打对」，真正的搜索还是发给官网：
+    // 选中一条 → 把英文名回填搜索框 → 走原来的 SubmitSearchAsync。
+
+    /// <summary>输入停下来才查；删空就立刻收起提示。</summary>
+    private void QueueSuggest()
     {
+        _suggestTimer.Stop();
+
+        if (SearchBox.Text.Trim().Length == 0)
+        {
+            CloseSuggest();
+            return;
+        }
+
+        _suggestTimer.Start();
+    }
+
+    private async void SuggestTimer_Tick(object? sender, EventArgs e)
+    {
+        _suggestTimer.Stop();
+
+        var keyword = SearchBox.Text.Trim();
+        if (keyword.Length == 0)
+        {
+            CloseSuggest();
+            return;
+        }
+
+        if (!AppDatabase.Instance.IsAvailable) return;
+
+        // 查 SQLite 放到线程池，别卡输入
+        var rows = await Task.Run(() => AppDatabase.Instance.SearchGameNames(keyword, 8));
+
+        // 查询期间用户又改了字：这次结果作废
+        if (SearchBox.Text.Trim() != keyword) return;
+
+        if (rows.Count == 0)
+        {
+            CloseSuggest();
+            return;
+        }
+
+        _suggests = rows;
+        SuggestList.ItemsSource = rows;
+        SuggestList.SelectedIndex = -1;
+        SuggestPopup.IsOpen = true;
+
+        SearchBox.Focus();
+    }
+
+    private void CloseSuggest()
+    {
+        if (!SuggestPopup.IsOpen) return;
+
+        CheckLog("CloseSuggest 执行");
+        SuggestPopup.IsOpen = false;
+        SuggestList.ItemsSource = null;
+        _suggests = new List<GameNameRow>();
+    }
+
+    /// <summary>把提示项回填进搜索框，并直接按官网搜索走一次。</summary>
+    private void ApplySuggest(GameNameRow row)
+    {
+        _applyingSuggest = true;
+        SearchBox.Text = row.CleanEn;
+        SearchBox.CaretIndex = SearchBox.Text.Length;
+        _applyingSuggest = false;
+
+        SearchHint.Visibility = Visibility.Collapsed;
+        CloseSuggest();
+
+        _ = SubmitSearchAsync();
+    }
+
+    /// <summary>
+    /// 鼠标点提示项：不依赖 ListBox 的选中，直接从命中的元素往上找到那一行的 DataContext。
+    /// 按下就处理（Up 太晚，Popup 是独立窗口，鼠标一按就可能已经被判成「点了外面」）。
+    /// </summary>
+    private void SuggestList_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        var row = RowFromElement(e.OriginalSource);
+        CheckLog($"SuggestList PreviewMouseDown：src={e.OriginalSource?.GetType().Name}，row={row?.CleanEn ?? "null"}");
+
+        if (row is null) return;
+
+        e.Handled = true;   // 别让 ListBox 再走自己的选中 / 焦点逻辑，否则会抢走搜索框焦点
+        ApplySuggest(row);
+    }
+
+    private static GameNameRow? RowFromElement(object? source)
+    {
+        var dep = source as DependencyObject;
+        while (dep is not null and not ListBoxItem)
+            dep = VisualTreeHelper.GetParent(dep);
+
+        return (dep as ListBoxItem)?.DataContext as GameNameRow;
+    }
+
+    private void MoveSuggest(int delta)
+    {
+        if (_suggests.Count == 0) return;
+
+        var index = SuggestList.SelectedIndex + delta;
+        if (index < 0) index = _suggests.Count - 1;
+        if (index >= _suggests.Count) index = 0;
+
+        SuggestList.SelectedIndex = index;
+        SuggestList.ScrollIntoView(SuggestList.SelectedItem);
+    }
+
+    /// <summary>
+    /// 提示打开时：↑↓ 挪高亮、回车把那一条拿去搜官网、Esc 先收提示。
+    /// 必须挂在 PreviewKeyDown 上——单行 TextBox 自己的类处理器会先把 ↑↓ 当成
+    /// 「光标去行首 / 行尾」吃掉，写在 KeyDown 里永远收不到方向键。
+    /// </summary>
+    private void SearchBox_PreviewKeyDown(object sender, System.Windows.Input.KeyEventArgs e)
+    {
+        if (SuggestPopup.IsOpen)
+        {
+            switch (e.Key)
+            {
+                case Key.Down:
+                    e.Handled = true;
+                    MoveSuggest(+1);
+                    return;
+                case Key.Up:
+                    e.Handled = true;
+                    MoveSuggest(-1);
+                    return;
+                case Key.Escape:
+                    e.Handled = true;
+                    CloseSuggest();
+                    return;
+                case Key.Enter:
+                    e.Handled = true;
+                    // 选中了就用选中的那一条，没选就直接搜输入框里的字
+                    if (SuggestList.SelectedItem is GameNameRow row)
+                        ApplySuggest(row);
+                    else
+                    {
+                        CloseSuggest();
+                        _ = SubmitSearchAsync();
+                    }
+                    return;
+            }
+        }
+
         if (e.Key == Key.Enter)
         {
             e.Handled = true;
+            CloseSuggest();
             _ = SubmitSearchAsync();
         }
         else if (e.Key == Key.Escape)
@@ -1340,31 +1655,63 @@ public partial class MainWindow : Window
         DetailLayer.Visibility = Visibility.Visible;
         _detailOpen = true;
 
+        // 封面跟着弹窗一起上屏，不再等动画播完：卡片刚显示过同一张图，
+        // 位图基本还在 NetImages 的缓存里（本地文件解码也就十几毫秒），
+        // 网络图本来就是后台下载、下完自动刷新，不会卡住开场动画。
+        _ = view.LoadImagesAsync();
+
         // 先把布局算完，动画只做位图合成：期间不重排、不重绘文字，稳定 60 帧
+        DetailBackdrop.BeginAnimation(OpacityProperty, null);
+        DetailBackdrop.Opacity = 0;
         DetailHost.BeginAnimation(OpacityProperty, null);
         DetailHost.Opacity = 0;
+        DetailScale.BeginAnimation(ScaleTransform.ScaleXProperty, null);
+        DetailScale.BeginAnimation(ScaleTransform.ScaleYProperty, null);
+        DetailScale.ScaleX = DetailScale.ScaleY = DetailScaleFrom;
         DetailSlide.BeginAnimation(TranslateTransform.YProperty, null);
         DetailSlide.Y = 10;
         DetailHost.UpdateLayout();
 
         DetailHost.CacheMode = new BitmapCache();
 
-        var ease = new CubicEase { EasingMode = EasingMode.EaseOut };
-        DetailHost.BeginAnimation(OpacityProperty,
-            new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(130)));
+        var token = ++_detailAnimToken;
 
-        var slide = new DoubleAnimation(10, 0, TimeSpan.FromMilliseconds(170)) { EasingFunction = ease };
-        slide.Completed += (_, _) =>
+        var fade = new CubicEase { EasingMode = EasingMode.EaseOut };
+        // 和关于弹窗同一档回弹（0.5）：从 0.96 起跳，实测过冲约 0.5%、350ms 左右落定
+        var spring = new BackEase { Amplitude = 0.5, EasingMode = EasingMode.EaseOut };
+
+        DetailBackdrop.BeginAnimation(
+            OpacityProperty,
+            new DoubleAnimation(0, 1, new Duration(DetailBackdropTime)) { EasingFunction = fade });
+
+        DetailHost.BeginAnimation(
+            OpacityProperty,
+            new DoubleAnimation(0, 1, new Duration(TimeSpan.FromMilliseconds(170))) { EasingFunction = fade });
+
+        // X / Y 各用一条独立时间线：同一个 Timeline 复用给两个属性会各自生成时钟，Completed 会触发两次
+        var zoomX = new DoubleAnimation(DetailScaleFrom, 1, new Duration(DetailOpenTime)) { EasingFunction = spring };
+        var zoomY = new DoubleAnimation(DetailScaleFrom, 1, new Duration(DetailOpenTime)) { EasingFunction = spring };
+
+        // 注意：Completed 必须在 BeginAnimation 之前挂，先启动再挂回调的话永远不会触发
+        zoomY.Completed += (_, _) =>
         {
-            // 动画结束后恢复实时渲染，滚动与文字才清晰；内容与图片再依次上屏
+            // 开场还没播完就被关掉（token 变了）就别再去构建列表了，那个详情页已经不要了
+            if (token != _detailAnimToken) return;
+
+            // 动画结束后恢复实时渲染，滚动与文字才清晰；选项列表再依次上屏
+            // （33~46 行的模板 + 文本排版约 80ms，放在开场动画之前会明显卡一下）
             DetailHost.CacheMode = null;
             Dispatcher.BeginInvoke(DispatcherPriority.ApplicationIdle, new Action(() =>
             {
-                _ = view.LoadImagesAsync();
                 view.LoadOptions();
             }));
         };
-        DetailSlide.BeginAnimation(TranslateTransform.YProperty, slide);
+
+        DetailScale.BeginAnimation(ScaleTransform.ScaleXProperty, zoomX);
+        DetailScale.BeginAnimation(ScaleTransform.ScaleYProperty, zoomY);
+        DetailSlide.BeginAnimation(
+            TranslateTransform.YProperty,
+            new DoubleAnimation(10, 0, new Duration(DetailOpenTime)) { EasingFunction = fade });
     }
 
     /// <summary>收藏状态变化：写 SQLite + 更新内存列表 + 刷新收藏夹视图。</summary>
@@ -1394,8 +1741,8 @@ public partial class MainWindow : Window
     {
         if (!_detailOpen) return;
 
-        // 只有事件源就是遮罩层本身才算「点在外面」，点到弹框的任何内容都不关
-        if (!ReferenceEquals(e.OriginalSource, DetailLayer)) return;
+        // 只有事件源就是那层遮罩矩形才算「点在外面」，点到弹框的任何内容都不关
+        if (!ReferenceEquals(e.OriginalSource, DetailBackdrop)) return;
 
         e.Handled = true;
         CloseDetail();
@@ -1407,19 +1754,55 @@ public partial class MainWindow : Window
         _detailOpen = false;
 
         DetailHost.CacheMode = new BitmapCache();
-        var fade = new DoubleAnimation(0, TimeSpan.FromMilliseconds(90));
-        fade.Completed += (_, _) =>
+
+        var token = ++_detailAnimToken;
+        var ease = new CubicEase { EasingMode = EasingMode.EaseIn };
+        var duration = new Duration(DetailCloseTime);
+
+        var cardFade = new DoubleAnimation(1, 0, duration) { EasingFunction = ease };
+
+        // 注意：Completed 必须在 BeginAnimation 之前挂，先启动再挂回调的话永远不会触发
+        cardFade.Completed += (_, _) =>
         {
+            // 播到一半又被点开（token 变了）就别收层，否则会把刚打开的详情页一起关掉
+            if (token != _detailAnimToken) return;
+
             DetailLayer.Visibility = Visibility.Collapsed;
             DetailHost.Content = null;
             DetailHost.CacheMode = null;
+
+            // 清掉动画值，回到 XAML 里的初始态（0.96 / 透明），下次打开才能从头播
             DetailHost.BeginAnimation(OpacityProperty, null);
+            DetailBackdrop.BeginAnimation(OpacityProperty, null);
+            DetailScale.BeginAnimation(ScaleTransform.ScaleXProperty, null);
+            DetailScale.BeginAnimation(ScaleTransform.ScaleYProperty, null);
+            DetailSlide.BeginAnimation(TranslateTransform.YProperty, null);
+            DetailHost.Opacity = 0;
+            DetailBackdrop.Opacity = 0;
+            DetailScale.ScaleX = DetailScale.ScaleY = DetailScaleFrom;
+            DetailSlide.Y = 10;
         };
-        DetailHost.BeginAnimation(OpacityProperty, fade);
-        DetailSlide.BeginAnimation(TranslateTransform.YProperty,
-            new DoubleAnimation(0, 6, TimeSpan.FromMilliseconds(110)));
+
+        // 面板比关于弹窗大得多，收场只缩到 0.97、位移 6，够柔和又不晃
+        DetailHost.BeginAnimation(OpacityProperty, cardFade);
+        DetailScale.BeginAnimation(
+            ScaleTransform.ScaleXProperty,
+            new DoubleAnimation(1, 0.97, duration) { EasingFunction = ease });
+        DetailScale.BeginAnimation(
+            ScaleTransform.ScaleYProperty,
+            new DoubleAnimation(1, 0.97, duration) { EasingFunction = ease });
+        DetailSlide.BeginAnimation(
+            TranslateTransform.YProperty,
+            new DoubleAnimation(0, 6, duration) { EasingFunction = ease });
+        DetailBackdrop.BeginAnimation(
+            OpacityProperty,
+            new DoubleAnimation(1, 0, duration) { EasingFunction = ease });
     }
 
+    /// <summary>
+    /// 刷新按钮只管「官网最新数据」。中文名同步已经拆到左下角的小胶囊里后台跑，
+    /// 两件事不再捆在一起——谁也不会因为对方慢而卡着。
+    /// </summary>
     private async void Refresh_Click(object sender, RoutedEventArgs e)
     {
         if (_busy) return;
@@ -1433,33 +1816,557 @@ public partial class MainWindow : Window
         RefreshButton.IsEnabled = false;
         StatusText.Text = "正在从 flingtrainer.com 同步…";
 
-        var fresh = await TrainerDataService.RefreshAsync(_library);
+        try
+        {
+            // 名单库空着（清过库、或第一次抓取没成功）就顺手重建一次，
+            // 免得点完刷新侧栏还是「建立中文名库」、中文名一直没数据
+            if (AppDatabase.Instance.IsAvailable &&
+                AppDatabase.Instance.GameNameCount() == 0 &&
+                !_nameSyncRunning)
+            {
+                StartNameSync(rebuild: true);
+            }
 
-        rotate.BeginAnimation(RotateTransform.AngleProperty, null);
+            await RefreshLibraryAsync();
+        }
+        catch (Exception ex)
+        {
+            StatusText.Text = $"同步失败：{ex.Message}";
+            StatusDot.Fill = (Brush)FindResource("B.Accent");
+        }
+        finally
+        {
+            rotate.BeginAnimation(RotateTransform.AngleProperty, null);
+            RefreshButton.IsEnabled = true;
+            _busy = false;
+        }
+    }
+
+    /// <summary>刷首页数据（原来的刷新逻辑）：重拉第 1 页并重置分页。</summary>
+    private async Task RefreshLibraryAsync()
+    {
+        var fresh = await TrainerDataService.RefreshAsync(_library);
 
         if (fresh is null)
         {
             StatusText.Text = "同步失败，继续使用本地数据";
             StatusDot.Fill = (Brush)FindResource("B.Accent");
-        }
-        else
-        {
-            _library = fresh;
-            TrainerDataService.CurrentLibrary = fresh;
-            RemapFavorites();
-            _nextPage = 2;
-            _noMore = false;
-            _loadFailed = false;
-            Render();
-            UpdateStats();
-            _ = CacheCoversAsync(_library.Items);
-            StatusText.Text = $"同步完成 · {_library.Items.Count} 款游戏";
-            StatusDot.Fill = (Brush)FindResource("B.Green");
+            return;
         }
 
-        RefreshButton.IsEnabled = true;
-        _busy = false;
+        _library = fresh;
+        TrainerDataService.CurrentLibrary = fresh;
+        RemapFavorites();
+
+        // 分页重置：官网顺序可能变了，重新按第 1 页取一次（顺带刷新总数）
+        _librarySeq++;
+        _libraryPager.Reset();
+        _firstLoading = false;
+        await GoToPageAsync(1);
+
+        _ = CacheCoversAsync(_library.Items);
+        StatusDot.Fill = (Brush)FindResource("B.Green");
     }
+
+    // ==================== 游戏名库：官网全量 + Steam 中文名 ====================
+
+    /// <summary>后台同步当前走到哪一步；进度面板和左下角小胶囊都按它渲染。</summary>
+    private enum NameSyncStage
+    {
+        Idle,
+        Fetching,
+        Filling,
+        Done,
+        Cancelled,
+        Failed
+    }
+
+    private sealed record NameSyncResult(int Total, int Cn, bool Cancelled, string? Error, bool SteamBlocked);
+
+    private NameSyncStage _nameSyncStage = NameSyncStage.Idle;
+
+    /// <summary>面板上那两行文字与进度，全部来自这几个字段：面板随时收起再打开都能还原。</summary>
+    private string _nameSyncPhaseText = "还没同步过 Steam 中文名";
+    private string _nameSyncCurrent = "";
+    private int _nameSyncDone;
+    private int _nameSyncRunTotal;
+
+    /// <summary>失败之后要不要继续把胶囊挂在顶栏：用户点开看过一次就收起来，别一直杵在那儿。</summary>
+    private bool _nameSyncFailureDismissed;
+
+    private bool NameSyncRunning => _nameSyncStage is NameSyncStage.Fetching or NameSyncStage.Filling;
+
+    /// <summary>后台开跑（不阻塞调用方，也不弹面板）。</summary>
+    private void StartNameSync(bool rebuild) => _ = RunNameSyncAsync(rebuild);
+
+    /// <summary>
+    /// 后台同步中文名。两条路：
+    /// <para><paramref name="rebuild"/> = true：按 A-Z 重抓官网全量英文名重建名单（<b>已有的中文名会原样保留</b>）。</para>
+    /// <para>false：不动名单，只把还没有中文名的那些拿去 Steam 慢慢换（启动时自动走这条）。</para>
+    /// 两条路最后都只去问「还没有中文名」的那批，拿到的才写库；全程不挡界面，
+    /// 进度体现在顶栏小胶囊和「点开的面板」上；取消时已写的中文名都保留。
+    /// </summary>
+    private async Task<NameSyncResult> RunNameSyncAsync(bool rebuild)
+    {
+        if (_nameSyncRunning) return new NameSyncResult(0, 0, true, null, false);
+
+        _nameSyncRunning = true;
+        _nameSyncCts?.Dispose();
+        _nameSyncCts = new CancellationTokenSource();
+        var ct = _nameSyncCts.Token;
+
+        var total = 0;
+        var cn = 0;
+        var cancelled = false;
+        var steamBlocked = false;
+        string? error = null;
+
+        _nameSyncDone = 0;
+        _nameSyncRunTotal = 0;
+        _nameSyncCurrent = "";
+        _nameSyncFailureDismissed = false;
+
+        try
+        {
+            var full = rebuild || AppDatabase.Instance.GameNameCount() == 0;
+            List<GameNameRow> rows;
+
+            if (full)
+            {
+                _nameSyncStage = NameSyncStage.Fetching;
+                _nameSyncPhaseText = "正在抓取 A-Z 游戏列表…";
+                UpdateNameUi();
+
+                // 先抓到完整的新名单再动表：抓取途中取消的话，旧名单和旧中文名都还留在库里
+                var fresh = await TrainerWeb.FetchAllNamesAsync(ct);
+                if (fresh.Count == 0) throw new InvalidOperationException("没有返回游戏列表");
+
+                // 重建只换名单，已换到的中文名按 trainer_id 带过去，不用重新问一遍 Steam
+                var keptCn = AppDatabase.Instance.RebuildGameNames(fresh);
+                total = AppDatabase.Instance.GameNameCount();
+                if (total == 0) throw new InvalidOperationException("游戏名库写入失败");
+
+                _nameSyncPhaseText = keptCn > 0
+                    ? $"名单已更新：{total} 款，保留了 {keptCn} 个已有中文名"
+                    : $"名单已更新：{total} 款";
+
+                // 重建之后也只补缺的，不把 767 条重新问一遍
+                rows = AppDatabase.Instance.LoadGameNamesMissingCn();
+            }
+            else
+            {
+                // 只补缺的：已经是中文名的不用再问一遍 Steam
+                rows = AppDatabase.Instance.LoadGameNamesMissingCn();
+                total = AppDatabase.Instance.GameNameCount();
+            }
+
+            if (rows.Count > 0)
+            {
+                _nameSyncStage = NameSyncStage.Filling;
+                _nameSyncPhaseText = full
+                    ? "正在从 Steam 逐个换取中文名…"
+                    : $"正在补齐剩余 {rows.Count} 款的 Steam 中文名…";
+                _nameSyncRunTotal = rows.Count;
+                UpdateNameUi();
+
+                (cn, steamBlocked) = await FillChineseNamesAsync(rows, ct);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            cancelled = true;
+        }
+        catch (Exception ex)
+        {
+            error = ex.Message;
+        }
+        finally
+        {
+            _nameSyncRunning = false;
+            _nameSyncCts?.Dispose();
+            _nameSyncCts = null;
+        }
+
+        var cnTotal = AppDatabase.Instance.GameNameCnCount();
+        var allTotal = AppDatabase.Instance.GameNameCount();
+
+        _nameSyncStage = error is not null || steamBlocked
+            ? NameSyncStage.Failed
+            : cancelled
+                ? NameSyncStage.Cancelled
+                : NameSyncStage.Done;
+
+        _nameSyncPhaseText = error is not null
+            ? $"同步失败：{error}"
+            : steamBlocked
+                ? "Steam 连不上，先停在这儿了 · 点「开始同步」可以再试"
+                : cancelled
+                    ? $"已取消 · 中文名 {cnTotal} / {allTotal}"
+                    : $"同步完成 · {allTotal} 款游戏，其中 {cnTotal} 款有中文名";
+
+        _nameSyncCurrent = "";
+        _nameSyncDone = _nameSyncRunTotal;
+        UpdateNameUi();
+
+        // 面板开着才提示一下再收起；用户已经收起来的就别跳出来打扰
+        if (NameSyncLayer.Visibility == Visibility.Visible)
+        {
+            await Task.Delay(cancelled ? 900 : 1600);
+            if (!NameSyncRunning) HideNameSyncPanel();
+        }
+
+        return new NameSyncResult(total, cn, cancelled, error, steamBlocked);
+    }
+
+    /// <summary>
+    /// 去 Steam 换中文名：2 路并发 + 每条之间歇一小会儿，慢慢跑不惊动 Steam。
+    /// 拿到一个就写一个（取消 / 关面板都不丢），连着失败太多次（基本等于 Steam 不可达）就提前收工。
+    /// </summary>
+    private async Task<(int Got, bool Blocked)> FillChineseNamesAsync(List<GameNameRow> rows, CancellationToken ct)
+    {
+        var done = 0;
+        var got = 0;
+        var fails = 0;
+        var blocked = false;
+        var lastPush = 0L;
+
+        using var abort = CancellationTokenSource.CreateLinkedTokenSource(ct);
+
+        try
+        {
+            await Parallel.ForEachAsync(
+                rows,
+                new ParallelOptions { MaxDegreeOfParallelism = 2, CancellationToken = abort.Token },
+                async (row, token) =>
+                {
+                    var name = await SteamWeb.FetchChineseNameAsync(SteamQueryName(row.NameEn), token)
+                        .ConfigureAwait(false);
+
+                    var n = Interlocked.Increment(ref done);
+
+                    if (name is null)
+                    {
+                        // 请求本身失败：连着 12 次且一条中文名都没拿到，就别再试了
+                        if (Interlocked.Increment(ref fails) >= 12 && Volatile.Read(ref got) == 0)
+                        {
+                            blocked = true;
+                            abort.Cancel();
+                        }
+                    }
+                    else if (name.Length > 0)
+                    {
+                        Interlocked.Increment(ref got);
+                        Interlocked.Exchange(ref fails, 0);
+                        AppDatabase.Instance.UpdateGameNameCn(row.TrainerId, name);
+                    }
+                    else
+                    {
+                        Interlocked.Exchange(ref fails, 0);
+                    }
+
+                    // 后台跑就慢慢来：每条之间喘一口气，767 条摊到两三分钟，不至于被限流
+                    if (name is not null && !token.IsCancellationRequested)
+                    {
+                        try { await Task.Delay(90, token).ConfigureAwait(false); }
+                        catch (OperationCanceledException) { }
+                    }
+
+                    // UI 不用每条都刷：200ms 推一次足够顺，也不会把界面线程喂爆
+                    var now = Environment.TickCount64;
+                    if (n == rows.Count || now - Interlocked.Read(ref lastPush) >= 200)
+                    {
+                        Interlocked.Exchange(ref lastPush, now);
+                        var current = name is { Length: > 0 } ? name : row.CleanEn;
+                        var doneNow = n;
+                        _ = Dispatcher.BeginInvoke(new Action(() => UpdateNameSyncProgress(doneNow, rows.Count, current)));
+                    }
+                });
+        }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        {
+            // 不是用户取消，是 Steam 一直连不上触发的提前收工
+            blocked = true;
+        }
+
+        return (got, blocked);
+    }
+
+    /// <summary>拿去 Steam 搜的名字：去掉官网标题里的 " Trainer" / " Enhanced" 后缀。</summary>
+    private static string SteamQueryName(string officialTitle) =>
+        officialTitle.Replace(" Trainer", "").Replace(" Enhanced", "").Trim();
+
+    // ==================== 同步 UI：左下角小胶囊 + 进度面板 ====================
+
+    /// <summary>把当前状态同时刷到小胶囊、面板和左下角那行入口上。</summary>
+    private void UpdateNameUi()
+    {
+        UpdateNamePill();
+        RefreshNamePanel();
+        UpdateNameSyncLink();
+    }
+
+    /// <summary>
+    /// 顶栏胶囊：只在本轮同步跑着（或刚失败还没被看过）时出现，平时整颗收起来不占地方。
+    /// 数字直接取内存里这一轮的进度，不再每条都去 COUNT 一遍数据库 ——
+    /// 既省 IO，也不会出现「库里的数还没写进去、胶囊看着不动」的错觉。
+    /// </summary>
+    private void UpdateNamePill()
+    {
+        var running = NameSyncRunning;
+        var showFailed = _nameSyncStage == NameSyncStage.Failed && !_nameSyncFailureDismissed;
+
+        NamePill.Visibility = running || showFailed ? Visibility.Visible : Visibility.Collapsed;
+
+        if (!running && !showFailed)
+        {
+            StartPillPulse(false);
+            return;
+        }
+
+        var accent = (Brush)FindResource("B.AccentLight");
+        NamePillSub.Foreground = accent;
+
+        switch (_nameSyncStage)
+        {
+            case NameSyncStage.Fetching:
+                NamePillText.Text = "正在抓取名单";
+                NamePillSub.Text = "";
+                NamePillDot.Fill = accent;
+                StartPillPulse(true);
+                break;
+
+            case NameSyncStage.Filling:
+                var pct = _nameSyncRunTotal > 0
+                    ? (int)Math.Round(_nameSyncDone * 100.0 / _nameSyncRunTotal)
+                    : 0;
+                NamePillText.Text = $"同步中 {pct}%";
+                NamePillSub.Text = $"{_nameSyncDone} / {_nameSyncRunTotal}";
+                NamePillDot.Fill = accent;
+                StartPillPulse(true);
+                break;
+
+            case NameSyncStage.Failed:
+                NamePillText.Text = "同步中断";
+                NamePillSub.Text = "点我看看";
+                NamePillDot.Fill = (Brush)FindResource("B.Accent");
+                StartPillPulse(false);
+                break;
+        }
+    }
+
+    /// <summary>
+    /// 左下角「数据源」里那行中文名入口：不跑的时候它就是全库的中文名覆盖情况，
+    /// 跑起来跟着显示百分比；点一下打开进度面板（和顶栏胶囊是同一个门）。
+    /// </summary>
+    private void UpdateNameSyncLink()
+    {
+        if (!AppDatabase.Instance.IsAvailable)
+        {
+            NameSyncLink.Visibility = Visibility.Collapsed;
+            return;
+        }
+
+        NameSyncLink.Visibility = Visibility.Visible;
+
+        if (NameSyncRunning)
+        {
+            NameSyncLinkText.Text = _nameSyncRunTotal > 0
+                ? $"中文名同步中 {_nameSyncDone * 100 / _nameSyncRunTotal}%"
+                : "中文名 · 抓取名单…";
+            return;
+        }
+
+        var all = AppDatabase.Instance.GameNameCount();
+        var cn = AppDatabase.Instance.GameNameCnCount();
+
+        NameSyncLinkText.Text = all == 0
+            ? "建立中文名库"
+            : $"中文名 {cn} / {all}";
+    }
+
+    /// <summary>同步中的呼吸灯：小圆点一明一暗，比转圈省事也不会抢视线。</summary>
+    private void StartPillPulse(bool on)
+    {
+        if (on)
+        {
+            NamePillDot.BeginAnimation(
+                OpacityProperty,
+                new DoubleAnimation(1, 0.25, TimeSpan.FromMilliseconds(700))
+                {
+                    AutoReverse = true,
+                    RepeatBehavior = RepeatBehavior.Forever
+                });
+            return;
+        }
+
+        NamePillDot.BeginAnimation(OpacityProperty, null);
+        NamePillDot.Opacity = 1;
+    }
+
+    /// <summary>面板内容全部由字段渲染：随时点开、随时收起，看到的都是最新一帧。</summary>
+    private void RefreshNamePanel()
+    {
+        var running = NameSyncRunning;
+
+        NameSyncTitle.Text = _nameSyncStage switch
+        {
+            NameSyncStage.Fetching or NameSyncStage.Filling => "Steam 中文名同步",
+            NameSyncStage.Done => "中文名同步完成",
+            NameSyncStage.Cancelled => "中文名同步已取消",
+            NameSyncStage.Failed => "中文名同步中断",
+            _ => "Steam 中文名同步"
+        };
+
+        NameSyncPhase.Text = _nameSyncPhaseText;
+
+        NameSyncBar.IsIndeterminate = _nameSyncStage == NameSyncStage.Fetching;
+        NameSyncBar.Maximum = Math.Max(1, _nameSyncRunTotal);
+        NameSyncBar.Value = _nameSyncStage == NameSyncStage.Done
+            ? NameSyncBar.Maximum
+            : Math.Min(_nameSyncDone, NameSyncBar.Maximum);
+
+        NameSyncCount.Text = _nameSyncRunTotal > 0 ? $"{_nameSyncDone} / {_nameSyncRunTotal}" : "";
+        NameSyncDetail.Text = _nameSyncCurrent;
+
+        NameSyncCancel.Visibility = running ? Visibility.Visible : Visibility.Collapsed;
+        NameSyncCancel.IsEnabled = running;
+
+        NameSyncStart.Visibility = running ? Visibility.Collapsed : Visibility.Visible;
+        NameSyncStart.Content = _nameSyncStage == NameSyncStage.Idle ? "开始同步" : "继续同步";
+        NameSyncRebuild.IsEnabled = !running;
+
+        NameSyncHint.Text = running
+            ? "同步在后台慢慢跑，收起这个面板也不影响，可以继续浏览游戏库。"
+            : "关掉面板不会影响任何数据；「重新抓取完整名单」会先清空游戏名表再全量重来。";
+    }
+
+    private void ShowNameSyncPanel()
+    {
+        RefreshNamePanel();
+        NameSyncLayer.Visibility = Visibility.Visible;
+        NameSyncCard.BeginAnimation(OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(200)));
+        NameSyncBackdrop.BeginAnimation(OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(180)));
+    }
+
+    private void HideNameSyncPanel()
+    {
+        NameSyncLayer.Visibility = Visibility.Collapsed;
+        NameSyncCard.BeginAnimation(OpacityProperty, null);
+        NameSyncBackdrop.BeginAnimation(OpacityProperty, null);
+        NameSyncCard.Opacity = 0;
+        NameSyncBackdrop.Opacity = 0;
+    }
+
+    /// <summary>同步每推进一点就刷这里：面板开着能看到，收起来了只更新小胶囊上的百分比。</summary>
+    private void UpdateNameSyncProgress(int done, int total, string current)
+    {
+        _nameSyncDone = done;
+        _nameSyncRunTotal = Math.Max(1, total);
+        _nameSyncCurrent = current;
+        UpdateNameUi();
+    }
+
+    /// <summary>小胶囊 / 左下角入口：开 / 关进度面板。再点一下收起来，方便。</summary>
+    private void NamePill_Click(object sender, RoutedEventArgs e)
+    {
+        if (NameSyncLayer.Visibility == Visibility.Visible)
+        {
+            HideNameSyncPanel();
+            return;
+        }
+
+        // 中断提示看过一次就算「知会过了」，胶囊该收了
+        _nameSyncFailureDismissed = true;
+        UpdateNamePill();
+
+        ShowNameSyncPanel();
+    }
+
+    private void NameSyncLink_Click(object sender, MouseButtonEventArgs e) => NamePill_Click(sender, e);
+
+    private void NameSyncClose_Click(object sender, RoutedEventArgs e) => HideNameSyncPanel();
+
+    private void NameSyncBackdrop_MouseLeftButtonDown(object sender, MouseButtonEventArgs e) => HideNameSyncPanel();
+
+    /// <summary>面板上的「开始 / 继续同步」：只补还没有中文名的那些。</summary>
+    private void NameSyncStart_Click(object sender, RoutedEventArgs e) => StartNameSync(rebuild: false);
+
+    /// <summary>面板上的「重新抓取完整名单」：清空重建，最彻底的那种。</summary>
+    private void NameSyncRebuild_Click(object sender, RoutedEventArgs e) => StartNameSync(rebuild: true);
+
+    private void NameSyncCancel_Click(object sender, RoutedEventArgs e)
+    {
+        if (!_nameSyncRunning) return;
+
+        NameSyncCancel.IsEnabled = false;
+        _nameSyncPhaseText = "正在取消，已拿到的中文名会保留…";
+        RefreshNamePanel();
+        _nameSyncCts?.Cancel();
+    }
+
+    /// <summary>
+    /// 启动时准备游戏名库：表里有货就跳过；空的才去抓一份（只抓英文名，很便宜）。
+    /// 抓完如果一条中文名都没有（首次打开 / 清过库），就问一句要不要同步，而不是闷头跑几百个请求。
+    /// </summary>
+    private async Task SeedGameNamesAsync()
+    {
+        if (!AppDatabase.Instance.IsAvailable) return;
+
+        if (AppDatabase.Instance.GameNameCount() == 0)
+        {
+            try
+            {
+                var rows = await TrainerWeb.FetchAllNamesAsync();
+                if (rows.Count > 0 && AppDatabase.Instance.GameNameCount() == 0)
+                    AppDatabase.Instance.SaveGameNames(rows);
+            }
+            catch
+            {
+                // 抓不到就下次启动再试，不影响主流程
+            }
+        }
+
+        UpdateNameUi();
+
+        if (AppDatabase.Instance.GameNameCount() == 0) return;
+
+        // 已经有中文名 / 正在同步 / 这轮问过了，都不打扰
+        if (AppDatabase.Instance.GameNameCnCount() > 0) return;
+        if (_nameSyncRunning || _namePromptShown) return;
+        if (IsSelfCheck) return;   // 自检跑截图时别让弹框挡在前面
+
+        _namePromptShown = true;
+
+        // 等首屏缓过来再问，别和首页请求抢带宽
+        await Task.Delay(2000);
+
+        // 等的这段时间里，用户可能已经自己点左下角入口开始同步了
+        if (_nameSyncRunning || AppDatabase.Instance.GameNameCnCount() > 0) return;
+
+        if (await AskSyncChineseAsync()) StartNameSync(rebuild: false);
+    }
+
+    /// <summary>
+    /// 问一句「要不要同步中文名」：库里有中文名、正在同步、或者这次启动已经问过，都不问。
+    /// 返回用户是否点了「开始同步」。
+    /// </summary>
+    private Task<bool> AskSyncChineseAsync()
+    {
+        if (AppDatabase.Instance.GameNameCnCount() > 0 || _nameSyncRunning) return Task.FromResult(false);
+
+        _namePromptShown = true;
+
+        return ConfirmAsync(
+            "同步游戏中文名？",
+            "本地还没有任何中文名，同步完成后就可以直接用中文搜游戏了（搜“赛博朋克”也能找到 Cyberpunk 2077）。\n\n" +
+            "同步在后台慢慢跑，大约需要几分钟，期间可以正常浏览游戏库，随时能取消。",
+            "开始同步",
+            primary: true);
+    }
+
+    /// <summary>带 -- 参数启动的都是开发期自检（截图、验收脚本），跑的时候自动弹框要跳过。</summary>
+    private static bool IsSelfCheck =>
+        Environment.GetCommandLineArgs().Skip(1).Any(a => a.StartsWith("--", StringComparison.Ordinal));
 
     /// <summary>同步后新列表是全新对象，把收藏夹里的引用换成新实例（拿最新版本与下载数据）。</summary>
     private void RemapFavorites()
@@ -1481,14 +2388,15 @@ public partial class MainWindow : Window
     private async void ClearCache_Click(object sender, RoutedEventArgs e)
     {
         if (_confirm is not null) return;   // 连点两下只弹一个框
+        if (!_resetDone) return;            // 上一次清完还在重新拉首页，别叠着来一遍
 
         var active = DownloadManager.Instance.Tasks.Count(t => t.IsActive);
-        var body = "将删除 SQLite 里的全部卡片缓存，以及 f 目录下的所有图片和已下载的修改器。" +
-                   (active > 0 ? $"\n\n当前还有 {active} 个下载任务，会先被取消。" : "") +
-                   "\n\n收藏夹不受影响，清除后无法恢复。";
+        var body = "这样操作会删除本地的缓存数据。" +
+                   (active > 0 ? $"\n\n当前还有 {active} 个下载任务，会先被取消。" : "");
 
         if (!await ConfirmAsync("清除本地缓存？", body, "清除")) return;
 
+        _resetDone = false;                 // 从这里开始，整套清除 + 重新加载都没走完
         ClearCacheButton.IsEnabled = false;
         AppDatabase.MuteCache();            // 掐断在途下载，别让缓存写入和落盘又填回来
         try
@@ -1497,9 +2405,10 @@ public partial class MainWindow : Window
             foreach (var task in DownloadManager.Instance.Tasks.Where(t => t.IsActive).ToList())
                 DownloadManager.Instance.Cancel(task);
 
-            // 2) 等首页加载 / 封面下载 / 被取消的任务收尾（否则刚删完又被写回去）
+            // 2) 等首页加载 / 翻页请求 / 封面下载 / 被取消的任务收尾（否则刚删完又被写回去）
             for (var i = 0; i < 40 &&
-                 (_firstLoading || _loadingMore || DownloadManager.Instance.ActiveCount > 0); i++)
+                 (_firstLoading || _libraryPager.Loading || _searchPager.Loading ||
+                  DownloadManager.Instance.ActiveCount > 0); i++)
                 await Task.Delay(100);
 
             // 3) 清空 SQLite 里的卡片缓存表（收藏夹那张表不动）+ 删掉 f 目录下的所有内容
@@ -1520,8 +2429,10 @@ public partial class MainWindow : Window
                 if (extraFiles == 0 && extraFailed == 0) break;   // 这一轮没东西可删 = 真的空了
             }
 
-            StatusText.Text = $"已清除缓存 · {rows} 条缓存记录 · {files} 个文件（{DownloadTask.Human(bytes)}）" +
-                              (failed > 0 ? $" · {failed} 项被占用，已跳过" : "");
+            var summary = $"已清除缓存 · {rows} 条缓存记录 · {files} 个文件（{DownloadTask.Human(bytes)}）" +
+                          (failed > 0 ? $" · {failed} 项被占用，已跳过" : "");
+            StatusText.Text = summary;
+            _pendingClearSummary = summary;
         }
         catch (Exception ex)
         {
@@ -1533,6 +2444,55 @@ public partial class MainWindow : Window
             await Task.Delay(800);
             AppDatabase.UnmuteCache();
             ClearCacheButton.IsEnabled = true;
+        }
+
+        await ResetAfterClearAsync();
+    }
+
+    /// <summary>清完缓存后要长时间显示的提示，重新加载列表时会被覆盖，加载完再贴回去。</summary>
+    private string _pendingClearSummary = "";
+
+    /// <summary>清完缓存 + 重新加载这一整套流程是否走完（只给自检用来等一个稳定状态）。</summary>
+    private bool _resetDone = true;
+
+    /// <summary>
+    /// 清完缓存之后，内存里那份列表也得跟着丢掉：
+    /// 否则界面还挂着几百张卡片，而「已经收录」按 SQLite 算已经是 0，两个数字互相打脸。
+    /// 重新拉一次首页，界面回到真实的「当前缓存里有几款」。
+    /// </summary>
+    private async Task ResetAfterClearAsync()
+    {
+        _resetDone = false;
+        try
+        {
+            if (Searching) ExitSearch(clearText: true);
+
+            // 换代序号 + 分页重置：清空过程中在飞的翻页响应回来后直接丢弃
+            _librarySeq++;
+            _library = new TrainerLibrary { Source = TrainerWeb.Site, Pages = 1 };
+            TrainerDataService.CurrentLibrary = _library;
+            _libraryPager.Reset();
+
+            // 收藏夹那张表没被清，重新按快照读一遍（里面记的封面路径已经没了，读回来才知道）
+            _favorites.Clear();
+            _favorites.AddRange(TrainerDataService.LoadFavorites(_library));
+
+            Render();
+            UpdateStats();
+            UpdateQueueBadge();
+
+            await LoadFirstPageAsync();
+
+            // 重新加载会把状态栏刷成页码信息，把这次清掉多少再贴回去，别让提示一闪就没
+            if (!string.IsNullOrEmpty(_pendingClearSummary))
+            {
+                StatusText.Text = _pendingClearSummary;
+                _pendingClearSummary = "";
+            }
+        }
+        finally
+        {
+            _resetDone = true;
         }
     }
 
@@ -1591,11 +2551,13 @@ public partial class MainWindow : Window
     }
 
     /// <summary>弹出确认框，等用户点「确定」（true）或「取消 / 点遮罩 / Esc」（false）。</summary>
-    private Task<bool> ConfirmAsync(string title, string body, string okText)
+    /// <param name="primary">确定按钮用主色（普通操作）；默认用警示色（删除 / 清空这类不可逆操作）。</param>
+    private Task<bool> ConfirmAsync(string title, string body, string okText, bool primary = false)
     {
         ConfirmTitle.Text = title;
         ConfirmBody.Text = body;
         ConfirmOkButton.Content = okText;
+        ConfirmOkButton.Style = (Style)FindResource(primary ? "PrimaryBtn" : "DangerBtn");
         ConfirmLayer.Visibility = Visibility.Visible;
 
         _confirm = new TaskCompletionSource<bool>();
@@ -1616,7 +2578,127 @@ public partial class MainWindow : Window
 
     private void ConfirmCancel_Click(object sender, RoutedEventArgs e) => CloseConfirm(false);
 
-    private void ConfirmLayer_MouseLeftButtonDown(object sender, MouseButtonEventArgs e) => CloseConfirm(false);
+    /// <summary>点遮罩（弹框外面那片半透明区域）= 取消。遮罩是独立一层，点卡片碰不到它。</summary>
+    private void ConfirmBackdrop_MouseLeftButtonDown(object sender, MouseButtonEventArgs e) => CloseConfirm(false);
+
+    // ==================== 关于 / 声明弹窗 ====================
+
+    // 新版 QQ 那套观感：淡入 + 从 0.92 轻微放大（带一点回弹），关闭时略微缩一下再淡出。
+    // 用 Animation 而不是 Visibility 硬切，时间都压得比较长，看起来"慢慢打开/合上"。
+    private static readonly TimeSpan AboutOpenTime = TimeSpan.FromMilliseconds(300);
+    private static readonly TimeSpan AboutCloseTime = TimeSpan.FromMilliseconds(220);
+
+    /// <summary>每次开关自增，用来识别"关闭动画播到一半又被重新打开"的情况。</summary>
+    private int _aboutAnimToken;
+
+    private void About_Click(object sender, RoutedEventArgs e) => ShowAbout();
+
+    private void ShowAbout()
+    {
+        ++_aboutAnimToken;
+        AboutLayer.Visibility = Visibility.Visible;
+
+        var fade = new CubicEase { EasingMode = EasingMode.EaseOut };
+        // 回弹：Amplitude 越大弹得越明显；0.5 实测大约多冲出去 0.5% 再回落，肉眼刚好能察觉
+        var spring = new BackEase { Amplitude = 0.5, EasingMode = EasingMode.EaseOut };
+
+        AboutBackdrop.BeginAnimation(
+            OpacityProperty,
+            new DoubleAnimation(0, 1, new Duration(TimeSpan.FromMilliseconds(240))) { EasingFunction = fade });
+
+        AboutCard.BeginAnimation(
+            OpacityProperty,
+            new DoubleAnimation(0, 1, new Duration(TimeSpan.FromMilliseconds(170))) { EasingFunction = fade });
+
+        AboutScale.BeginAnimation(
+            ScaleTransform.ScaleXProperty,
+            new DoubleAnimation(0.93, 1, new Duration(AboutOpenTime)) { EasingFunction = spring });
+        AboutScale.BeginAnimation(
+            ScaleTransform.ScaleYProperty,
+            new DoubleAnimation(0.93, 1, new Duration(AboutOpenTime)) { EasingFunction = spring });
+
+        AboutShift.BeginAnimation(
+            TranslateTransform.YProperty,
+            new DoubleAnimation(10, 0, new Duration(AboutOpenTime)) { EasingFunction = fade });
+    }
+
+    private void CloseAbout()
+    {
+        if (AboutLayer.Visibility != Visibility.Visible)
+        {
+            return;
+        }
+
+        var token = ++_aboutAnimToken;
+        var fade = new CubicEase { EasingMode = EasingMode.EaseIn };
+        var duration = new Duration(AboutCloseTime);
+
+        var cardFade = new DoubleAnimation(1, 0, duration) { EasingFunction = fade };
+
+        // 注意：Completed 必须在 BeginAnimation 之前挂，先启动再挂回调的话永远不会触发
+        cardFade.Completed += (_, _) =>
+        {
+            // 播完时如果用户又点开了（token 变了），就别收层、也别清动画
+            if (token != _aboutAnimToken)
+            {
+                return;
+            }
+
+            AboutLayer.Visibility = Visibility.Collapsed;
+
+            // 清掉动画值，让元素回到 XAML 里的初始态（0.92 / 透明），下次打开才能从头播
+            AboutCard.BeginAnimation(OpacityProperty, null);
+            AboutBackdrop.BeginAnimation(OpacityProperty, null);
+            AboutScale.BeginAnimation(ScaleTransform.ScaleXProperty, null);
+            AboutScale.BeginAnimation(ScaleTransform.ScaleYProperty, null);
+            AboutShift.BeginAnimation(TranslateTransform.YProperty, null);
+        };
+
+        // 卡片先淡出、缩一点点（0.97）再收层，比直接消失柔和
+        AboutCard.BeginAnimation(OpacityProperty, cardFade);
+        AboutScale.BeginAnimation(
+            ScaleTransform.ScaleXProperty,
+            new DoubleAnimation(1, 0.97, duration) { EasingFunction = fade });
+        AboutScale.BeginAnimation(
+            ScaleTransform.ScaleYProperty,
+            new DoubleAnimation(1, 0.97, duration) { EasingFunction = fade });
+        AboutShift.BeginAnimation(
+            TranslateTransform.YProperty,
+            new DoubleAnimation(0, 6, duration) { EasingFunction = fade });
+        AboutBackdrop.BeginAnimation(OpacityProperty, new DoubleAnimation(1, 0, duration) { EasingFunction = fade });
+    }
+
+    private void AboutClose_Click(object sender, RoutedEventArgs e) => CloseAbout();
+
+    private void AboutBackdrop_MouseLeftButtonDown(object sender, MouseButtonEventArgs e) => CloseAbout();
+
+    // ==================== 版本 / 外链 ====================
+
+    /// <summary>当前程序版本，取程序集版本号（csproj 里的 &lt;Version&gt;）。</summary>
+    private static string AppVersion
+    {
+        get
+        {
+            var v = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version;
+            return v is null ? "1.0" : $"{v.Major}.{v.Minor}.{v.Build}";
+        }
+    }
+
+    /// <summary>用系统默认浏览器打开链接；失败就把原因写进状态栏，不弹异常。</summary>
+    private void OpenExternal(string url)
+    {
+        try
+        {
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(url)
+            {
+                UseShellExecute = true
+            });
+        }
+        catch (Exception ex)
+        {
+            StatusText.Text = $"打不开浏览器：{ex.Message}";
+        }
+    }
 
     // ==================== 窗口 ====================
 
@@ -1667,7 +2749,11 @@ public partial class MainWindow : Window
         timer.Start();
     }
 
-    private void ShowMainWindow()
+    /// <summary>
+    /// 把主界面亮出来并置前。托盘菜单用它；「双击第二次图标」时也走这里
+    /// （那时候窗口可能正藏在托盘里）。
+    /// </summary>
+    public void ShowMainWindow()
     {
         if (!IsVisible) Show();
 
@@ -1675,12 +2761,19 @@ public partial class MainWindow : Window
         if (WindowState == WindowState.Minimized) WindowState = _stateBeforeTray;
 
         Activate();
+        Topmost = true;      // 抢一次前台：Windows 不允许后台进程直接抢焦点，先置顶再放开
+        Topmost = false;
+        Focus();
     }
 
     private void ExitFromTray()
     {
         _exitRequested = true;
         _trayIcon.Visible = false;
+
+        // 后台还在换中文名的话，先把它掐掉再退，别留一堆 http 请求挂着
+        try { _nameSyncCts?.Cancel(); } catch { }
+
         System.Windows.Application.Current.Shutdown();
     }
 
@@ -1706,7 +2799,18 @@ public partial class MainWindow : Window
 
     private void OnPreviewKeyDown(object sender, System.Windows.Input.KeyEventArgs e)
     {
-        if (e.Key == Key.Escape && _confirm is not null)
+        if (e.Key == Key.Escape && NameSyncLayer.Visibility == Visibility.Visible)
+        {
+            // 只是收起面板，后台同步继续跑
+            HideNameSyncPanel();
+            e.Handled = true;
+        }
+        else if (e.Key == Key.Escape && AboutLayer.Visibility == Visibility.Visible)
+        {
+            CloseAbout();
+            e.Handled = true;
+        }
+        else if (e.Key == Key.Escape && _confirm is not null)
         {
             CloseConfirm(false);
             e.Handled = true;
@@ -1714,6 +2818,12 @@ public partial class MainWindow : Window
         else if (e.Key == Key.Escape && _detailOpen)
         {
             CloseDetail();
+            e.Handled = true;
+        }
+        else if (e.Key == Key.Escape && SuggestPopup.IsOpen)
+        {
+            // 提示列表开着时，Esc 只收提示，不动搜索框里的字（和搜索框自己的处理一致）
+            CloseSuggest();
             e.Handled = true;
         }
         else if (e.Key == Key.Escape && Searching)
@@ -1881,19 +2991,1215 @@ public partial class MainWindow : Window
 
         // 按钮恢复可用 = 清除流程（含多轮扫尾 + 解除静音）真正跑完，最多等 12 秒
         for (var i = 0; i < 120 && !ClearCacheButton.IsEnabled; i++) await Task.Delay(100);
+
+        // 再等「清完缓存 + 重新拉首页」这套流程整走完，否则量到的是中间态。
+        // 注意先等一会儿：点「确定」只是把确认框关掉，真正的清除是接着才在调度器上跑起来的。
+        await Task.Delay(1000);
+
+        var timeline = new System.Text.StringBuilder();
+        for (var i = 0; i < 400; i++)
+        {
+            if (i % 10 == 0)
+                timeline.Append($"{i * 100}ms resetDone={_resetDone} firstLoading={_firstLoading} " +
+                                $"items={_library.Items.Count} cache={AppDatabase.Instance.CacheCount()}\n");
+            if (_resetDone && !_firstLoading && _library.Items.Count > 0) break;
+            await Task.Delay(100);
+        }
         await Task.Delay(1200);   // 解除静音后再观察一会儿，确认没有文件被重新写回来
 
         var rowsAfter = AppDatabase.Instance.CacheCount();
         var filesAfter = Directory.GetFiles(AppPaths.FilesDir, "*", SearchOption.AllDirectories).Length;
         var dirsAfter = Directory.GetDirectories(AppPaths.FilesDir).Length;
 
+        var statusOnSettings = StatusText.Text;
+
+        // 回到游戏库，看「已经收录」这个数字到底取的是哪一份数据
+        NavList.SelectedIndex = 0;
+        await Task.Delay(700);
+        var subtitle = SectionSubtitle.Text;
+        var statusOnLibrary = StatusText.Text;
+
         File.AppendAllText(log,
             $"清除前：缓存 {rowsBefore} 条 / f 目录 {filesBefore} 个文件（{DownloadTask.Human(bytesBefore)}）\n" +
             $"清除后：缓存 {rowsAfter} 条 / f 目录 {filesAfter} 个文件 / {dirsAfter} 个子目录\n" +
             $"确认框：{(ConfirmLayer.Visibility == Visibility.Visible ? "仍打开" : "已关闭")}\n" +
-            $"状态栏：{StatusText.Text}\n");
+            $"设置页状态栏：{statusOnSettings}\n" +
+            $"游戏库副标题：{subtitle}\n" +
+            $"游戏库状态栏：{statusOnLibrary}\n" +
+            $"内存条数：{_library.Items.Count} / SQLite：{AppDatabase.Instance.CacheCount()}\n" +
+            $"加载状态：firstLoading={_firstLoading} page={_libraryPager.Page}/{_libraryPager.TotalPages} " +
+            $"total={_libraryPager.TotalCount} loading={_libraryPager.Loading}\n" +
+            $"错误：{_firstError ?? "无"}\n" +
+            $"时间线：\n{timeline}");
 
         SaveShot(Path.Combine(dir, "after-clear.png"));
+    }
+
+    /// <summary>
+    /// 自检：第二次启动时那个「已经启动」提示框，单独拍一张图看版式。
+    /// </summary>
+    public async Task RunTipCheckAsync(string dir)
+    {
+        Directory.CreateDirectory(dir);
+        Hide();
+        await Task.Delay(400);
+
+        var tip = new AlreadyRunningWindow();
+        tip.Show();
+        await Task.Delay(700);
+        SaveShotOf(tip, Path.Combine(dir, "already-running.png"));
+
+        tip.Close();
+        await Task.Delay(200);
+    }
+
+    /// <summary>
+    /// 自检：详情页的开关动画。验证三件事——开场缩放/淡入真的在动、动画播完能清掉位图缓存
+    /// 接着把选项加载出来、点遮罩能关掉且关完真的收了层（不是"透明但挡着点击"）。
+    /// </summary>
+    public async Task RunDetailCheckAsync(string dir)
+    {
+        Directory.CreateDirectory(dir);
+        var log = Path.Combine(dir, "detail.txt");
+
+        for (var i = 0; i < 300 && (_firstLoading || _library.Items.Count == 0); i++) await Task.Delay(100);
+        await Task.Delay(600);
+
+        var item = _library.Items[0];
+        var timeline = new System.Text.StringBuilder();
+
+        // ---- 开场：从 0.96 起跳，看缩放/透明度随时间怎么走 ----
+        OpenDetail(item);
+        var watch = System.Diagnostics.Stopwatch.StartNew();
+        var peak = 0.0;
+        var openedAt = -1L;
+        for (var i = 0; i < 120; i++)
+        {
+            var s = DetailScale.ScaleX;
+            peak = Math.Max(peak, s);
+            timeline.Append($"{watch.ElapsedMilliseconds,4}ms scale={s:0.0000} op={DetailHost.Opacity:0.00} " +
+                            $"mask={DetailBackdrop.Opacity:0.00} cache={(DetailHost.CacheMode is null ? "无" : "有")}\n");
+
+            // 位图缓存被清掉 = 动画真的播完、Completed 回调真的跑了（先启动后挂回调的话这里永远是"有"）
+            if (openedAt < 0 && DetailHost.CacheMode is null && s > 0.999)
+            {
+                openedAt = watch.ElapsedMilliseconds;
+                break;
+            }
+
+            await Task.Delay(20);
+        }
+
+        await Task.Delay(300);
+        SaveShot(Path.Combine(dir, "01-detail-open.png"));
+
+        // ---- 卡片中心点落在谁身上（应该落在卡片里的元素，而不是遮罩）----
+        var center = new Point(DetailHost.ActualWidth / 2, DetailHost.ActualHeight / 2);
+        var hit = VisualTreeHelper.HitTest(DetailHost, center);
+        var hitName = hit?.VisualHit is null ? "(null)" : hit.VisualHit.GetType().Name;
+        var cardOwnsCenter = hit?.VisualHit is not null &&
+                             (hit.VisualHit is not System.Windows.Shapes.Rectangle r || r.Name != "DetailBackdrop");
+
+        // ---- 关掉：等 500ms 再看是不是真的收层了 ----
+        var maskClick = new MouseButtonEventArgs(Mouse.PrimaryDevice, Environment.TickCount, MouseButton.Left)
+        {
+            RoutedEvent = UIElement.MouseLeftButtonDownEvent
+        };
+        DetailBackdrop.RaiseEvent(maskClick);
+        await Task.Delay(500);
+
+        var collapsed = DetailLayer.Visibility != Visibility.Visible;
+        var cleared = DetailHost.Content is null;
+        var resetOpacity = Math.Abs(DetailHost.Opacity) < 0.01;
+        SaveShot(Path.Combine(dir, "02-detail-closed.png"));
+
+        // ---- 再开一次：确认收层后还能正常打开（动画值有没有被清回初始态）----
+        OpenDetail(item);
+        await Task.Delay(500);
+        var reopened = DetailLayer.Visibility == Visibility.Visible && DetailHost.Opacity > 0.99 &&
+                       Math.Abs(DetailScale.ScaleX - 1) < 0.002;
+
+        File.WriteAllText(log,
+            $"卡片中心命中：{hitName}（{(cardOwnsCenter ? "是卡片内容（对）" : "是遮罩（错）")}）\n" +
+            $"开场动画落定：{openedAt}ms（>0 即 Completed 已触发并清掉了位图缓存）\n" +
+            $"缩放峰值：{peak:0.0000}（起点 {DetailScaleFrom}，应 >1 表示有回弹）\n" +
+            $"点遮罩后：{(collapsed ? "已收层（对）" : "仍显示（错）")} / " +
+            $"内容{(cleared ? "已释放" : "未释放（错）")} / 透明度{(resetOpacity ? "已归零" : $"={DetailHost.Opacity:0.00}（错）")}\n" +
+            $"再次打开：{(reopened ? "正常（动画值已回到初始态）" : "异常")}\n" +
+            $"时间线：\n{timeline}");
+    }
+
+    /// <summary>
+    /// 自检：确认框的遮罩点击。真的发一次鼠标点击（不是 RaiseEvent），
+    /// 验证「点遮罩 = 取消」「点卡片 = 不关」，并把每一步写进 mask.txt。
+    /// </summary>
+    public async Task RunMaskCheckAsync(string dir)
+    {
+        Directory.CreateDirectory(dir);
+        var log = Path.Combine(dir, "mask.txt");
+        File.WriteAllText(log, "");
+
+        for (var i = 0; i < 200 && _firstLoading; i++) await Task.Delay(100);
+        await Task.Delay(1200);
+
+        NavList.SelectedIndex = 3;               // 设置
+        await Task.Delay(700);
+        ClearCacheButton.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
+        await Task.Delay(700);
+        SaveShot(Path.Combine(dir, "01-confirm.png"));
+
+        // 遮罩上的取样点：窗口右下角，离卡片很远，一定是「弹框外面」
+        var maskPoint = new Point(ActualWidth - 70, ActualHeight - 110);
+        LogHit(maskPoint, "遮罩取样点");
+
+        // 先点卡片内部的空白（正文那行），弹框应该无动于衷
+        var bodyPoint = Center(ConfirmBody);
+        File.AppendAllText(log, $"卡片内取样点 {bodyPoint} → {HitName(bodyPoint)}\n");
+        await ClickAsync(bodyPoint);
+        await Task.Delay(400);
+        File.AppendAllText(log, $"点卡片内部后：{(ConfirmLayer.Visibility == Visibility.Visible ? "仍打开（对）" : "被关掉了（错）")}\n");
+        SaveShot(Path.Combine(dir, "02-after-card-click.png"));
+
+        // 再点遮罩，弹框应当关闭
+        await ClickAsync(maskPoint);
+        await Task.Delay(600);
+        File.AppendAllText(log, $"点遮罩后：{(ConfirmLayer.Visibility == Visibility.Visible ? "仍打开（错）" : "已关闭（对）")}\n");
+        SaveShot(Path.Combine(dir, "03-after-mask-click.png"));
+
+        // 重开一次，确认连点遮罩两下也不会把确认框卡住
+        ClearCacheButton.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
+        await Task.Delay(600);
+        await ClickAsync(new Point(ActualWidth - 70, 90));       // 这次点右上角
+        await Task.Delay(500);
+        File.AppendAllText(log, $"第二次开框后点右上遮罩：{(ConfirmLayer.Visibility == Visibility.Visible ? "仍打开（错）" : "已关闭（对）")}\n");
+
+        string HitName(Point p)
+        {
+            var hit = VisualTreeHelper.HitTest(ConfirmLayer, p);
+            DependencyObject? v = hit?.VisualHit;
+            while (v is not null && v is not FrameworkElement) v = VisualTreeHelper.GetParent(v);
+            return v is FrameworkElement fe ? $"{fe.GetType().Name}({fe.Name})" : "null";
+        }
+
+        void LogHit(Point p, string label) =>
+            File.AppendAllText(log, $"{label} {p} → {HitName(p)}\n");
+
+        Point Center(FrameworkElement element)
+        {
+            var local = new Point(element.ActualWidth / 2, element.ActualHeight / 2);
+            return element.TranslatePoint(local, ConfirmLayer);
+        }
+    }
+
+    /// <summary>在窗口坐标系里真的发一次左键单击（光标也移过去，和用户点没区别）。</summary>
+    private async Task ClickAsync(Point point)
+    {
+        var screen = PointToScreen(point);
+        SetCursorPos((int)Math.Round(screen.X), (int)Math.Round(screen.Y));
+        await Task.Delay(90);
+
+        mouse_event(MouseEventLeftDown, 0, 0, 0, UIntPtr.Zero);
+        await Task.Delay(70);
+        mouse_event(MouseEventLeftUp, 0, 0, 0, UIntPtr.Zero);
+        await Task.Delay(90);
+    }
+
+    /// <summary>
+    /// 自检：上下分页。核对第 1 页的总数 / 页码 / 卡片数，点「下一页」后页码与内容是否跟着走，
+    /// 再点「上一页」回到第 1 页（应走缓存、不重新请求），顺带验证详情页封面是打开即有。
+    /// </summary>
+    public async Task RunPageCheckAsync(string dir)
+    {
+        Directory.CreateDirectory(dir);
+        var log = Path.Combine(dir, "page.txt");
+        File.WriteAllText(log, "");
+
+        for (var i = 0; i < 300 && (_firstLoading || _library.Items.Count == 0); i++) await Task.Delay(100);
+        await Task.Delay(1800);   // 封面陆续落盘，等一下再截图
+
+        void Note(string step) => File.AppendAllText(log,
+            $"{step}：副标题=「{SectionSubtitle.Text}」 状态=「{StatusText.Text}」 " +
+            $"页码=「{PagerPageText.Text}」 总数=「{PagerTotalText.Text}」 卡片={_items.Count} " +
+            $"分页栏={(PagerBar.Visibility == Visibility.Visible ? "显示" : "隐藏")} " +
+            $"上一页可点={PagerPrev.IsEnabled} 下一页可点={PagerNext.IsEnabled}\n");
+
+        Note("01-第1页");
+        SaveShot(Path.Combine(dir, "01-page1.png"));
+
+        var page1Ids = _items.Select(i => i.Id).ToList();
+
+        PagerNext.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
+        for (var i = 0; i < 200 && _libraryPager.Loading; i++) await Task.Delay(100);
+        await Task.Delay(900);
+        Note("02-下一页");
+        var page2Ids = _items.Select(i => i.Id).ToList();
+        SaveShot(Path.Combine(dir, "02-page2.png"));
+
+        PagerPrev.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
+        await Task.Delay(700);
+        Note("03-上一页（应走缓存）");
+        var backIds = _items.Select(i => i.Id).ToList();
+        SaveShot(Path.Combine(dir, "03-page1-again.png"));
+
+        File.AppendAllText(log,
+            $"第 1 页 {page1Ids.Count} 条 / 第 2 页 {page2Ids.Count} 条 / 回到第 1 页 {backIds.Count} 条\n" +
+            $"两页内容重叠：{page1Ids.Intersect(page2Ids).Count()} 条（应为 0）\n" +
+            $"回到第 1 页是否与首次一致：{(backIds.SequenceEqual(page1Ids) ? "是" : "否")}\n" +
+            $"请求过的页：{string.Join(",", _libraryPager.Cache.Keys.OrderBy(k => k))}\n");
+
+        // ---- 详情页封面：点开瞬间就该有图，不再等开场动画 ----
+        var item = _items.FirstOrDefault();
+        if (item is not null)
+        {
+            OpenDetail(item);
+            var immediate = DetailHost.Content is TrainerDetailView v && v.BannerReady;
+            await Task.Delay(60);
+            SaveShot(Path.Combine(dir, "04-detail-open.png"));
+            File.AppendAllText(log, $"详情页打开瞬间封面已就绪：{(immediate ? "是" : "否")}\n");
+
+            // 等开场动画彻底落定再拍一张，核对详情页本身的版式与亮度
+            await Task.Delay(900);
+            SaveShot(Path.Combine(dir, "05-detail-settled.png"));
+
+            CloseDetail();
+            await Task.Delay(400);
+        }
+
+        // 其余几页顺带拍一张，核对提亮之后的观感
+        NavList.SelectedIndex = 1;
+        await Task.Delay(500);
+        SaveShot(Path.Combine(dir, "06-favorites.png"));
+
+        NavList.SelectedIndex = 3;
+        await Task.Delay(500);
+        SaveShot(Path.Combine(dir, "07-settings.png"));
+
+        NavList.SelectedIndex = 2;
+        await Task.Delay(500);
+        SaveShot(Path.Combine(dir, "08-queue.png"));
+
+        NavList.SelectedIndex = 0;
+        await Task.Delay(500);
+        SaveShot(Path.Combine(dir, "09-back-to-library.png"));
+
+        // ---- 搜索结果同样走上下分页 ----
+        SearchBox.Text = "assassin";
+        await SubmitSearchAsync();
+        await Task.Delay(500);
+        CloseSuggest();
+        File.AppendAllText(log,
+            $"搜索：副标题=「{SectionSubtitle.Text}」 状态=「{StatusText.Text}」 " +
+            $"页码=「{PagerPageText.Text}」 总数=「{PagerTotalText.Text}」 卡片={_items.Count}\n");
+        SaveShot(Path.Combine(dir, "10-search.png"));
+
+        if (_searchPager.TotalPages > 1)
+        {
+            PagerNext.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
+            for (var i = 0; i < 200 && _searchPager.Loading; i++) await Task.Delay(100);
+            await Task.Delay(600);
+            File.AppendAllText(log,
+                $"搜索第 2 页：页码=「{PagerPageText.Text}」 卡片={_items.Count} " +
+                $"状态=「{StatusText.Text}」\n");
+            SaveShot(Path.Combine(dir, "11-search-page2.png"));
+        }
+
+        ExitSearch(clearText: true);
+        await Task.Delay(500);
+        SaveShot(Path.Combine(dir, "12-after-search-exit.png"));
+    }
+
+#if DEBUG
+    /// <summary>
+    /// 自检：一页超过 15 条时卡片不再被压小、列表能滚动。
+    /// 只往内存里把当前页再叠一份（30 条），不发请求也不写库，测完 <see cref="Render"/> 还原。
+    /// </summary>
+    public async Task RunScrollCheckAsync(string dir)
+    {
+        Directory.CreateDirectory(dir);
+        var log = Path.Combine(dir, "scroll.txt");
+        File.WriteAllText(log, "");
+
+        for (var i = 0; i < 300 && (_firstLoading || _library.Items.Count == 0); i++) await Task.Delay(100);
+        await Task.Delay(1500);
+
+        var scroll = _listScroll ??= FindScrollViewer(CardList);
+
+        void Note(string tag) => File.AppendAllText(log,
+            $"{tag}：卡片 {_cardW}x{_cardH} · 行数 {_rows.Count} · 条数 {_items.Count} · " +
+            $"可视高 {scroll?.ViewportHeight:F0} 内容高 {scroll?.ExtentHeight:F0} " +
+            $"可滚高度 {scroll?.ScrollableHeight:F0}\n");
+
+        Note("15 条");
+        SaveShot(Path.Combine(dir, "01-fifteen.png"));
+
+        var snapshot = _items.ToList();
+        var doubled = new List<TrainerItem>(snapshot);
+        doubled.AddRange(snapshot);
+        SetItems(doubled);
+        await Task.Delay(800);
+
+        Note("30 条");
+        SaveShot(Path.Combine(dir, "02-thirty.png"));
+
+        scroll?.ScrollToVerticalOffset(260);
+        await Task.Delay(350);
+        File.AppendAllText(log, $"滚到 260 之后实际位置：{scroll?.VerticalOffset:F0}\n");
+        SaveShot(Path.Combine(dir, "03-scrolled.png"));
+
+        Render();
+        await Task.Delay(600);
+        Note("还原");
+        SaveShot(Path.Combine(dir, "04-restored.png"));
+    }
+
+    /// <summary>
+    /// 自检：游戏名库。核对「表为空时启动自动抓全量」有没有落库、本地提示能不能查到、
+    /// Steam 换中文名通不通，最后把同步进度弹窗摆出来拍一张。
+    /// </summary>
+    public async Task RunNameCheckAsync(string dir)
+    {
+        Directory.CreateDirectory(dir);
+        var log = Path.Combine(dir, "names.txt");
+        File.WriteAllText(log, "");
+
+        for (var i = 0; i < 300 && (_firstLoading || _library.Items.Count == 0); i++) await Task.Delay(100);
+
+        // 启动时的种子任务是后台跑的，这里等它落库（最多 90 秒）
+        var waited = 0;
+        while (AppDatabase.Instance.GameNameCount() == 0 && waited < 900)
+        {
+            await Task.Delay(100);
+            waited++;
+        }
+
+        await Task.Delay(800);
+
+        var count = AppDatabase.Instance.GameNameCount();
+        File.AppendAllText(log,
+            $"游戏名库条数：{count}（等待种子 {waited * 100} ms）\n" +
+            $"库里前 3 条：{string.Join(" / ", AppDatabase.Instance.SearchGameNames("a", 3).Select(r => r.CleanEn))}\n" +
+            $"待补中文名：{AppDatabase.Instance.LoadGameNamesMissingCn().Count} 条（后台补齐只碰这些）\n");
+
+        // ---- 本地提示 ----
+        var hits = AppDatabase.Instance.SearchGameNames("assas", 8);
+        File.AppendAllText(log,
+            $"搜索 “assas” 命中 {hits.Count} 条：{string.Join(" / ", hits.Select(h => h.CleanEn))}\n");
+
+        SearchBox.Text = "assas";
+        SearchBox.Focus();
+        await Task.Delay(1000);
+        File.AppendAllText(log, $"提示弹窗：{(SuggestPopup.IsOpen ? "已打开" : "没打开")}，条目 {_suggests.Count}\n");
+
+        // 弹窗是独立窗口，RenderTargetBitmap 拍不到，这里直接截屏
+        CaptureWindowScreen(Path.Combine(dir, "01-suggest.png"));
+        CloseSuggest();
+
+        // 中文名也能搜（同步过才有）
+        var cnHits = AppDatabase.Instance.SearchGameNames("赛博", 8);
+        File.AppendAllText(log,
+            $"搜索 “赛博” 命中 {cnHits.Count} 条：{string.Join(" / ", cnHits.Select(h => $"{h.CleanEn}（{h.NameCn}）"))}\n");
+
+        // ---- 中文名提示（需要先有中文名；没有就现场换几条写进去） ----
+        foreach (var probe in new[] { "Assassin's Creed Mirage", "Cyberpunk 2077", "Elden Ring" })
+        {
+            var cn = await SteamWeb.FetchChineseNameAsync(probe);
+            File.AppendAllText(log, $"Steam：{probe} → {(cn is null ? "请求失败" : cn.Length == 0 ? "（没有中文名）" : cn)}\n");
+        }
+
+        // ---- 进度面板外观（后台同步的「看进度」窗口） ----
+        _nameSyncStage = NameSyncStage.Filling;
+        _nameSyncPhaseText = "正在从 Steam 逐个换取中文名…";
+        _nameSyncCurrent = "";
+        _nameSyncDone = 0;
+        _nameSyncRunTotal = count;
+        ShowNameSyncPanel();
+        UpdateNameSyncProgress(Math.Max(1, count / 3), count, "Assassin's Creed Mirage");
+        await Task.Delay(600);
+        SaveShot(Path.Combine(dir, "02-sync-dialog.png"));
+
+        _nameSyncStage = NameSyncStage.Done;
+        _nameSyncPhaseText = $"同步完成 · {count} 款游戏，其中 {AppDatabase.Instance.GameNameCnCount()} 款有中文名";
+        UpdateNameSyncProgress(count, count, "Cyberpunk 2077");
+        await Task.Delay(400);
+        SaveShot(Path.Combine(dir, "03-sync-done.png"));
+        HideNameSyncPanel();
+
+        // ---- 方向键选中 + 回车回填（键盘路径直接调内部方法验证，真实按键靠人工） ----
+        // 先把输入清空再打，否则文本没变不会触发 TextChanged，提示不会重新查
+        SearchBox.Text = "";
+        await Task.Delay(60);
+        SearchBox.Text = "assas";
+        SearchBox.Focus();
+        await Task.Delay(1000);
+
+        MoveSuggest(+1);
+        MoveSuggest(+1);
+        var picked = SuggestList.SelectedItem as GameNameRow;
+        File.AppendAllText(log, $"方向键选中：index={SuggestList.SelectedIndex}，选中项=「{picked?.CleanEn}」\n");
+
+        // 再从「按键」这条路走一遍：模拟 ↓↓，看是不是真的挪到了第 2 条
+        SuggestList.SelectedIndex = -1;
+        SimulateSearchKey(Key.Down);
+        SimulateSearchKey(Key.Down);
+        File.AppendAllText(log,
+            $"模拟按键 ↓↓ 之后：index={SuggestList.SelectedIndex}，" +
+            $"选中项=「{(SuggestList.SelectedItem as GameNameRow)?.CleanEn}」\n");
+
+        // 等一帧把高亮画出来，否则截到的还是上一帧（WPF 渲染在下一个合成周期）
+        await Task.Delay(300);
+        CaptureWindowScreen(Path.Combine(dir, "04-suggest-selected.png"));
+
+        if (SuggestList.SelectedItem is GameNameRow row)
+        {
+            // 模拟回车：应该回填英文名并直接搜
+            SimulateSearchKey(Key.Enter);
+            await Task.Delay(1200);
+            File.AppendAllText(log, $"模拟回车之后：搜索框=「{SearchBox.Text}」\n");
+            SaveShot(Path.Combine(dir, "05-suggest-applied.png"));
+        }
+    }
+
+    /// <summary>自检用：把一个按键按「预览」路径发给搜索框，等价于真实按下。</summary>
+    private void SimulateSearchKey(Key key)
+    {
+        var source = PresentationSource.FromVisual(SearchBox);
+        if (source is null) return;
+
+        SearchBox.RaiseEvent(new KeyEventArgs(Keyboard.PrimaryDevice, source, Environment.TickCount, key)
+        {
+            RoutedEvent = System.Windows.Input.Keyboard.PreviewKeyDownEvent
+        });
+    }
+
+    /// <summary>
+    /// 自检：跑一次真正的后台同步（清空 → 重抓全量 → 2 路慢慢换中文名），
+    /// 全程不 await 它，用来验证「同步不挡界面」：中途还能截图、还能开关面板。
+    /// </summary>
+    public async Task RunNameSyncCheckAsync(string dir)
+    {
+        Directory.CreateDirectory(dir);
+        var log = Path.Combine(dir, "sync.txt");
+        File.WriteAllText(log, "");
+
+        for (var i = 0; i < 300 && (_firstLoading || _library.Items.Count == 0); i++) await Task.Delay(100);
+        for (var i = 0; i < 900 && AppDatabase.Instance.GameNameCount() == 0; i++) await Task.Delay(100);
+
+        var before = AppDatabase.Instance.GameNameCount();
+        var started = Environment.TickCount64;
+
+        // 后台开跑：不等它，接下来照常操作界面
+        StartNameSync(rebuild: true);
+
+        await Task.Delay(2500);
+        File.AppendAllText(log,
+            $"2.5 秒后：stage={_nameSyncStage}，面板={(NameSyncLayer.Visibility == Visibility.Visible ? "开" : "关")}，" +
+            $"胶囊=「{NamePillText.Text} {NamePillSub.Text}」\n");
+
+        // 关着面板也能看到胶囊上的活进度
+        SaveShot(Path.Combine(dir, "01-pill-running.png"));
+
+        // 点开面板看详情
+        NamePill_Click(NamePill, new RoutedEventArgs());
+        await Task.Delay(700);
+        File.AppendAllText(log, $"点开面板：{NameSyncLayer.Visibility}，阶段文案=「{NameSyncPhase.Text}」\n");
+        SaveShot(Path.Combine(dir, "02-panel-running.png"));
+
+        // 收起面板，验证同步不受影响
+        HideNameSyncPanel();
+        await Task.Delay(1500);
+        File.AppendAllText(log,
+            $"收起面板 1.5 秒后仍在跑：{(NameSyncRunning ? "是" : "否")}，" +
+            $"进度 {_nameSyncDone} / {_nameSyncRunTotal}\n");
+
+        // 等它自己跑完（最多 8 分钟）
+        for (var i = 0; i < 4800 && _nameSyncRunning; i++) await Task.Delay(100);
+
+        var elapsed = Environment.TickCount64 - started;
+        var after = AppDatabase.Instance.GameNameCount();
+        var withCn = AppDatabase.Instance.GameNameCnCount();
+
+        File.AppendAllText(log,
+            $"同步前 {before} 条 → 同步后 {after} 条，其中 {withCn} 条有中文名\n" +
+            $"stage={_nameSyncStage}，胶囊=「{NamePillText.Text} {NamePillSub.Text}」\n" +
+            $"耗时 {elapsed / 1000.0:F1} 秒（2 路并发 + 每条歇 90ms）\n" +
+            $"待补中文名还剩：{AppDatabase.Instance.LoadGameNamesMissingCn().Count} 条\n");
+
+        ShowNameSyncPanel();
+        await Task.Delay(500);
+        SaveShot(Path.Combine(dir, "03-panel-done.png"));
+        HideNameSyncPanel();
+
+        foreach (var kw in new[] { "assassin", "cyberpunk", "elden", "gta" })
+        {
+            var hits = AppDatabase.Instance.SearchGameNames(kw, 4);
+            File.AppendAllText(log,
+                $"“{kw}”：{string.Join(" / ", hits.Select(h => $"{h.CleanEn}（{h.NameCn}）"))}\n");
+        }
+
+        SearchBox.Text = "assas";
+        SearchBox.Focus();
+        await Task.Delay(1000);
+        CaptureWindowScreen(Path.Combine(dir, "01-suggest-cn.png"));
+        CloseSuggest();
+    }
+
+    /// <summary>
+    /// 自检：只走「补齐缺的中文名」这一条路（启动时自动同步用的就是它），
+    /// 确认不会弹面板、界面照常可用，胶囊上有活进度。
+    /// </summary>
+    public async Task RunNameFillCheckAsync(string dir)
+    {
+        Directory.CreateDirectory(dir);
+        var log = Path.Combine(dir, "fill.txt");
+        File.WriteAllText(log, "");
+
+        for (var i = 0; i < 300 && (_firstLoading || _library.Items.Count == 0); i++) await Task.Delay(100);
+        for (var i = 0; i < 900 && AppDatabase.Instance.GameNameCount() == 0; i++) await Task.Delay(100);
+
+        var all = AppDatabase.Instance.GameNameCount();
+        var cnBefore = AppDatabase.Instance.GameNameCnCount();
+        var missing = AppDatabase.Instance.LoadGameNamesMissingCn().Count;
+
+        File.AppendAllText(log,
+            $"开跑前：{all} 条名单，其中 {cnBefore} 条有中文名，待补 {missing} 条\n" +
+            $"    空闲时胶囊={(NamePill.Visibility == Visibility.Visible ? "显示（不对）" : "隐藏（对）")}，" +
+            $"侧栏入口=「{NameSyncLinkText.Text}」\n");
+        SaveShot(Path.Combine(dir, "00-idle.png"));
+
+        var started = Environment.TickCount64;
+        StartNameSync(rebuild: false);
+
+        await Task.Delay(2000);
+        File.AppendAllText(log,
+            $"2 秒后：stage={_nameSyncStage}，胶囊={(NamePill.Visibility == Visibility.Visible ? "显示" : "隐藏（不对）")}，" +
+            $"文字=「{NamePillText.Text} {NamePillSub.Text}」，侧栏入口=「{NameSyncLinkText.Text}」，" +
+            $"面板={(NameSyncLayer.Visibility == Visibility.Visible ? "开（不对）" : "关（对）")}\n");
+
+        // 中途再采一次，确认计数是跟着走的，不是写死在初始值上
+        await Task.Delay(4000);
+        File.AppendAllText(log,
+            $"6 秒后：胶囊=「{NamePillText.Text} {NamePillSub.Text}」，侧栏入口=「{NameSyncLinkText.Text}」\n");
+        SaveShot(Path.Combine(dir, "01-fill-running.png"));
+
+        for (var i = 0; i < 4800 && _nameSyncRunning; i++) await Task.Delay(100);
+
+        var elapsed = Environment.TickCount64 - started;
+        var cnAfter = AppDatabase.Instance.GameNameCnCount();
+
+        await Task.Delay(400);   // 等收尾那一帧刷新，胶囊会在这时候收起来
+        File.AppendAllText(log,
+            $"结束：{AppDatabase.Instance.GameNameCount()} 条名单，中文名 {cnBefore} → {cnAfter}，stage={_nameSyncStage}\n" +
+            $"耗时 {elapsed / 1000.0:F1} 秒，本轮进度 {_nameSyncDone} / {_nameSyncRunTotal}\n" +
+            $"待补还剩 {AppDatabase.Instance.LoadGameNamesMissingCn().Count} 条，" +
+            $"胶囊={(NamePill.Visibility == Visibility.Visible ? "仍显示（不对）" : "已收起（对）")}，" +
+            $"侧栏入口=「{NameSyncLinkText.Text}」\n");
+
+        SaveShot(Path.Combine(dir, "02-fill-done.png"));
+    }
+
+    /// <summary>
+    /// 自检：用真实鼠标点一下智能提示的第二行，验证「点得到、点完直接去搜官网」。
+    /// 之前的毛病是 Popup 用了 StaysOpen=False，鼠标一按它先把自己关掉，点击就丢了。
+    /// </summary>
+    public async Task RunSuggestClickCheckAsync(string dir)
+    {
+        Directory.CreateDirectory(dir);
+        var log = Path.Combine(dir, "click.txt");
+        File.WriteAllText(log, "");
+        _selfCheckLog = log;
+
+        for (var i = 0; i < 300 && (_firstLoading || _library.Items.Count == 0); i++) await Task.Delay(100);
+        for (var i = 0; i < 600 && AppDatabase.Instance.GameNameCount() == 0; i++) await Task.Delay(100);
+
+        NavList.SelectedIndex = 0;
+        await Task.Delay(400);
+        Activate();
+        SearchBox.Focus();
+        SearchBox.Text = "assas";
+        await Task.Delay(1300);
+
+        File.AppendAllText(log,
+            $"提示已开：{SuggestPopup.IsOpen}，条目 {_suggests.Count}：" +
+            $"{string.Join(" | ", _suggests.Take(3).Select(s => s.CleanEn))}\n");
+
+        if (!SuggestPopup.IsOpen || _suggests.Count < 2)
+        {
+            File.AppendAllText(log, "没有可点的提示项，跳过\n");
+            return;
+        }
+
+        var target = _suggests[1];
+        SuggestList.SelectedIndex = 0;   // 高亮先放第一行，点完看它有没有真的换过去
+        SuggestList.UpdateLayout();
+        await Task.Delay(150);
+
+        if (SuggestList.ItemContainerGenerator.ContainerFromIndex(1) is not FrameworkElement container)
+        {
+            File.AppendAllText(log, "拿不到第 2 行的容器，跳过\n");
+            return;
+        }
+
+        // Popup 是独立窗口，Visual.PointToScreen 在这套 DPI 下不可靠 ——
+        // 直接拿 Popup 自己的窗口矩形，再加上行在 Popup 里的相对位置（按 DPI 换算成物理像素）
+        var popupRoot = SuggestPopup.Child as FrameworkElement;
+        var popupHwnd = popupRoot is null
+            ? IntPtr.Zero
+            : (PresentationSource.FromVisual(popupRoot) as HwndSource)?.Handle ?? IntPtr.Zero;
+
+        var x = 0;
+        var y = 0;
+        if (popupHwnd != IntPtr.Zero && GetWindowRect(popupHwnd, out var popupRect))
+        {
+            var scale = Math.Max(1.0, GetDpiForWindow(popupHwnd) / 96.0);
+            var rel = container.TransformToAncestor(popupRoot!)
+                .Transform(new Point(container.ActualWidth / 2, container.ActualHeight / 2));
+
+            x = popupRect.Left + (int)Math.Round(rel.X * scale);
+            y = popupRect.Top + (int)Math.Round(rel.Y * scale);
+
+            File.AppendAllText(log,
+                $"Popup 窗口 ({popupRect.Left},{popupRect.Top})-({popupRect.Right},{popupRect.Bottom})，" +
+                $"缩放 {scale:F2}，行内相对 ({rel.X:F0},{rel.Y:F0})\n");
+        }
+        else
+        {
+            var fallback = container.PointToScreen(
+                new Point(container.ActualWidth / 2, container.ActualHeight / 2));
+            x = (int)fallback.X;
+            y = (int)fallback.Y;
+            File.AppendAllText(log, $"拿不到 Popup 句柄，退回 PointToScreen ({x},{y})\n");
+        }
+
+        File.AppendAllText(log, $"要点第 2 行「{target.CleanEn}」，屏幕坐标 ({x}, {y})\n");
+
+        // 自检窗口必须在最前面，否则这一下点到的是别的窗口
+        var mainHwnd = new WindowInteropHelper(this).Handle;
+        SetForegroundWindow(mainHwnd);
+        await Task.Delay(400);
+        File.AppendAllText(log,
+            $"点击前前台是本窗口：{(GetForegroundWindow() == mainHwnd ? "是" : "否")}\n");
+
+        SetCursorPos(x, y);
+        await Task.Delay(120);
+        mouse_event(MouseEventLeftDown, 0, 0, 0, UIntPtr.Zero);
+        await Task.Delay(40);
+        mouse_event(MouseEventLeftUp, 0, 0, 0, UIntPtr.Zero);
+
+        await Task.Delay(1800);
+
+        var ok = SearchBox.Text == target.CleanEn && _searchPager.TotalCount > 0;
+        File.AppendAllText(log,
+            $"点完之后：搜索框=「{SearchBox.Text}」，提示开着={SuggestPopup.IsOpen}\n" +
+            $"    结果 {_searchPager.TotalCount} 条：{string.Join(" / ", _items.Take(2).Select(i => i.Title))}\n" +
+            $"    状态栏：{StatusText.Text}\n" +
+            $"    与预期一致：{(ok ? "是" : "否")}\n");
+
+        CloseSuggest();
+        SaveShot(Path.Combine(dir, "01-after-click.png"));
+    }
+
+    /// <summary>
+    /// 自检：搜索关键词的 URL 编码 + 中文名翻译。
+    /// 官网是英文站，中文词必须先翻成英文名；英文词里的空格、撇号交给 Uri.EscapeDataString 编码。
+    /// 这里把四类关键词真打一遍，记下本地反查结果、实际发给官网的词、结果条数和状态栏文案。
+    /// </summary>
+    public async Task RunSearchCheckAsync(string dir)
+    {
+        Directory.CreateDirectory(dir);
+        var log = Path.Combine(dir, "search.txt");
+        File.WriteAllText(log, "");
+
+        for (var i = 0; i < 300 && (_firstLoading || _library.Items.Count == 0); i++) await Task.Delay(100);
+        for (var i = 0; i < 600 && AppDatabase.Instance.GameNameCount() == 0; i++) await Task.Delay(100);
+
+        File.AppendAllText(log,
+            $"游戏名库 {AppDatabase.Instance.GameNameCount()} 条，其中有中文名 {AppDatabase.Instance.GameNameCnCount()} 条\n");
+
+        foreach (var (label, keyword) in new[]
+                 {
+                     ("中文名 · 完整", "赛博朋克 2077"),
+                     ("中文名 · 部分", "艾尔登法环"),
+                     ("英文 · 空格与撇号", "Assassin's Creed"),
+                     ("英文 · 单词", "elden"),
+                     ("中文名 · 库里没有", "风灵月影"),
+                 })
+        {
+            var translated = AppDatabase.Instance.FindEnglishByChinese(keyword);
+            SearchBox.Text = keyword;
+            await SubmitSearchAsync();
+            await Task.Delay(800);
+
+            File.AppendAllText(log,
+                $"[{label}] 输入「{keyword}」\n" +
+                $"    本地反查英文名：{translated ?? "（没有）"}\n" +
+                $"    实际发给官网：{_keyword}（编码后 {Uri.EscapeDataString(_keyword)}）\n" +
+                $"    结果 {_searchPager.TotalCount} 条：{string.Join(" / ", _items.Take(3).Select(i => i.Title))}\n" +
+                $"    状态栏：{StatusText.Text}\n");
+        }
+
+        // 最后停在中文搜索的结果页上，顺带把顶栏（胶囊 + 刷新按钮）一起拍进去
+        SearchBox.Text = "赛博朋克 2077";
+        await SubmitSearchAsync();
+        await Task.Delay(900);
+        CloseSuggest();
+        await Task.Delay(200);
+        CaptureWindowScreen(Path.Combine(dir, "01-search-cn.png"));
+
+        File.AppendAllText(log,
+            $"截图停在：搜索「{_keyword}」，结果 {_searchPager.TotalCount} 条，第一页 {_items.Count} 张卡片\n");
+    }
+
+    /// <summary>
+    /// 自检：库里一条中文名都没有时（首次打开 / 清过库），启动后应该弹「同步游戏中文名？」的询问框。
+    /// 记下标题 / 正文 / 按钮，拍一张，然后取消（不真的跑同步）。
+    /// </summary>
+    public async Task RunInviteCheckAsync(string dir)
+    {
+        Directory.CreateDirectory(dir);
+        var log = Path.Combine(dir, "invite.txt");
+        File.WriteAllText(log, "");
+
+        for (var i = 0; i < 300 && (_firstLoading || _library.Items.Count == 0); i++) await Task.Delay(100);
+
+        // 自动触发会被「自检跳过」挡掉（怕弹框挡截图），这里直接走同一条询问分支，验证文案和按钮
+        var asking = AskSyncChineseAsync();
+
+        for (var i = 0; i < 60 && ConfirmLayer.Visibility != Visibility.Visible; i++) await Task.Delay(100);
+
+        var shown = ConfirmLayer.Visibility == Visibility.Visible;
+
+        File.AppendAllText(log,
+            $"游戏名库 {AppDatabase.Instance.GameNameCount()} 条，中文名 {AppDatabase.Instance.GameNameCnCount()} 条\n" +
+            $"询问框：{(shown ? "已弹出（对）" : "没有弹（错）")}\n" +
+            $"    标题：{ConfirmTitle.Text}\n" +
+            $"    正文：{ConfirmBody.Text.Replace("\n", " ")}\n" +
+            $"    按钮：{ConfirmOkButton.Content}\n");
+
+        await Task.Delay(450);
+        SaveShot(Path.Combine(dir, "01-invite.png"));
+
+        if (shown) CloseConfirm(false);
+        await asking;
+        await Task.Delay(400);
+
+        File.AppendAllText(log,
+            $"取消之后：询问框={(ConfirmLayer.Visibility == Visibility.Visible ? "仍开着（错）" : "已关（对）")}，" +
+            $"同步中={_nameSyncRunning}\n");
+    }
+
+    /// <summary>
+    /// 自检：把鼠标停在一张卡片的标题上，确认 ToolTip 弹出来的是完整游戏名。
+    /// 工具提示是独立 HWND，只能抓整块屏幕（窗口截图里看不到）。
+    /// </summary>
+    public async Task RunCardTipCheckAsync(string dir)
+    {
+        Directory.CreateDirectory(dir);
+        var log = Path.Combine(dir, "tip.txt");
+        File.WriteAllText(log, "");
+
+        for (var i = 0; i < 300 && (_firstLoading || _library.Items.Count == 0); i++) await Task.Delay(100);
+        await Task.Delay(800);
+
+        Activate();
+        await Task.Delay(300);
+
+        if (CardList.ItemContainerGenerator.ContainerFromIndex(0) is not ListBoxItem rowItem)
+        {
+            File.AppendAllText(log, "拿不到第一行容器，跳过\n");
+            return;
+        }
+
+        var title = Descendants<TextBlock>(rowItem).FirstOrDefault(t => t.ToolTip is string);
+        if (title is null)
+        {
+            File.AppendAllText(log, "第一行里没有带 ToolTip 的标题，跳过\n");
+            return;
+        }
+
+        var center = title.TransformToAncestor(this)
+            .Transform(new Point(title.ActualWidth / 2, title.ActualHeight / 2));
+        var screen = PointToScreen(center);
+
+        File.AppendAllText(log,
+            $"标题显示为「{title.Text}」\n" +
+            $"ToolTip 完整名：「{title.ToolTip}」\n" +
+            $"悬停屏幕坐标：({screen.X:F0}, {screen.Y:F0})\n");
+
+        SetCursorPos((int)screen.X, (int)screen.Y);
+        await Task.Delay(1400);
+
+        CaptureFullScreen(Path.Combine(dir, "01-card-tip.png"));
+        File.AppendAllText(log, "已截全屏（含工具提示窗口）\n");
+    }
+
+    /// <summary>自检：关于 / 声明弹窗的新文案排版（正文变长后靠滚动，落款要能看到）。</summary>
+    public async Task RunAboutCheckAsync(string dir)
+    {
+        Directory.CreateDirectory(dir);
+        var log = Path.Combine(dir, "about.txt");
+
+        for (var i = 0; i < 300 && (_firstLoading || _library.Items.Count == 0); i++) await Task.Delay(100);
+
+        ShowAbout();
+        await Task.Delay(900);
+        SaveShot(Path.Combine(dir, "01-about.png"));
+
+        var scroll = FindScrollViewer(AboutCard);
+        if (scroll is not null)
+        {
+            scroll.ScrollToEnd();
+            await Task.Delay(400);
+            SaveShot(Path.Combine(dir, "02-about-end.png"));
+
+            File.WriteAllText(log,
+                $"关于卡片：{AboutCard.ActualWidth:F0}x{AboutCard.ActualHeight:F0}，" +
+                $"正文可视高 {scroll.ViewportHeight:F0} / 内容高 {scroll.ExtentHeight:F0}，" +
+                $"可滚 {scroll.ScrollableHeight:F0}\n");
+        }
+
+        CloseAbout();
+    }
+#endif
+
+    /// <summary>
+    /// 自检：核对「已经收录」（SQLite 缓存条数）和「已加载」（内存里当前列表条数）两个数字，
+    /// 顺便看看正常一轮加载要多久。
+    /// </summary>
+    public async Task RunCountCheckAsync(string dir)
+    {
+        Directory.CreateDirectory(dir);
+        var log = Path.Combine(dir, "count.txt");
+        File.WriteAllText(log, "");
+
+        var started = Environment.TickCount64;
+        for (var i = 0; i < 600 && (_firstLoading || _library.Items.Count == 0); i++) await Task.Delay(100);
+        var elapsed = Environment.TickCount64 - started;
+
+        File.AppendAllText(log,
+            $"首次加载耗时：{elapsed} ms\n" +
+            $"副标题：{SectionSubtitle.Text}\n" +
+            $"状态栏：{StatusText.Text}\n" +
+            $"内存条数：{_library.Items.Count} / SQLite：{AppDatabase.Instance.CacheCount()}\n" +
+            $"收藏：{_favorites.Count} / 库可用：{AppDatabase.Instance.IsAvailable}\n");
+
+        SaveShot(Path.Combine(dir, "count.png"));
+    }
+
+    /// <summary>
+    /// 自检：圆角按钮的边缘。同一个窗口分别按 1.0 / 1.25 / 1.5 / 2.0 倍渲染出来，
+    /// 再抓一张当前屏幕的真实像素，用来对比「100% 缩放」和「150% 缩放」下圆角有没有发黑。
+    /// </summary>
+    public async Task RunCornerCheckAsync(string dir)
+    {
+        Directory.CreateDirectory(dir);
+        var log = Path.Combine(dir, "corner.txt");
+        File.WriteAllText(log, $"实际 DPI 缩放 = {VisualTreeHelper.GetDpi(this).DpiScaleX:0.###}\n");
+
+        for (var i = 0; i < 200 && _firstLoading; i++) await Task.Delay(100);
+        await Task.Delay(1200);
+
+        NavList.SelectedIndex = 3;               // 设置
+        await Task.Delay(700);
+        Activate();
+        await Task.Delay(400);
+
+        CaptureWindowScreen(Path.Combine(dir, "blue-screen.png"));
+        foreach (var scale in new[] { 1.0, 1.25, 1.5, 2.0 })
+            SaveShotAtScale(Path.Combine(dir, $"blue-{scale * 100:0}.png"), scale);
+
+        // 红按钮在确认框里，底色比卡片更暗，是最容易看出黑边的那颗
+        ClearCacheButton.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
+        await Task.Delay(700);
+
+        CaptureWindowScreen(Path.Combine(dir, "red-screen.png"));
+        foreach (var scale in new[] { 1.0, 1.25, 1.5, 2.0 })
+            SaveShotAtScale(Path.Combine(dir, $"red-{scale * 100:0}.png"), scale);
+
+        File.AppendAllText(log, "已输出 blue-*/red-* 各 1x 1.25x 1.5x 2x 以及屏幕实拍\n");
+    }
+
+    /// <summary>
+    /// 自检：几种圆角画法并排渲染（纯填充 / 不同强度的内侧亮边 / 不同圆角半径），
+    /// 在 1x 和 1.5x 下各出一张，用来看哪种在 100% 缩放下四角不会显得发黑。
+    /// </summary>
+    public Task RunRimCheckAsync(string dir)
+    {
+        Directory.CreateDirectory(dir);
+
+        var variants = new (string name, double radius, Color? rim, double rimAlpha, double halo)[]
+        {
+            ("A-纯填充-r10", 10, null, 0, 0),
+            ("B-亮边6%-r10", 10, Colors.White, 0.06, 0),
+            ("C-亮边12%-r10", 10, Colors.White, 0.12, 0),
+            ("D-纯填充-r12", 12, null, 0, 0),
+            ("E-亮边6%-r12", 12, Colors.White, 0.06, 0),
+            ("F-同色描边-r10", 10, Color.FromRgb(0x7A, 0xB2, 0xFF), 1.0, 0),
+            ("G-同色衬底22%-r10", 10, null, 0, 0.22),
+            ("H-同色衬底35%-r10", 10, null, 0, 0.35),
+            ("I-同色衬底45%-r12", 12, null, 0, 0.45)
+        };
+
+        var host = new Grid
+        {
+            Width = 300,
+            Height = 34 * variants.Length + 12 * (variants.Length + 1),
+            Background = new SolidColorBrush(Color.FromRgb(0x1A, 0x28, 0x36))
+        };
+
+        for (var i = 0; i < variants.Length; i++)
+        {
+            var (_, radius, rim, alpha, halo) = variants[i];
+
+            var slot = new Grid
+            {
+                Width = 116,
+                Height = 36,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Top,
+                Margin = new Thickness(0, 12 + i * (34 + 12), 0, 0)
+            };
+
+            // 衬底：比按钮大 1 DIP 的同色半透明圆角块。主填充的抗锯齿就只和这层同色混，
+            // 不再直接和深色卡片底混，角上那圈"发黑"的过渡就被换成一圈很淡的同色光。
+            if (halo > 0)
+            {
+                slot.Children.Add(new Border
+                {
+                    CornerRadius = new CornerRadius(radius + 1),
+                    Background = new SolidColorBrush(Color.FromArgb((byte)Math.Round(halo * 255), 0x3B, 0x82, 0xF6))
+                });
+            }
+
+            var button = new Border
+            {
+                Margin = new Thickness(halo > 0 ? 1 : 0),
+                CornerRadius = new CornerRadius(radius),
+                Background = new SolidColorBrush(Color.FromRgb(0x3B, 0x82, 0xF6))
+            };
+
+            if (rim is { } color)
+            {
+                button.BorderThickness = new Thickness(1);
+                button.BorderBrush =
+                    new SolidColorBrush(Color.FromArgb((byte)Math.Round(alpha * 255), color.R, color.G, color.B));
+            }
+
+            slot.Children.Add(button);
+            host.Children.Add(slot);
+        }
+
+        host.Measure(new Size(host.Width, host.Height));
+        host.Arrange(new Rect(0, 0, host.Width, host.Height));
+        host.UpdateLayout();
+
+        foreach (var scale in new[] { 1.0, 1.5 })
+        {
+            var bitmap = new RenderTargetBitmap(
+                (int)Math.Round(host.Width * scale), (int)Math.Round(host.Height * scale),
+                96 * scale, 96 * scale, PixelFormats.Pbgra32);
+            bitmap.Render(host);
+
+            var encoder = new PngBitmapEncoder();
+            encoder.Frames.Add(BitmapFrame.Create(bitmap));
+            using var stream = File.Create(Path.Combine(dir, $"rims-{scale * 100:0}.png"));
+            encoder.Save(stream);
+        }
+
+        File.WriteAllText(Path.Combine(dir, "rims.txt"),
+            string.Join("\n", variants.Select((v, i) => $"{i}: {v.name} radius={v.radius} rim={v.rim} alpha={v.rimAlpha}")));
+        return Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// 自检：首页右上角「最近更新 / 热门游戏」页签（选中态）的圆角描边在 1x 下发黑的对照实验。
+    /// 背景 #0E1825、填充 #244A72、描边 #3974AE、圆角 8、高 32——与 LibraryTabButton 完全一致。
+    /// </summary>
+    public Task RunTabCheckAsync(string dir)
+    {
+        Directory.CreateDirectory(dir);
+
+        var fill = Color.FromRgb(0x24, 0x4A, 0x72);
+        var stroke = Color.FromRgb(0x39, 0x74, 0xAE);
+        var pageBg = Color.FromRgb(0x0E, 0x18, 0x25);
+
+        Border Pill(double radius, double thickness, Brush? brush)
+        {
+            var b = new Border
+            {
+                CornerRadius = new CornerRadius(radius),
+                Background = new SolidColorBrush(fill)
+            };
+            if (brush is not null)
+            {
+                b.BorderThickness = new Thickness(thickness);
+                b.BorderBrush = brush;
+            }
+            return b;
+        }
+
+        // 每个槽位 140x44，槽间距 14，页签 116x32 居中放
+        (string name, Func<UIElement> build)[] variants =
+        [
+            ("A-现状-描边1", () => Pill(8, 1, new SolidColorBrush(stroke))),
+            ("B-衬底55%同色", () =>
+            {
+                var g = new Grid();
+                g.Children.Add(new Border
+                {
+                    Margin = new Thickness(-1),
+                    CornerRadius = new CornerRadius(9),
+                    Background = new SolidColorBrush(Color.FromArgb(0x8C, stroke.R, stroke.G, stroke.B))
+                });
+                g.Children.Add(Pill(8, 1, new SolidColorBrush(stroke)));
+                return g;
+            }),
+            ("C-衬底纯填充", () =>
+            {
+                var g = new Grid();
+                g.Children.Add(new Border
+                {
+                    Margin = new Thickness(-1),
+                    CornerRadius = new CornerRadius(9),
+                    Background = new SolidColorBrush(fill)
+                });
+                g.Children.Add(Pill(8, 1, new SolidColorBrush(stroke)));
+                return g;
+            }),
+            ("D-内嵌描边", () =>
+            {
+                var g = new Grid();
+                g.Children.Add(new Border { CornerRadius = new CornerRadius(8), Background = new SolidColorBrush(fill) });
+                g.Children.Add(new Border
+                {
+                    Margin = new Thickness(1),
+                    CornerRadius = new CornerRadius(7),
+                    BorderThickness = new Thickness(1),
+                    BorderBrush = new SolidColorBrush(stroke)
+                });
+                return g;
+            }),
+            ("E-描边1.5", () => Pill(8, 1.5, new SolidColorBrush(stroke))),
+        ];
+
+        var host = new Grid
+        {
+            Width = 180,
+            Height = variants.Length * 44 + (variants.Length + 1) * 14,
+            Background = new SolidColorBrush(pageBg)
+        };
+
+        for (var i = 0; i < variants.Length; i++)
+        {
+            var slot = new Grid
+            {
+                Width = 140,
+                Height = 44,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Top,
+                Margin = new Thickness(0, 14 + i * (44 + 14), 0, 0)
+            };
+            slot.Children.Add(variants[i].build());
+            host.Children.Add(slot);
+        }
+
+        host.Measure(new Size(host.Width, host.Height));
+        host.Arrange(new Rect(0, 0, host.Width, host.Height));
+        host.UpdateLayout();
+
+        foreach (var scale in new[] { 1.0, 1.25, 1.5, 2.0 })
+        {
+            var bitmap = new RenderTargetBitmap(
+                (int)Math.Round(host.Width * scale), (int)Math.Round(host.Height * scale),
+                96 * scale, 96 * scale, PixelFormats.Pbgra32);
+            bitmap.Render(host);
+
+            var encoder = new PngBitmapEncoder();
+            encoder.Frames.Add(BitmapFrame.Create(bitmap));
+            using var stream = File.Create(Path.Combine(dir, $"tabs-{scale * 100:0}.png"));
+            encoder.Save(stream);
+        }
+
+        File.WriteAllText(Path.Combine(dir, "tabs.txt"),
+            string.Join("\n", variants.Select((v, i) => $"{i}: {v.name}")));
+        return Task.CompletedTask;
+    }
+
+    /// <summary>按给定倍数把整个窗口渲染成一张图（相当于那台机器按这个 DPI 缩放渲染）。</summary>
+    private void SaveShotAtScale(string path, double scale)
+    {
+        try
+        {
+            var width = (int)Math.Round(ActualWidth * scale);
+            var height = (int)Math.Round(ActualHeight * scale);
+            if (width <= 0 || height <= 0) return;
+
+            var bitmap = new RenderTargetBitmap(width, height, 96 * scale, 96 * scale, PixelFormats.Pbgra32);
+            bitmap.Render(this);
+
+            var encoder = new PngBitmapEncoder();
+            encoder.Frames.Add(BitmapFrame.Create(bitmap));
+            using var stream = File.Create(path);
+            encoder.Save(stream);
+        }
+        catch
+        {
+            // 截图失败不影响自检
+        }
+    }
+
+    /// <summary>抓当前屏幕上这块窗口的真实像素（硬件渲染的结果，不是 RenderTargetBitmap）。</summary>
+    private void CaptureWindowScreen(string path)
+    {
+        try
+        {
+            var origin = PointToScreen(new Point(0, 0));
+            var width = (int)Math.Round(ActualWidth);
+            var height = (int)Math.Round(ActualHeight);
+            if (width <= 0 || height <= 0) return;
+
+            using var bitmap = new System.Drawing.Bitmap(width, height);
+            using var graphics = System.Drawing.Graphics.FromImage(bitmap);
+            graphics.CopyFromScreen((int)Math.Round(origin.X), (int)Math.Round(origin.Y), 0, 0,
+                new System.Drawing.Size(width, height));
+            bitmap.Save(path, System.Drawing.Imaging.ImageFormat.Png);
+        }
+        catch
+        {
+            // 抓不到屏幕也不影响自检
+        }
+    }
+
+    /// <summary>抓整块屏幕（工具提示、Popup 都是独立 HWND，窗口截图里拍不到）。</summary>
+    private void CaptureFullScreen(string path)
+    {
+        try
+        {
+            var screen = System.Windows.Forms.Screen.PrimaryScreen;
+            if (screen is null) return;
+
+            var bounds = screen.Bounds;
+            using var bitmap = new System.Drawing.Bitmap(bounds.Width, bounds.Height);
+            using var graphics = System.Drawing.Graphics.FromImage(bitmap);
+            graphics.CopyFromScreen(bounds.Left, bounds.Top, 0, 0, bounds.Size);
+            bitmap.Save(path, System.Drawing.Imaging.ImageFormat.Png);
+        }
+        catch
+        {
+            // 抓不到屏幕也不影响自检
+        }
+    }
+
+    /// <summary>按类型找视觉树里的所有子元素。</summary>
+    private static IEnumerable<T> Descendants<T>(DependencyObject root) where T : DependencyObject
+    {
+        var count = VisualTreeHelper.GetChildrenCount(root);
+        for (var i = 0; i < count; i++)
+        {
+            var child = VisualTreeHelper.GetChild(root, i);
+            if (child is T typed) yield return typed;
+
+            foreach (var nested in Descendants<T>(child)) yield return nested;
+        }
     }
 
     /// <summary>
@@ -2084,7 +4390,7 @@ public partial class MainWindow : Window
         {
             RoutedEvent = UIElement.MouseLeftButtonDownEvent
         };
-        DetailLayer.RaiseEvent(maskClick);
+        DetailBackdrop.RaiseEvent(maskClick);
         await Task.Delay(450);
         SaveShot(Path.Combine(dir, "09b-mask-close.png"));
 
@@ -2107,6 +4413,7 @@ public partial class MainWindow : Window
         SearchBox.Focus();
         SearchBox.Text = "elden";
         await Task.Delay(500);
+        CloseSuggest();
         SaveShot(Path.Combine(dir, "13-search-focus.png"));
 
         // 回车之后才真的向官网要结果

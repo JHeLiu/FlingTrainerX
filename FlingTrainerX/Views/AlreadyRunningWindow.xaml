@@ -1,0 +1,84 @@
+<Window
+    x:Class="FlingTrainerX.Views.AlreadyRunningWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    Title="已经启动"
+    Width="424"
+    AllowsTransparency="True"
+    Background="Transparent"
+    FontFamily="{StaticResource F.Ui}"
+    ResizeMode="NoResize"
+    ShowInTaskbar="False"
+    SizeToContent="Height"
+    SnapsToDevicePixels="True"
+    TextOptions.TextFormattingMode="Ideal"
+    Topmost="True"
+    WindowStartupLocation="CenterScreen"
+    WindowStyle="None">
+
+    <!--  第二次启动时的小提示：不弹系统消息框，保持和主界面同一套深色风格  -->
+    <Border
+        Margin="16"
+        Padding="22,20"
+        Background="#FF101B28"
+        BorderBrush="{StaticResource B.Border}"
+        BorderThickness="1"
+        CornerRadius="14"
+        MouseLeftButtonDown="Root_MouseLeftButtonDown">
+        <Border.Effect>
+            <DropShadowEffect
+                BlurRadius="26"
+                Direction="270"
+                Opacity="0.5"
+                ShadowDepth="8"
+                Color="#FF000000" />
+        </Border.Effect>
+
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+
+            <Border
+                Grid.Column="0"
+                Width="38"
+                Height="38"
+                VerticalAlignment="Top"
+                Background="#FF17283C"
+                CornerRadius="11">
+                <TextBlock
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    FontFamily="{StaticResource F.Icon}"
+                    FontSize="17"
+                    Foreground="{StaticResource B.AccentLight}"
+                    Text="&#xE946;" />
+            </Border>
+
+            <StackPanel Grid.Column="1" Margin="14,0,0,0">
+                <TextBlock
+                    FontSize="14.5"
+                    FontWeight="SemiBold"
+                    Foreground="#FFE6EFF8"
+                    Text="已经启动" />
+                <TextBlock
+                    Margin="0,7,0,0"
+                    FontSize="12"
+                    Foreground="{StaticResource B.TextDim}"
+                    LineHeight="19"
+                    Text="已经在运行，已为你切回原来的窗口。"
+                    TextWrapping="Wrap" />
+                <Button
+                    Height="30"
+                    Margin="0,16,0,0"
+                    Padding="16,0"
+                    HorizontalAlignment="Right"
+                    Click="Ok_Click"
+                    Content="知道了"
+                    FontSize="12"
+                    Style="{StaticResource PrimaryBtn}" />
+            </StackPanel>
+        </Grid>
+    </Border>
+</Window>

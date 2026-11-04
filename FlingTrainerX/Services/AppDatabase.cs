@@ -151,6 +151,37 @@ public sealed class TrainerCacheRow
 }
 
 /// <summary>
+/// 游戏名库表：官网「All Trainers (A-Z)」里每款游戏一行。
+/// <para>
+/// <see cref="NameEn"/> 是官网原始标题（默认只存它）；<see cref="NameCn"/> 是从 Steam 商店换来的
+/// 简体中文名，一开始为空，点「同步」时才批量补。搜索框的智能提示走这张表（本地 SQLite），
+/// 真正的搜索仍然发给官网接口。
+/// </para>
+/// </summary>
+[SugarTable("game_names")]
+public sealed class GameNameRow
+{
+    /// <summary>官网文章 ID，按字符串存（和收藏 / 缓存两张表同一套约定）。</summary>
+    [SugarColumn(ColumnName = "trainer_id", Length = 64, IsPrimaryKey = true, IsIdentity = false)]
+    public string TrainerId { get; set; } = "";
+
+    /// <summary>官网原始标题，例如 "Assassin's Creed Mirage Trainer"。</summary>
+    [SugarColumn(ColumnName = "name_en", Length = 256, IsNullable = true)]
+    public string NameEn { get; set; } = "";
+
+    /// <summary>Steam 商店上的简体中文名；没有（Steam 搜不到 / 没出中文）就是空。</summary>
+    [SugarColumn(ColumnName = "name_cn", Length = 256, IsNullable = true)]
+    public string NameCn { get; set; } = "";
+
+    [SugarColumn(ColumnName = "updated_at")]
+    public DateTime UpdatedAt { get; set; }
+
+    /// <summary>去掉 " Trainer" / " Enhanced" 后的游戏名，提示列表展示和回填搜索框都用它。</summary>
+    [SugarColumn(IsIgnore = true)]
+    public string CleanEn => NameEn.Replace(" Trainer", "").Replace(" Enhanced", "").Trim();
+}
+
+/// <summary>
 /// 本地 SQLite 库（单例）。整个应用只持有一个 <see cref="SqlSugarScope"/>，
 /// SqlSugarScope 本身是线程安全的，可以直接多线程共用。
 /// </summary>
@@ -216,6 +247,7 @@ public sealed class AppDatabase
 
             _db.CodeFirst.InitTables<FavoriteRow>();
             _db.CodeFirst.InitTables<TrainerCacheRow>();
+            _db.CodeFirst.InitTables<GameNameRow>();
 
             MergeLeftoverTables();
             MigratePathsToRelative();
@@ -509,6 +541,149 @@ public sealed class AppDatabase
     }
 
     public int ClearCache() => Run(db => db.Deleteable<TrainerCacheRow>().ExecuteCommand(), 0);
+
+    // ==================== 游戏名库（官网 A-Z 全量 + Steam 中文名） ====================
+
+    /// <summary>游戏名库里有多少条；启动时用它判断「要不要重新抓一次全量」。</summary>
+    public int GameNameCount() => Run(db => db.Queryable<GameNameRow>().Count(), 0);
+
+    /// <summary>已经有中文名的条数（同步进度 / 自检用）。</summary>
+    public int GameNameCnCount() =>
+        Run(db => db.Queryable<GameNameRow>().Where(r => r.NameCn != "" && r.NameCn != null).Count(), 0);
+
+    /// <summary>清空游戏名库（只在「已经不再需要旧数据」时用，正常重建走 <see cref="RebuildGameNames"/>）。</summary>
+    public int ClearGameNames() => Run(db => db.Deleteable<GameNameRow>().ExecuteCommand(), 0);
+
+    /// <summary>
+    /// 用官网新名单重建游戏名表，<b>但把已经换到的中文名按 trainer_id 原样带过去</b>。
+    /// 之前「重新抓取完整名单」是清表重写，396 个中文名跟着一起没了、又要从头问一遍 Steam；
+    /// 现在只换名单本身：新条目中文名为空，老条目继续用原来的中文名，官网已经下架的自然消失。
+    /// 返回保留下来的中文名条数。
+    /// </summary>
+    public int RebuildGameNames(List<GameNameRow> fresh)
+    {
+        var list = fresh.Where(r => !string.IsNullOrEmpty(r.TrainerId)).ToList();
+        if (list.Count == 0) return 0;
+
+        return Run(db =>
+        {
+            var cnById = db.Queryable<GameNameRow>()
+                .Where(r => r.NameCn != "" && r.NameCn != null)
+                .ToList()
+                .GroupBy(r => r.TrainerId)
+                .ToDictionary(g => g.Key, g => g.First().NameCn);
+
+            var kept = 0;
+            foreach (var row in list)
+            {
+                if (!cnById.TryGetValue(row.TrainerId, out var cn) || cn.Length == 0) continue;
+
+                row.NameCn = cn;
+                kept++;
+            }
+
+            db.Deleteable<GameNameRow>().ExecuteCommand();
+
+            for (var i = 0; i < list.Count; i += 200)
+                db.Insertable(list.Skip(i).Take(200).ToList()).ExecuteCommand();
+
+            return kept;
+        }, 0);
+    }
+
+    /// <summary>
+    /// 还没有中文名的那些行：后台「慢慢补齐」时只拿它们去问 Steam，
+    /// 已经有中文名的就不重复请求了。
+    /// </summary>
+    public List<GameNameRow> LoadGameNamesMissingCn() =>
+        Run(db => db.Queryable<GameNameRow>()
+            .Where(r => r.NameCn == "" || r.NameCn == null)
+            .OrderBy(r => r.NameEn)
+            .ToList(), new List<GameNameRow>());
+
+    /// <summary>批量写入全量游戏名（调用前一般刚清空过表，直接 insert）。</summary>
+    public int SaveGameNames(IEnumerable<GameNameRow> rows)
+    {
+        var list = rows.Where(r => !string.IsNullOrEmpty(r.TrainerId)).ToList();
+        if (list.Count == 0) return 0;
+
+        return Run(db =>
+        {
+            // 一批最多 200 条：SQLite 单条语句的参数有上限，别一口气塞 700 多个
+            for (var i = 0; i < list.Count; i += 200)
+                db.Insertable(list.Skip(i).Take(200).ToList()).ExecuteCommand();
+            return list.Count;
+        }, 0);
+    }
+
+    /// <summary>给某一款游戏补上中文名（同步过程中来一个写一个，取消时已写的不丢）。</summary>
+    public bool UpdateGameNameCn(string trainerId, string nameCn) => Run(db =>
+        db.Updateable<GameNameRow>()
+            .SetColumns(r => new GameNameRow { NameCn = nameCn, UpdatedAt = DateTime.Now })
+            .Where(r => r.TrainerId == trainerId)
+            .ExecuteCommand() > 0, false);
+
+    /// <summary>
+    /// 中文名反查英文名：官网是英文站，中文关键词直接发过去必然搜不到，
+    /// 所以搜索前先用中文名在本地库里换成英文名，再用英文名去官网搜。
+    /// 先认完全相同的，再退化到「包含」（输入「赛博朋克」也能命中「赛博朋克 2077」）；
+    /// 多个候选时取中文名最短、英文名最短的那条 —— 「艾尔登法环」应该落在
+    /// Elden Ring 本体上，而不是中文名同样叫这个的资料片（Nightreign）。
+    /// 返回的是去掉 " Trainer" 的干净名字，搜出来更准。
+    /// </summary>
+    public string? FindEnglishByChinese(string chineseName)
+    {
+        var key = chineseName.Trim();
+        if (key.Length == 0) return null;
+
+        return Run(db =>
+        {
+            var rows = db.Queryable<GameNameRow>()
+                .Where(r => r.NameCn != "" && r.NameCn != null && r.NameCn.Contains(key))
+                .Take(60)
+                .ToList();
+
+            if (rows.Count == 0) return null;
+
+            var exact = rows
+                .Where(r => string.Equals(r.NameCn.Trim(), key, StringComparison.Ordinal))
+                .OrderBy(r => r.NameEn.Length)
+                .ThenBy(r => r.NameEn, StringComparer.OrdinalIgnoreCase)
+                .FirstOrDefault();
+
+            if (exact is not null) return exact.CleanEn;
+
+            return rows.OrderBy(r => r.NameCn.Length)
+                .ThenBy(r => r.NameEn.Length)
+                .ThenBy(r => r.NameEn, StringComparer.OrdinalIgnoreCase)
+                .First().CleanEn;
+        }, null);
+    }
+
+    /// <summary>
+    /// 智能提示用：英文名 / 中文名里包含关键词的行。英文、中文都认；
+    /// 前缀命中的排前面，再按字母序，最多 <paramref name="limit"/> 条。
+    /// </summary>
+    public List<GameNameRow> SearchGameNames(string keyword, int limit)
+    {
+        var kw = keyword.Trim();
+        if (kw.Length == 0 || limit <= 0) return new List<GameNameRow>();
+
+        var rows = Run(db => db.Queryable<GameNameRow>()
+            .Where(r => r.NameEn.Contains(kw) || r.NameCn.Contains(kw))
+            .OrderBy(r => r.NameEn)
+            .Take(60)
+            .ToList(), new List<GameNameRow>());
+
+        return rows
+            .OrderByDescending(r => StartsWith(r.CleanEn, kw))
+            .ThenByDescending(r => StartsWith(r.NameCn, kw))
+            .ThenBy(r => r.CleanEn, StringComparer.OrdinalIgnoreCase)
+            .Take(limit)
+            .ToList();
+
+        static bool StartsWith(string text, string prefix) => text.StartsWith(prefix, StringComparison.OrdinalIgnoreCase);
+    }
 
     private static DateTime ParseDate(string text) =>
         DateTime.TryParse(text?.Replace('.', '-'), out var d) ? d : DateTime.MinValue;

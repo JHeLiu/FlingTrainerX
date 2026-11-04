@@ -1,45 +1,45 @@
-using System.Diagnostics;
-using System.IO;
 using System.Net;
 using System.Net.Http;
-using System.Runtime.InteropServices;
-using System.Text;
-using Microsoft.Win32;
 
 namespace FlingTrainerX.Services;
 
 /// <summary>
-/// 按本机真实的 Edge 浏览器信息拼装 User-Agent 与配套的浏览器请求头。
-/// flingtrainer.com 会拦截非浏览器 UA，这里直接伪装成本地安装的 Edge，
-/// 版本号从注册表 / msedge.exe 里现读，系统版本、位数也从当前机器动态获取。
+/// 拼装浏览器 User-Agent 与配套请求头。
+/// flingtrainer.com 会拦截非浏览器 UA，这里伪装成 Edge。
+///
+/// 版本号是**写死**的常量：不读注册表、不看 msedge.exe，
+/// 所以换到没装 Edge 的机器（LTSC / Server / 精简系统）上也照样是同一份合法 UA，
+/// 不会因为读不到版本而退化成奇怪的字符串。只有系统版本 / 位数取自当前机器。
+/// 升级版本改 <see cref="EdgeVersion"/> 一行即可。
 /// </summary>
 public static class UserAgentProvider
 {
-    private static readonly Lazy<BrowserInfo> Info = new(Detect, LazyThreadSafetyMode.ExecutionAndPublication);
+    /// <summary>伪装用的 Edge 版本（= 对应的 Chromium 主版本），要改就改这里。</summary>
+    private const string EdgeVersion = "141.0.0.0";
+
+    private static readonly Lazy<BrowserInfo> Info = new(Build, LazyThreadSafetyMode.ExecutionAndPublication);
 
     public static string UserAgent => Info.Value.UserAgent;
-    public static string FullVersion => Info.Value.FullVersion;
+    public static string FullVersion => EdgeVersion;
     public static string MajorVersion => Info.Value.MajorVersion;
     public static string Platform => Info.Value.Platform;
     public static string LanguageHeader => Info.Value.LanguageHeader;
 
     /// <summary>设置页里展示用的说明。</summary>
     public static string Describe() =>
-        $"Edge {FullVersion} · {Platform} · 系统 {Environment.OSVersion.VersionString}";
+        $"Edge {EdgeVersion}（内置版本） · {Platform} · 系统 {Environment.OSVersion.VersionString}";
 
     private sealed record BrowserInfo(
         string UserAgent,
-        string FullVersion,
         string MajorVersion,
         string Platform,
         string LanguageHeader);
 
-    private static BrowserInfo Detect()
+    private static BrowserInfo Build()
     {
-        var version = FindEdgeVersion();
-        var major = version.Split('.')[0];
-        var chrome = $"{major}.0.0.0";
+        var major = EdgeVersion.Split('.')[0];
 
+        // 只有这两样取自本机：位数决定 Win64; x64 / WOW64，NT 版本取自当前系统
         var arch = Environment.Is64BitOperatingSystem
             ? (Environment.Is64BitProcess ? "Win64; x64" : "WOW64")
             : string.Empty;
@@ -51,90 +51,11 @@ public static class UserAgentProvider
 
         var platform = arch.Length > 0 ? $"{ntVersion}; {arch}" : ntVersion;
 
+        // UA 里 Chrome/ 那段在 Edge 上就是 major.0.0.0，跟 Edg/ 的完整版本号是两个东西，别写成一样
         var ua = $"Mozilla/5.0 ({platform}) AppleWebKit/537.36 (KHTML, like Gecko) " +
-                 $"Chrome/{chrome} Safari/537.36 Edg/{version}";
+                 $"Chrome/{major}.0.0.0 Safari/537.36 Edg/{EdgeVersion}";
 
-        return new BrowserInfo(ua, version, major, platform, BuildLanguage());
-    }
-
-    /// <summary>从注册表读 Edge 版本，读不到就从 msedge.exe 的文件版本取，最后兜底一个较新的版本。</summary>
-    private static string FindEdgeVersion()
-    {
-        const string edgeClient = @"SOFTWARE\Microsoft\EdgeUpdate\Clients\{56EB18F8-B008-4CBD-B6D2-8C97FE7E9062}";
-
-        foreach (var hive in new[] { RegistryHive.LocalMachine, RegistryHive.CurrentUser })
-        {
-            foreach (var view in new[] { RegistryView.Registry64, RegistryView.Registry32 })
-            {
-                var v = ReadVersion(RegistryKey.OpenBaseKey(hive, view), edgeClient);
-                if (v is not null) return v;
-                var v2 = ReadVersion(RegistryKey.OpenBaseKey(hive, view),
-                    @"SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\{56EB18F8-B008-4CBD-B6D2-8C97FE7E9062}");
-                if (v2 is not null) return v2;
-            }
-        }
-
-        foreach (var exe in EdgeExeCandidates())
-        {
-            try
-            {
-                if (!File.Exists(exe)) continue;
-                var fv = FileVersionInfo.GetVersionInfo(exe).FileVersion;
-                if (Normalize(fv) is { } v) return v;
-            }
-            catch
-            {
-                // 忽略单个路径读取失败
-            }
-        }
-
-        return "141.0.0.0";
-    }
-
-    private static string? ReadVersion(RegistryKey baseKey, string path)
-    {
-        try
-        {
-            using var key = baseKey.OpenSubKey(path);
-            return Normalize(key?.GetValue("pv") as string);
-        }
-        catch
-        {
-            return null;
-        }
-    }
-
-    /// <summary>统一成 4 段数字，避免注册表里出现 "141.0.3537" 这种不完整版本。</summary>
-    private static string? Normalize(string? raw)
-    {
-        if (string.IsNullOrWhiteSpace(raw)) return null;
-        var parts = raw.Split('.');
-        if (parts.Length == 0 || !int.TryParse(parts[0], out var major) || major < 80) return null;
-
-        var sb = new StringBuilder(major.ToString());
-        for (var i = 1; i < 4; i++)
-        {
-            var piece = i < parts.Length && int.TryParse(parts[i], out var n) ? n : 0;
-            sb.Append('.').Append(piece);
-        }
-
-        return sb.ToString();
-    }
-
-    private static IEnumerable<string> EdgeExeCandidates()
-    {
-        var roots = new[]
-        {
-            Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86),
-            Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData)
-        };
-
-        foreach (var root in roots)
-        {
-            if (string.IsNullOrEmpty(root)) continue;
-            yield return Path.Combine(root, "Microsoft", "Edge", "Application", "msedge.exe");
-        }
+        return new BrowserInfo(ua, major, platform, BuildLanguage());
     }
 
     /// <summary>Accept-Language 按当前系统语言生成，中文机器就是 zh-CN,zh;q=0.9,en;q=0.8。</summary>

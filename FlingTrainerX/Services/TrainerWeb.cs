@@ -15,8 +15,8 @@ public static class TrainerWeb
 {
     public const string Site = "https://flingtrainer.com/";
 
-    /// <summary>官网首页每页 24 条，翻页地址是 /page/2/，API 对应 page=2。</summary>
-    public const int PageSize = 24;
+    /// <summary>官网每页 15 条（首页一行 5 张 × 3 行），翻页地址是 /page/2/，API 对应 page=2。</summary>
+    public const int PageSize = 15;
 
     private const string ApiBase = "https://flingtrainer.com/wp-json/wp/v2/posts";
 
@@ -32,12 +32,38 @@ public static class TrainerWeb
         "&_fields=id,date,modified,link,title,content,_links,_embedded";
 
     /// <summary>
+    /// 搜索关键词归一化。官网标题里是排版用的弯引号（Assassin’s 的 U+2019），
+    /// 拿它原样去搜是搜不到的（WP 把它当成词的一部分），换成直引号反而能命中；
+    /// 破折号同理。别的字符保持原样。
+    /// </summary>
+    public static string NormalizeKeyword(string keyword)
+    {
+        if (string.IsNullOrEmpty(keyword)) return "";
+
+        var sb = new StringBuilder(keyword.Length);
+        foreach (var c in keyword)
+        {
+            sb.Append(c switch
+            {
+                '\u2018' or '\u2019' or '\u02BC' => '\'',   // ‘ ’ ʼ
+                '\u201C' or '\u201D' => '"',                // “ ”
+                '\u2010' or '\u2011' or '\u2012' or '\u2013' or '\u2014' or '\u2015' => '-',  // 各种连字符/破折号
+                '\u00A0' => ' ',                            // 不换行空格
+                _ => c
+            });
+        }
+
+        return sb.ToString().Trim();
+    }
+
+    /// <summary>
     /// 官网自带搜索的接口形式。官网搜索页（<c>/?s=关键词</c>）用的就是 WP 的 <c>search</c> 参数，
     /// 结果顺序也和搜索页一致（按最后修改时间倒序），所以这里跟列表走同一套排序。
+    /// 关键词先做归一化再 URL 编码：中文、空格、冒号、撇号都能直接用。
     /// </summary>
     private static string SearchEndpointOf(string keyword, int page) =>
         $"{ApiBase}?per_page={PageSize}&page={page}&orderby=modified&order=desc" +
-        $"&search={Uri.EscapeDataString(keyword)}" +
+        $"&search={Uri.EscapeDataString(NormalizeKeyword(keyword))}" +
         "&_embed=wp:featuredmedia" +
         "&_fields=id,date,modified,link,title,content,_links,_embedded";
 
@@ -70,7 +96,7 @@ public static class TrainerWeb
 
     public static async Task<List<TrainerItem>> FetchAsync(CancellationToken ct = default)
     {
-        var (items, _) = await FetchPageAsync(1, ct).ConfigureAwait(false);
+        var (items, _, _) = await FetchPageAsync(1, ct).ConfigureAwait(false);
         return items;
     }
 
@@ -97,19 +123,67 @@ public static class TrainerWeb
         }
     }
 
-    /// <summary>抓取官网第 <paramref name="page"/> 页（1 起），返回文章与总页数。</summary>
-    public static Task<(List<TrainerItem> Items, int TotalPages)> FetchPageAsync(
+    /// <summary>
+    /// 抓取官网第 <paramref name="page"/> 页（1 起），返回文章、总页数与总条数
+    /// （分页栏按官网真实总数显示，不再依赖本地加载了多少）。
+    /// </summary>
+    public static Task<(List<TrainerItem> Items, int TotalPages, int TotalCount)> FetchPageAsync(
         int page, CancellationToken ct = default) => FetchListAsync(EndpointOf(page), ct);
 
     /// <summary>
     /// 官网搜索：契约同 <see cref="FetchPageAsync"/>，只是多了 <c>search</c> 条件。
     /// 关键词按 URL 编码拼进查询串，中文/空格/符号都能直接用。
     /// </summary>
-    public static Task<(List<TrainerItem> Items, int TotalPages)> SearchAsync(
+    public static Task<(List<TrainerItem> Items, int TotalPages, int TotalCount)> SearchAsync(
         string keyword, int page, CancellationToken ct = default)
         => FetchListAsync(SearchEndpointOf(keyword, page), ct);
 
-    private static async Task<(List<TrainerItem> Items, int TotalPages)> FetchListAsync(
+    /// <summary>
+    /// 抓「全部游戏名」——和官网 <c>All Trainers (A-Z)</c> 页面同一份数据：
+    /// 按标题 A-Z 排序、每页 100 条翻完为止（767 款 ≈ 8 个请求）。
+    /// 只取 id 和标题，不带正文，比抓详情页便宜得多。
+    /// </summary>
+    public static async Task<List<GameNameRow>> FetchAllNamesAsync(CancellationToken ct = default)
+    {
+        var all = new List<GameNameRow>();
+        var page = 1;
+        int totalPages;
+
+        do
+        {
+            using var request = Request(
+                $"{ApiBase}?per_page=100&page={page}&orderby=title&order=asc&_fields=id,title", true);
+            using var res = await Http.SendAsync(request, ct).ConfigureAwait(false);
+            res.EnsureSuccessStatusCode();
+
+            totalPages = 1;
+            if (res.Headers.TryGetValues("X-WP-TotalPages", out var values) &&
+                int.TryParse(values.FirstOrDefault(), out var t))
+            {
+                totalPages = t;
+            }
+
+            var json = await res.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+            using var doc = JsonDocument.Parse(json);
+            if (doc.RootElement.ValueKind != JsonValueKind.Array) break;
+
+            var now = DateTime.Now;
+            foreach (var post in doc.RootElement.EnumerateArray())
+            {
+                if (!post.TryGetProperty("id", out var idEl) || !idEl.TryGetInt32(out var id) || id <= 0)
+                    continue;
+
+                var title = HtmlText(post.GetProperty("title").GetProperty("rendered").GetString() ?? "");
+                if (title.Length == 0) continue;
+
+                all.Add(new GameNameRow { TrainerId = id.ToString(), NameEn = title, UpdatedAt = now });
+            }
+        } while (page++ < totalPages);
+
+        return all;
+    }
+
+    private static async Task<(List<TrainerItem> Items, int TotalPages, int TotalCount)> FetchListAsync(
         string url, CancellationToken ct)
     {
         using var request = Request(url, true);
@@ -123,8 +197,16 @@ public static class TrainerWeb
             total = t;
         }
 
+        // X-WP-Total：官网一共有多少篇文章（多少款游戏），副标题与分页栏都用它
+        var count = 0;
+        if (res.Headers.TryGetValues("X-WP-Total", out var countValues) &&
+            int.TryParse(countValues.FirstOrDefault(), out var c))
+        {
+            count = c;
+        }
+
         var json = await res.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
-        return (Parse(json), total);
+        return (Parse(json), total, count);
     }
 
     /// <summary>

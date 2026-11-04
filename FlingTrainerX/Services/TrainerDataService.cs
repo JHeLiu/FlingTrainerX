@@ -73,44 +73,10 @@ public static class TrainerDataService
         };
     }
 
+    // ---------- 卡片缓存 ----------
+
     /// <summary>把抓到的卡片写进缓存表（有则更新，无则插入）。</summary>
     public static void SaveCache(IEnumerable<TrainerItem> items) => AppDatabase.Instance.SaveCacheRange(items);
-
-    // ---------- 翻页进度 ----------
-
-    /// <summary>
-    /// 已经翻到第几页。缓存表里存的只是卡片，没有「这是第几页」这种信息，
-    /// 不记下来的话下次启动只能从第 2 页重新翻，前几页全是重复内容，滚到底也看不到新东西。
-    /// 放在 dbs\library.page，一个数字，坏了就当没有。
-    /// </summary>
-    private static string PageCursorFile => Path.Combine(AppPaths.DbDir, "library.page");
-
-    /// <summary>读上次翻到的页码；没有/读不出返回 1。</summary>
-    public static int LoadPageCursor()
-    {
-        try
-        {
-            var text = File.Exists(PageCursorFile) ? File.ReadAllText(PageCursorFile).Trim() : "";
-            return int.TryParse(text, out var page) && page > 0 ? page : 1;
-        }
-        catch
-        {
-            return 1;
-        }
-    }
-
-    /// <summary>记下已经翻到第几页。</summary>
-    public static void SavePageCursor(int page)
-    {
-        try
-        {
-            File.WriteAllText(PageCursorFile, page.ToString());
-        }
-        catch
-        {
-            // 写不进去就算了，最多下次多翻几页重复内容
-        }
-    }
 
     /// <summary>单条回写（封面落盘、下载完成时用）。</summary>
     public static void SaveCache(TrainerItem item) => AppDatabase.Instance.SaveCache(item);

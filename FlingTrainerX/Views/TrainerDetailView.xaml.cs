@@ -172,8 +172,8 @@ public partial class TrainerDetailView : System.Windows.Controls.UserControl
         DownloadPane.Visibility = index == 2 ? Visibility.Visible : Visibility.Collapsed;
 
         var activeBg = (Brush)FindResource("B.AccentDim");
-        var activeText = new SolidColorBrush(Color.FromRgb(0xEA, 0xF2, 0xFB));
-        var idleText = new SolidColorBrush(Color.FromRgb(0x8C, 0xA2, 0xB9));
+        var activeText = new SolidColorBrush(Color.FromRgb(0xFF, 0xFF, 0xFF));
+        var idleText = new SolidColorBrush(Color.FromRgb(0xE6, 0xEE, 0xF8));
 
         ShotsTab.Background = index == 0 ? activeBg : Brushes.Transparent;
         OptionsTab.Background = index == 1 ? activeBg : Brushes.Transparent;
@@ -535,6 +535,9 @@ public partial class TrainerDetailView : System.Windows.Controls.UserControl
     }
 
 #if DEBUG
+    /// <summary>自检用：封面是否已经挂上（验证「打开即有图」而不是等动画播完）。</summary>
+    public bool BannerReady => BannerBrush.ImageSource is not null;
+
     /// <summary>自检用：切到文件下载选项卡。</summary>
     public void ShowDownloadTab() => SelectTab(2);
 
