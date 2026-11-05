@@ -7,3 +7,9 @@ bin
 *.user
 .workbuddy
 .docs
+
+# 发布脚本的产物 / 临时文件
+.pro/[0-9]*.*.*
+.pro/.stage
+.pro/tools
+.pro/version.txt

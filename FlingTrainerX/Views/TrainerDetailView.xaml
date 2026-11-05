@@ -84,8 +84,8 @@
                             CaretBrush="Transparent"
                             Cursor="IBeam"
                             FontFamily="{StaticResource F.Ui}"
-                            FontSize="27"
-                            FontWeight="Bold"
+                            FontSize="{StaticResource Fs.Display}"
+                            FontWeight="SemiBold"
                             Foreground="White"
                             HorizontalScrollBarVisibility="Disabled"
                             IsReadOnly="True"
@@ -99,7 +99,7 @@
                         <WrapPanel Margin="0,10,0,0">
                             <Border Background="#CC12243A" Style="{StaticResource Chip}">
                                 <TextBlock
-                                    FontSize="11"
+                                    FontSize="{StaticResource Fs.Caption}"
                                     Foreground="{StaticResource B.AccentLight}"
                                     Text="{Binding OptionCountText}" />
                             </Border>
@@ -107,7 +107,7 @@
                                 Background="#CC12243A"
                                 Style="{StaticResource Chip}"
                                 Visibility="{Binding Version, Converter={StaticResource TextToVis}}">
-                                <TextBlock FontSize="11" Foreground="#FFFFFFFF">
+                                <TextBlock FontSize="{StaticResource Fs.Caption}" Foreground="#FFFFFFFF">
                                     <Run Foreground="#FFDCE6F1" Text="游戏版本 " />
                                     <Run Text="{Binding Version, Mode=OneWay}" />
                                 </TextBlock>
@@ -116,19 +116,19 @@
                                 Background="#CC12243A"
                                 Style="{StaticResource Chip}"
                                 Visibility="{Binding PlatformText, Converter={StaticResource TextToVis}}">
-                                <TextBlock FontSize="11" Foreground="#FFFFFFFF">
+                                <TextBlock FontSize="{StaticResource Fs.Caption}" Foreground="#FFFFFFFF">
                                     <Run Foreground="#FFDCE6F1" Text="平台 " />
                                     <Run Text="{Binding PlatformText, Mode=OneWay}" />
                                 </TextBlock>
                             </Border>
                             <Border Background="#CC12243A" Style="{StaticResource Chip}">
-                                <TextBlock FontSize="11" Foreground="#FFFFFFFF">
+                                <TextBlock FontSize="{StaticResource Fs.Caption}" Foreground="#FFFFFFFF">
                                     <Run Foreground="#FFDCE6F1" Text="最后更新 " />
                                     <Run Text="{Binding UpdatedText, Mode=OneWay}" />
                                 </TextBlock>
                             </Border>
                             <Border Background="#CC12243A" Style="{StaticResource Chip}">
-                                <TextBlock FontSize="11" Foreground="#FFFFFFFF">
+                                <TextBlock FontSize="{StaticResource Fs.Caption}" Foreground="#FFFFFFFF">
                                     <Run Foreground="#FFDCE6F1" Text="发布 " />
                                     <Run Text="{Binding Published, Mode=OneWay}" />
                                 </TextBlock>
@@ -172,7 +172,7 @@
                             <StackPanel Orientation="Horizontal">
                                 <TextBlock
                                     x:Name="ShotsTabText"
-                                    FontSize="12.5"
+                                    FontSize="{StaticResource Fs.Body}"
                                     FontWeight="SemiBold"
                                     Foreground="#FFFFFFFF"
                                     Text="软件截图" />
@@ -184,7 +184,7 @@
                                     CornerRadius="6">
                                     <TextBlock
                                         x:Name="ShotsTabCount"
-                                        FontSize="10"
+                                        FontSize="{StaticResource Fs.Caption}"
                                         Foreground="#FF7FB4FF" />
                                 </Border>
                             </StackPanel>
@@ -197,7 +197,7 @@
                             <StackPanel Orientation="Horizontal">
                                 <TextBlock
                                     x:Name="OptionsTabText"
-                                    FontSize="12.5"
+                                    FontSize="{StaticResource Fs.Body}"
                                     FontWeight="SemiBold"
                                     Foreground="#FFE6EEF8"
                                     Text="选项功能" />
@@ -209,7 +209,7 @@
                                     CornerRadius="6">
                                     <TextBlock
                                         x:Name="OptionsTabCount"
-                                        FontSize="10"
+                                        FontSize="{StaticResource Fs.Caption}"
                                         Foreground="#FF7FB4FF" />
                                 </Border>
                             </StackPanel>
@@ -222,7 +222,7 @@
                             <StackPanel Orientation="Horizontal">
                                 <TextBlock
                                     x:Name="DownloadTabText"
-                                    FontSize="12.5"
+                                    FontSize="{StaticResource Fs.Body}"
                                     FontWeight="SemiBold"
                                     Foreground="#FFE6EEF8"
                                     Text="文件下载" />
@@ -234,7 +234,7 @@
                                     CornerRadius="6">
                                     <TextBlock
                                         x:Name="DownloadTabCount"
-                                        FontSize="10"
+                                        FontSize="{StaticResource Fs.Caption}"
                                         Foreground="#FF7FB4FF" />
                                 </Border>
                             </StackPanel>
@@ -252,72 +252,51 @@
                             <RowDefinition Height="*" />
                         </Grid.RowDefinitions>
 
-                        <Grid Grid.Row="0" Margin="0,0,0,10">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="Auto" />
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="Auto" />
-                            </Grid.ColumnDefinitions>
-
-                            <StackPanel VerticalAlignment="Center" Orientation="Horizontal">
+                        <!--
+                            标题和数量已经在选项卡上（「选项功能 36」），面板里重复一遍纯属占地方；
+                            这一行只保留右侧的筛选框
+                        -->
+                        <Border
+                            x:Name="FilterWrap"
+                            Grid.Row="0"
+                            Width="200"
+                            Height="32"
+                            Margin="0,0,0,10"
+                            HorizontalAlignment="Right"
+                            Background="#FF192A3E"
+                            BorderBrush="{StaticResource B.Border}"
+                            BorderThickness="1"
+                            CornerRadius="8">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
                                 <TextBlock
-                                    FontSize="13.5"
-                                    FontWeight="SemiBold"
-                                    Style="{StaticResource T.Base}"
-                                    Text="选项功能" />
-                                <Border
-                                    Margin="8,0,0,0"
-                                    Padding="7,1"
+                                    Margin="10,0,0,0"
                                     VerticalAlignment="Center"
-                                    Background="#FF2A4058"
-                                    CornerRadius="7">
-                                    <TextBlock
-                                        x:Name="CountText"
-                                        FontSize="10.5"
-                                        Foreground="{StaticResource B.AccentLight}" />
-                                </Border>
-                            </StackPanel>
-
-                            <Border
-                                x:Name="FilterWrap"
-                                Grid.Column="2"
-                                Width="200"
-                                Height="32"
-                                Background="#FF192A3E"
-                                BorderBrush="{StaticResource B.Border}"
-                                BorderThickness="1"
-                                CornerRadius="8">
-                                <Grid>
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="Auto" />
-                                        <ColumnDefinition Width="*" />
-                                    </Grid.ColumnDefinitions>
-                                    <TextBlock
-                                        Margin="10,0,0,0"
-                                        VerticalAlignment="Center"
-                                        FontFamily="{StaticResource F.Icon}"
-                                        FontSize="11"
-                                        Foreground="#FFC6D4E2"
-                                        Text="&#xE721;" />
-                                    <TextBox
-                                        x:Name="FilterBox"
-                                        Grid.Column="1"
-                                        Height="30"
-                                        Margin="7,0,8,0"
-                                        FontSize="11.5"
-                                        Style="{StaticResource SearchBox}" />
-                                    <TextBlock
-                                        x:Name="FilterHint"
-                                        Grid.Column="1"
-                                        Margin="8,0,0,0"
-                                        VerticalAlignment="Center"
-                                        FontSize="11.5"
-                                        Foreground="#FFC6D4E2"
-                                        IsHitTestVisible="False"
-                                        Text="筛选选项 / 快捷键" />
-                                </Grid>
-                            </Border>
-                        </Grid>
+                                    FontFamily="{StaticResource F.Icon}"
+                                    FontSize="13"
+                                    Foreground="#FFC6D4E2"
+                                    Text="&#xE721;" />
+                                <TextBox
+                                    x:Name="FilterBox"
+                                    Grid.Column="1"
+                                    Height="30"
+                                    Margin="7,0,8,0"
+                                    FontSize="{StaticResource Fs.Small}"
+                                    Style="{StaticResource SearchBox}" />
+                                <TextBlock
+                                    x:Name="FilterHint"
+                                    Grid.Column="1"
+                                    Margin="8,0,0,0"
+                                    VerticalAlignment="Center"
+                                    FontSize="{StaticResource Fs.Small}"
+                                    Foreground="#FFC6D4E2"
+                                    IsHitTestVisible="False"
+                                    Text="筛选选项 / 快捷键" />
+                            </Grid>
+                        </Border>
 
                         <ScrollViewer
                             x:Name="OptionsScroll"
@@ -334,7 +313,7 @@
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate>
                                         <Border
-                                            Height="34"
+                                            Height="38"
                                             Margin="0,0,8,8"
                                             Background="#FF22354B"
                                             BorderBrush="#FF2C4259"
@@ -347,7 +326,7 @@
                                                     <ColumnDefinition Width="*" />
                                                 </Grid.ColumnDefinitions>
                                                 <Border
-                                                    Height="20"
+                                                    Height="22"
                                                     MinWidth="24"
                                                     Padding="7,0"
                                                     Style="{StaticResource KeyBadge}">
@@ -355,7 +334,7 @@
                                                         HorizontalAlignment="Center"
                                                         VerticalAlignment="Center"
                                                         FontFamily="Consolas, Microsoft YaHei UI"
-                                                        FontSize="10"
+                                                        FontSize="{StaticResource Fs.Caption}"
                                                         Foreground="#FF8FC2FF"
                                                         Text="{Binding Key}" />
                                                 </Border>
@@ -364,7 +343,7 @@
                                                     Margin="9,0,0,0"
                                                     VerticalAlignment="Center"
                                                     FontFamily="{StaticResource F.Ui}"
-                                                    FontSize="11.5"
+                                                    FontSize="{StaticResource Fs.Small}"
                                                     Foreground="#FFF8FBFF"
                                                     Text="{Binding Name}"
                                                     TextTrimming="CharacterEllipsis" />
@@ -381,7 +360,7 @@
                             HorizontalAlignment="Center"
                             VerticalAlignment="Center"
                             FontFamily="{StaticResource F.Ui}"
-                            FontSize="12"
+                            FontSize="{StaticResource Fs.Small}"
                             Foreground="#FFC6D4E2"
                             Text="正在加载修改选项…" />
 
@@ -391,7 +370,7 @@
                             HorizontalAlignment="Center"
                             VerticalAlignment="Center"
                             FontFamily="{StaticResource F.Ui}"
-                            FontSize="12"
+                            FontSize="{StaticResource Fs.Small}"
                             Foreground="#FFC6D4E2"
                             Text="没有匹配的选项"
                             Visibility="Collapsed" />
@@ -408,39 +387,34 @@
                             <RowDefinition Height="*" />
                         </Grid.RowDefinitions>
 
-                        <Grid Grid.Row="0" Margin="0,0,0,10">
-                            <TextBlock
-                                VerticalAlignment="Center"
-                                FontSize="13.5"
-                                FontWeight="SemiBold"
-                                Style="{StaticResource T.Base}"
-                                Text="文件下载" />
-                            <StackPanel
-                                HorizontalAlignment="Right"
-                                VerticalAlignment="Center"
-                                Orientation="Horizontal">
-                                <Button
-                                    x:Name="CopyAllButton"
-                                    Click="CopyAllDownloads_Click"
-                                    Style="{StaticResource RowIconBtn}"
-                                    ToolTip="复制全部下载地址">
-                                    <TextBlock
-                                        FontFamily="{StaticResource F.Icon}"
-                                        FontSize="11"
-                                        Text="&#xE8C8;" />
-                                </Button>
-                                <Button
-                                    x:Name="ReloadDownloadsButton"
-                                    Click="ReloadDownloads_Click"
-                                    Style="{StaticResource RowIconBtn}"
-                                    ToolTip="重新从官网读取下载信息">
-                                    <TextBlock
-                                        FontFamily="{StaticResource F.Icon}"
-                                        FontSize="11"
-                                        Text="&#xE72C;" />
-                                </Button>
-                            </StackPanel>
-                        </Grid>
+                        <!--  标题已在选项卡上（「文件下载 1」），这一行只留右侧两个小图标按钮  -->
+                        <StackPanel
+                            Grid.Row="0"
+                            Margin="0,0,0,10"
+                            HorizontalAlignment="Right"
+                            VerticalAlignment="Center"
+                            Orientation="Horizontal">
+                            <Button
+                                x:Name="CopyAllButton"
+                                Click="CopyAllDownloads_Click"
+                                Style="{StaticResource RowIconBtn}"
+                                ToolTip="复制全部下载地址">
+                                <TextBlock
+                                    FontFamily="{StaticResource F.Icon}"
+                                    FontSize="14"
+                                    Text="&#xE8C8;" />
+                            </Button>
+                            <Button
+                                x:Name="ReloadDownloadsButton"
+                                Click="ReloadDownloads_Click"
+                                Style="{StaticResource RowIconBtn}"
+                                ToolTip="重新从官网读取下载信息">
+                                <TextBlock
+                                    FontFamily="{StaticResource F.Icon}"
+                                    FontSize="14"
+                                    Text="&#xE72C;" />
+                            </Button>
+                        </StackPanel>
 
                         <!--  表头  -->
                         <Border
@@ -454,39 +428,39 @@
                                     <ColumnDefinition Width="*" />
                                     <ColumnDefinition Width="112" />
                                     <ColumnDefinition Width="96" />
-                                    <ColumnDefinition Width="56" />
-                                    <ColumnDefinition Width="56" />
+                                    <ColumnDefinition Width="64" />
+                                    <ColumnDefinition Width="64" />
                                     <ColumnDefinition Width="96" />
                                 </Grid.ColumnDefinitions>
                                 <TextBlock
                                     Grid.Column="1"
-                                    FontSize="10"
+                                    FontSize="{StaticResource Fs.Caption}"
                                     Foreground="#FFC6D4E2"
                                     Text="文件" />
                                 <TextBlock
                                     Grid.Column="2"
-                                    FontSize="10"
+                                    FontSize="{StaticResource Fs.Caption}"
                                     Foreground="#FFC6D4E2"
                                     Text="状态" />
                                 <TextBlock
                                     Grid.Column="3"
-                                    FontSize="10"
+                                    FontSize="{StaticResource Fs.Caption}"
                                     Foreground="#FFC6D4E2"
                                     Text="添加日期" />
                                 <TextBlock
                                     Grid.Column="4"
-                                    FontSize="10"
+                                    FontSize="{StaticResource Fs.Caption}"
                                     Foreground="#FFC6D4E2"
                                     Text="大小" />
                                 <TextBlock
                                     Grid.Column="5"
-                                    FontSize="10"
+                                    FontSize="{StaticResource Fs.Caption}"
                                     Foreground="#FFC6D4E2"
                                     Text="下载量" />
                                 <TextBlock
                                     Grid.Column="6"
                                     HorizontalAlignment="Center"
-                                    FontSize="10"
+                                    FontSize="{StaticResource Fs.Caption}"
                                     Foreground="#FFC6D4E2"
                                     Text="操作" />
                             </Grid>
@@ -527,8 +501,8 @@
                                                         <ColumnDefinition Width="*" />
                                                         <ColumnDefinition Width="112" />
                                                         <ColumnDefinition Width="96" />
-                                                        <ColumnDefinition Width="56" />
-                                                        <ColumnDefinition Width="56" />
+                                                        <ColumnDefinition Width="64" />
+                                                        <ColumnDefinition Width="64" />
                                                         <ColumnDefinition Width="96" />
                                                     </Grid.ColumnDefinitions>
 
@@ -544,7 +518,7 @@
                                                             HorizontalAlignment="Center"
                                                             VerticalAlignment="Center"
                                                             FontFamily="{StaticResource F.Icon}"
-                                                            FontSize="11"
+                                                            FontSize="13"
                                                             Foreground="#FF7FB4FF"
                                                             Text="&#xE7C3;" />
                                                     </Border>
@@ -554,7 +528,7 @@
                                                         Grid.Column="1"
                                                         Margin="0,2,12,0"
                                                         VerticalAlignment="Top"
-                                                        FontSize="11.5"
+                                                        FontSize="{StaticResource Fs.Small}"
                                                         Foreground="#FFFFFFFF"
                                                         Text="{Binding FileName}"
                                                         TextTrimming="CharacterEllipsis"
@@ -570,7 +544,7 @@
                                                             <TextBlock
                                                                 Margin="6,0,0,0"
                                                                 VerticalAlignment="Center"
-                                                                FontSize="10"
+                                                                FontSize="{StaticResource Fs.Caption}"
                                                                 FontWeight="SemiBold"
                                                                 Foreground="#FF8FC2FF"
                                                                 Text="{Binding PercentText}"
@@ -587,7 +561,7 @@
                                                             Value="{Binding Progress, Mode=OneWay}" />
                                                         <TextBlock
                                                             Margin="0,5,0,0"
-                                                            FontSize="9.5"
+                                                            FontSize="{StaticResource Fs.Caption}"
                                                             Foreground="#FFD4DFEB"
                                                             Text="{Binding SizePairText}"
                                                             TextTrimming="CharacterEllipsis"
@@ -598,7 +572,7 @@
                                                         Grid.Column="3"
                                                         Margin="0,2,0,0"
                                                         VerticalAlignment="Top"
-                                                        FontSize="10.5"
+                                                        FontSize="{StaticResource Fs.Caption}"
                                                         Foreground="#FFE9F1F9"
                                                         Text="{Binding Date}"
                                                         TextWrapping="Wrap" />
@@ -606,14 +580,14 @@
                                                         Grid.Column="4"
                                                         Margin="0,2,0,0"
                                                         VerticalAlignment="Top"
-                                                        FontSize="10.5"
+                                                        FontSize="{StaticResource Fs.Caption}"
                                                         Foreground="#FFE9F1F9"
                                                         Text="{Binding Size}" />
                                                     <TextBlock
                                                         Grid.Column="5"
                                                         Margin="0,2,0,0"
                                                         VerticalAlignment="Top"
-                                                        FontSize="10.5"
+                                                        FontSize="{StaticResource Fs.Caption}"
                                                         Foreground="#FFE9F1F9"
                                                         Text="{Binding CountText}" />
 
@@ -630,12 +604,12 @@
                                                                 <TextBlock
                                                                     VerticalAlignment="Center"
                                                                     FontFamily="{StaticResource F.Icon}"
-                                                                    FontSize="10"
+                                                                    FontSize="{StaticResource Fs.Caption}"
                                                                     Text="{Binding ActionGlyph}" />
                                                                 <TextBlock
                                                                     Margin="5,0,0,0"
                                                                     VerticalAlignment="Center"
-                                                                    FontSize="10.5"
+                                                                    FontSize="{StaticResource Fs.Caption}"
                                                                     Text="{Binding ActionText}" />
                                                             </StackPanel>
                                                         </Button>
@@ -652,7 +626,7 @@
                                                             Visibility="{Binding CanOpenFolder, Converter={StaticResource BoolToVis}}">
                                                             <TextBlock
                                                                 FontFamily="{StaticResource F.Icon}"
-                                                                FontSize="10"
+                                                                FontSize="{StaticResource Fs.Caption}"
                                                                 Text="&#xE8DA;" />
                                                         </Button>
                                                     </StackPanel>
@@ -670,46 +644,23 @@
                             HorizontalAlignment="Center"
                             VerticalAlignment="Center"
                             FontFamily="{StaticResource F.Ui}"
-                            FontSize="12"
+                            FontSize="{StaticResource Fs.Small}"
                             Foreground="#FFC6D4E2"
                             Text="官网暂无下载文件"
                             Visibility="Collapsed" />
                     </Grid>
 
                     <!--  ===== 软件截图面板 =====  -->
+                    <!--  标题与张数已经在选项卡上（「软件截图 1」），面板里直接铺图  -->
                     <Grid
                         x:Name="ShotsPane"
                         Grid.Row="1"
                         Visibility="Collapsed">
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="Auto" />
-                            <RowDefinition Height="*" />
-                        </Grid.RowDefinitions>
-
-                        <Grid Grid.Row="0" Margin="0,0,0,10">
-                            <StackPanel VerticalAlignment="Center" Orientation="Horizontal">
-                                <TextBlock
-                                    FontSize="13.5"
-                                    FontWeight="SemiBold"
-                                    Style="{StaticResource T.Base}"
-                                    Text="软件截图" />
-                                <Border
-                                    Margin="8,0,0,0"
-                                    Padding="7,1"
-                                    VerticalAlignment="Center"
-                                    Background="#FF2A4058"
-                                    CornerRadius="7">
-                                    <TextBlock
-                                        x:Name="ShotsCountText"
-                                        FontSize="10.5"
-                                        Foreground="{StaticResource B.AccentLight}" />
-                                </Border>
-                            </StackPanel>
-                        </Grid>
 
                         <ScrollViewer
-                            Grid.Row="1"
-                            Padding="0,0,6,0"
+                            x:Name="ShotsScroll"
+                            Grid.Row="0"
+                            Padding="0,4,6,0"
                             HorizontalScrollBarVisibility="Disabled"
                             VerticalScrollBarVisibility="Auto">
                             <ItemsControl x:Name="ShotsList">
@@ -742,7 +693,7 @@
                                                     Background="#A6060D16"
                                                     CornerRadius="6">
                                                     <TextBlock
-                                                        FontSize="9.5"
+                                                        FontSize="{StaticResource Fs.Caption}"
                                                         Foreground="#FFF3F8FD"
                                                         Text="{Binding Caption}" />
                                                 </Border>
@@ -759,7 +710,7 @@
                             HorizontalAlignment="Center"
                             VerticalAlignment="Center"
                             FontFamily="{StaticResource F.Ui}"
-                            FontSize="12"
+                            FontSize="{StaticResource Fs.Small}"
                             Foreground="#FFC6D4E2"
                             Text="官网这篇文章没有配图"
                             Visibility="Collapsed" />
@@ -777,7 +728,7 @@
                             <TextBlock
                                 VerticalAlignment="Center"
                                 FontFamily="{StaticResource F.Icon}"
-                                FontSize="13"
+                                FontSize="15"
                                 Text="&#xE896;" />
                             <TextBlock
                                 Margin="7,0,0,0"
@@ -799,7 +750,7 @@
                             <TextBlock
                                 VerticalAlignment="Center"
                                 FontFamily="{StaticResource F.Icon}"
-                                FontSize="12"
+                                FontSize="14"
                                 Text="&#xE768;" />
                             <TextBlock
                                 Margin="7,0,0,0"
@@ -817,7 +768,7 @@
                         <StackPanel Orientation="Horizontal">
                             <TextBlock
                                 VerticalAlignment="Center"
-                                FontSize="12"
+                                FontSize="14"
                                 Text="↗" />
                             <TextBlock
                                 Margin="7,0,0,0"
@@ -847,13 +798,60 @@
                         x:Name="ToastText"
                         Margin="2,8,0,0"
                         FontFamily="{StaticResource F.Ui}"
-                        FontSize="11"
+                        FontSize="{StaticResource Fs.Caption}"
                         Foreground="{StaticResource B.Green}"
                         Opacity="0"
                         Text=""
                         TextWrapping="Wrap" />
                 </StackPanel>
             </Grid>
+
+            <!--
+                加载遮层：只有「要从官网取数据」时才打开——本地已有下载表就直接显示，
+                不挡用户。盖住整个面板（含横幅），加载期间点不到任何东西，也看不到半张页面。
+                转角比面板小 1px，跟着面板的圆角走。
+            -->
+            <Border
+                x:Name="LoadingOverlay"
+                Grid.RowSpan="2"
+                Background="#E60A1420"
+                CornerRadius="15"
+                Visibility="Collapsed">
+                <StackPanel
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center">
+                    <Grid
+                        Width="48"
+                        Height="48"
+                        HorizontalAlignment="Center">
+                        <!--  底圈：一整圈淡色，给缺口一个参照  -->
+                        <Ellipse Stroke="#26FFFFFF" StrokeThickness="3" />
+                        <!--  转动的圆弧：90° 缺口 + 圆头，靠 RotateTransform 转  -->
+                        <Path
+                            x:Name="SpinnerArc"
+                            Width="48"
+                            Height="48"
+                            Data="M 24,4 A 20,20 0 0 1 44,24"
+                            Stretch="None"
+                            Stroke="{StaticResource B.AccentLight}"
+                            StrokeEndLineCap="Round"
+                            StrokeStartLineCap="Round"
+                            StrokeThickness="3">
+                            <Path.RenderTransform>
+                                <RotateTransform x:Name="SpinnerRotate" CenterX="24" CenterY="24" />
+                            </Path.RenderTransform>
+                        </Path>
+                    </Grid>
+
+                    <TextBlock
+                        Margin="0,18,0,0"
+                        HorizontalAlignment="Center"
+                        FontFamily="{StaticResource F.Ui}"
+                        FontSize="{StaticResource Fs.Body}"
+                        Foreground="#FFDCE8F5"
+                        Text="正在加载中，请耐心等待…" />
+                </StackPanel>
+            </Border>
         </Grid>
     </Border>
 </UserControl>

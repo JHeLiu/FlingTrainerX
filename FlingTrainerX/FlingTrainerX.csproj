@@ -27,6 +27,14 @@
   <ItemGroup>
     <!-- 侧栏 Logo 与窗口图标（WPF 的 Window.Icon 用 PNG 解得更干净） -->
     <Resource Include="Assets\logo.png" />
+    <!-- 灵石结缘收款码：已经压过（原图 4M/3M，640 宽 q85 后约 170K/120K），直接嵌进程序 -->
+    <Resource Include="Assets\alipay.jpeg" />
+    <Resource Include="Assets\wxpay.jpeg" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- 免责声明正文：放成独立文本文件，随程序一起发布，改文案不用重新编译 -->
+    <None Update="Assets\免责声明.txt" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>

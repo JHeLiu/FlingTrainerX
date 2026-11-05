@@ -81,6 +81,20 @@ public static class NetImages
         return bmp;
     }
 
+    /// <summary>
+    /// 把一批**本地**图片先在后台线程解码好放进缓存（冻结后的 BitmapImage 可以跨线程使用）。
+    /// 卡片列表的绑定求值时就能直接命中，不用在 UI 线程上一张张读盘 + 解码；
+    /// 网络地址不在这里处理，交给 WPF 自己的异步下载。调用方负责放到后台线程上跑。
+    /// </summary>
+    public static void WarmLocal(IEnumerable<string?> sources)
+    {
+        foreach (var source in sources)
+        {
+            if (string.IsNullOrWhiteSpace(source) || !IsLocal(source)) continue;
+            Get(source);
+        }
+    }
+
     /// <summary>把最久没用到的图挤出去，直到张数和字节数都回到上限内。</summary>
     private static void Trim()
     {

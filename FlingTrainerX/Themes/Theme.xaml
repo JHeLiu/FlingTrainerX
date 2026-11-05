@@ -4,11 +4,39 @@
     xmlns:conv="clr-namespace:FlingTrainerX.Converters"
     xmlns:sys="clr-namespace:System;assembly=System.Runtime">
 
-    <!--  卡片尺寸：版心固定，一行恒定 5 张；这里只是加载完数据前 / 设计期的默认值，运行时按版心宽度算  -->
-    <sys:Double x:Key="CardW">223</sys:Double>
-    <sys:Double x:Key="CardH">209</sys:Double>
+    <!--
+        ============ 字号刻度 ============
+        全项目只允许用这几档，不要再往控件上写零散的 10.5 / 11.5 / 13.5：
+        最小 12，正文默认 14，往上每档 +1~+3，超大字号只留给标题和装饰。
+        
+        12  Caption   角标、表头、字段说明、时间戳这类“看得见但不抢眼”的字
+        13  Small     次要正文：描述段落、状态、文件名、数量
+        14  Body      正文默认：导航、按钮、列表项、游戏名
+        15  Subtitle  小标题：区块名、弹框标题
+        20  Head      页面级标题（“Steam 单机游戏库”）
+        28  Display   详情页游戏名
+        40  Watermark 卡片封面上的水印首字母（纯装饰，不参与阅读）
+        
+        17  Title     介于 Subtitle 和 Head 之间的区块标题
+        图标字形（Segoe MDL2）不走这套刻度，按控件本身的尺寸单独给，但同样不低于 12。
+    -->
+    <sys:Double x:Key="Fs.Caption">12</sys:Double>
+    <sys:Double x:Key="Fs.Small">13</sys:Double>
+    <sys:Double x:Key="Fs.Body">14</sys:Double>
+    <sys:Double x:Key="Fs.Subtitle">15</sys:Double>
+    <sys:Double x:Key="Fs.Title">17</sys:Double>
+    <sys:Double x:Key="Fs.Head">20</sys:Double>
+    <sys:Double x:Key="Fs.Display">28</sys:Double>
+    <sys:Double x:Key="Fs.Watermark">40</sys:Double>
 
-    <!--  卡片下半部的文字区高度：封面 = 卡高 − 这个值，正好是 16:9（两行标题 + 标签行）  -->
+    <!--  卡片尺寸：版心固定，一行恒定 5 张；这里只是加载完数据前 / 设计期的默认值，运行时按版心宽度算  -->
+    <sys:Double x:Key="CardW">193</sys:Double>
+    <sys:Double x:Key="CardH">193</sys:Double>
+
+    <!--
+        卡片下半部的文字区高度：封面 = 卡高 − 这个值，正好是 16:9
+        两行标题（14 号 / 行高 20 = 40）+ 标签行（约 22）+ 上下内边距 16 ≈ 78，留余量取 84
+    -->
     <GridLength x:Key="CardInfoH">84</GridLength>
 
     <!--
@@ -68,7 +96,7 @@
     <Style TargetType="ToolTip">
         <Setter Property="Foreground" Value="{StaticResource B.Text}" />
         <Setter Property="FontFamily" Value="{StaticResource F.Ui}" />
-        <Setter Property="FontSize" Value="11.5" />
+        <Setter Property="FontSize" Value="{StaticResource Fs.Small}" />
         <Setter Property="HasDropShadow" Value="False" />
         <Setter Property="Template">
             <Setter.Value>
@@ -101,17 +129,22 @@
     </Style>
 
     <!--  ============ 文本 ============  -->
+    <!--
+        这里不写 TextOptions.TextFormattingMode：整形模式由窗口统一设为 Display，
+        样式里一旦写死（曾经是 Ideal）就会盖掉窗口那条继承值 —— 样式 setter 的优先级高于属性继承。
+        Ideal 在 96 DPI（100% 缩放的屏）下小字号会发虚，Display 才是像素对齐的清晰版。
+    -->
     <Style x:Key="T.Base" TargetType="TextBlock">
         <Setter Property="FontFamily" Value="{StaticResource F.Ui}" />
+        <Setter Property="FontSize" Value="{StaticResource Fs.Body}" />
         <Setter Property="Foreground" Value="{StaticResource B.Text}" />
-        <Setter Property="TextOptions.TextFormattingMode" Value="Ideal" />
     </Style>
 
     <Style
         x:Key="T.H1"
         BasedOn="{StaticResource T.Base}"
         TargetType="TextBlock">
-        <Setter Property="FontSize" Value="21" />
+        <Setter Property="FontSize" Value="{StaticResource Fs.Head}" />
         <Setter Property="FontWeight" Value="SemiBold" />
     </Style>
 
@@ -119,7 +152,7 @@
         x:Key="T.Dim"
         BasedOn="{StaticResource T.Base}"
         TargetType="TextBlock">
-        <Setter Property="FontSize" Value="12" />
+        <Setter Property="FontSize" Value="{StaticResource Fs.Body}" />
         <Setter Property="Foreground" Value="{StaticResource B.TextDim}" />
     </Style>
 
@@ -127,7 +160,7 @@
         x:Key="T.Mute"
         BasedOn="{StaticResource T.Base}"
         TargetType="TextBlock">
-        <Setter Property="FontSize" Value="11" />
+        <Setter Property="FontSize" Value="{StaticResource Fs.Small}" />
         <Setter Property="Foreground" Value="{StaticResource B.TextMute}" />
     </Style>
 
@@ -294,7 +327,7 @@
         <Setter Property="Focusable" Value="False" />
         <Setter Property="Foreground" Value="White" />
         <Setter Property="FontFamily" Value="{StaticResource F.Ui}" />
-        <Setter Property="FontSize" Value="12.5" />
+        <Setter Property="FontSize" Value="{StaticResource Fs.Body}" />
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="Button">
@@ -344,7 +377,7 @@
         <Setter Property="Focusable" Value="False" />
         <Setter Property="Foreground" Value="{StaticResource B.TextDim}" />
         <Setter Property="FontFamily" Value="{StaticResource F.Ui}" />
-        <Setter Property="FontSize" Value="12.5" />
+        <Setter Property="FontSize" Value="{StaticResource Fs.Body}" />
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="Button">
@@ -389,7 +422,7 @@
         <Setter Property="Focusable" Value="False" />
         <Setter Property="Foreground" Value="White" />
         <Setter Property="FontFamily" Value="{StaticResource F.Ui}" />
-        <Setter Property="FontSize" Value="12" />
+        <Setter Property="FontSize" Value="{StaticResource Fs.Body}" />
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="Button">
@@ -439,7 +472,7 @@
         <Setter Property="Focusable" Value="False" />
         <Setter Property="Foreground" Value="{StaticResource B.TextDim}" />
         <Setter Property="FontFamily" Value="{StaticResource F.Ui}" />
-        <Setter Property="FontSize" Value="11.5" />
+        <Setter Property="FontSize" Value="{StaticResource Fs.Small}" />
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="Button">
@@ -497,7 +530,7 @@
                             HorizontalAlignment="Center"
                             VerticalAlignment="Center"
                             FontFamily="{StaticResource F.Icon}"
-                            FontSize="11"
+                            FontSize="14"
                             Text="&#xE711;" />
                     </Border>
                     <ControlTemplate.Triggers>
@@ -514,8 +547,8 @@
 
     <!--  收藏夹卡片左上角的「取消收藏」小按钮  -->
     <Style x:Key="CardFavRemove" TargetType="Button">
-        <Setter Property="Width" Value="24" />
-        <Setter Property="Height" Value="24" />
+        <Setter Property="Width" Value="26" />
+        <Setter Property="Height" Value="26" />
         <Setter Property="Cursor" Value="Hand" />
         <Setter Property="Focusable" Value="False" />
         <Setter Property="Foreground" Value="#FFD5E2F2" />
@@ -527,12 +560,12 @@
                         Background="#B3060D16"
                         BorderBrush="#33FFFFFF"
                         BorderThickness="1"
-                        CornerRadius="12">
+                        CornerRadius="13">
                         <TextBlock
                             HorizontalAlignment="Center"
                             VerticalAlignment="Center"
                             FontFamily="{StaticResource F.Icon}"
-                            FontSize="9"
+                            FontSize="12"
                             Text="&#xE711;" />
                     </Border>
                     <ControlTemplate.Triggers>
@@ -667,7 +700,7 @@
             只有让它按自身内容高度居中（VerticalAlignment=Center），文字才和左边的图标同轴
         -->
         <Setter Property="FontFamily" Value="{StaticResource F.Ui}" />
-        <Setter Property="FontSize" Value="12.5" />
+        <Setter Property="FontSize" Value="{StaticResource Fs.Body}" />
         <Setter Property="Foreground" Value="{StaticResource B.Text}" />
         <Setter Property="CaretBrush" Value="{StaticResource B.AccentLight}" />
         <Setter Property="VerticalAlignment" Value="Center" />
@@ -784,7 +817,7 @@
                     <Border
                         x:Name="b"
                         Margin="0,0,6,0"
-                        Padding="14,7"
+                        Padding="14,8"
                         Background="{TemplateBinding Background}"
                         CornerRadius="8">
                         <ContentPresenter />
@@ -1061,7 +1094,7 @@
     <!--  下载状态文字：未下载（灰）/ 正在下载（蓝）/ 已下载（绿）  -->
     <Style x:Key="StatusText" TargetType="TextBlock">
         <Setter Property="FontFamily" Value="{StaticResource F.Ui}" />
-        <Setter Property="FontSize" Value="10.5" />
+        <Setter Property="FontSize" Value="{StaticResource Fs.Small}" />
         <Setter Property="VerticalAlignment" Value="Center" />
         <!--  未下载/等待这类"安静"的状态也要看得清，别糊进深底里  -->
         <Setter Property="Foreground" Value="#FFD4DFEB" />
@@ -1080,13 +1113,14 @@
 
     <!--  下载行右侧的小按钮：下载 / 取消 / 重试  -->
     <Style x:Key="RowActionBtn" TargetType="Button">
-        <Setter Property="Height" Value="24" />
-        <Setter Property="MinWidth" Value="62" />
+        <Setter Property="Height" Value="26" />
+        <Setter Property="MinWidth" Value="64" />
         <Setter Property="Padding" Value="9,0" />
         <Setter Property="Cursor" Value="Hand" />
         <Setter Property="Focusable" Value="False" />
         <Setter Property="HorizontalAlignment" Value="Center" />
         <Setter Property="FontFamily" Value="{StaticResource F.Ui}" />
+        <Setter Property="FontSize" Value="{StaticResource Fs.Caption}" />
         <Setter Property="Foreground" Value="#FF9EC5FF" />
         <Setter Property="Template">
             <Setter.Value>
@@ -1113,6 +1147,69 @@
                 </ControlTemplate>
             </Setter.Value>
         </Setter>
+    </Style>
+
+    <!--  ==================== 悬浮菜单（顶栏刷新按钮的下拉） ====================  -->
+
+    <!--  Steam 客户端那种菜单项：34 高、悬停整行浅蓝底 + 5px 圆角  -->
+    <Style x:Key="MenuRow" TargetType="Button">
+        <Setter Property="Height" Value="34" />
+        <Setter Property="Padding" Value="8,0,10,0" />
+        <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="Foreground" Value="#FFD3E1F0" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="Focusable" Value="False" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border
+                        x:Name="Surface"
+                        Padding="{TemplateBinding Padding}"
+                        Background="{TemplateBinding Background}"
+                        CornerRadius="5"
+                        SnapsToDevicePixels="True">
+                        <ContentPresenter VerticalAlignment="Center" />
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Surface" Property="Background" Value="#FF24384F" />
+                            <Setter Property="Foreground" Value="#FFFFFFFF" />
+                        </Trigger>
+                        <Trigger Property="IsPressed" Value="True">
+                            <Setter TargetName="Surface" Property="Background" Value="#FF1B2B3E" />
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter Property="Opacity" Value="0.45" />
+                            <Setter Property="Cursor" Value="Arrow" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!--  菜单项左侧的小图标  -->
+    <Style x:Key="MenuRowIcon" TargetType="TextBlock">
+        <Setter Property="FontFamily" Value="{StaticResource F.Icon}" />
+        <Setter Property="FontSize" Value="14" />
+        <Setter Property="Foreground" Value="#FF8CA3BB" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+
+    <!--  菜单项文字：颜色跟着按钮走，悬停时一起变白  -->
+    <Style x:Key="MenuRowLabel" TargetType="TextBlock">
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="FontFamily" Value="{StaticResource F.Ui}" />
+        <Setter Property="FontSize" Value="{StaticResource Fs.Small}" />
+        <Setter Property="Foreground" Value="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" />
+    </Style>
+
+    <!--  菜单顶部的小标题  -->
+    <Style x:Key="MenuCaption" TargetType="TextBlock">
+        <Setter Property="Margin" Value="10,6,0,4" />
+        <Setter Property="FontSize" Value="{StaticResource Fs.Caption}" />
+        <Setter Property="Foreground" Value="{StaticResource B.TextMute}" />
     </Style>
 
 </ResourceDictionary>

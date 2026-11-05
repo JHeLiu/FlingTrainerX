@@ -7,6 +7,38 @@ using System.Windows.Threading;
 
 namespace FlingTrainerX
 {
+    /// <summary>
+    /// 启动耗时打点：只有设了环境变量 <c>FTX_BOOT_TRACE=1</c> 才生效，
+    /// 每次追加「从进程启动算起的毫秒数 + 阶段名」到 %TEMP%\fling-boot.log。
+    /// 平时零开销，排查「启动慢 / 白屏久」时打开看各阶段的真实耗时。
+    /// </summary>
+    internal static class BootTrace
+    {
+        private static readonly bool Enabled =
+            Environment.GetEnvironmentVariable("FTX_BOOT_TRACE") == "1";
+
+        private static readonly DateTime Started = System.Diagnostics.Process.GetCurrentProcess().StartTime;
+        private static readonly object Gate = new();
+
+        public static void Mark(string what)
+        {
+            if (!Enabled) return;
+
+            try
+            {
+                var ms = (long)(DateTime.Now - Started).TotalMilliseconds;
+                lock (Gate)
+                    System.IO.File.AppendAllText(
+                        System.IO.Path.Combine(System.IO.Path.GetTempPath(), "fling-boot.log"),
+                        $"{ms,6} ms  {what}\n");
+            }
+            catch
+            {
+                // 打点写不进去不影响启动
+            }
+        }
+    }
+
     /// <summary>应用入口。</summary>
     public partial class App : System.Windows.Application
     {
@@ -31,10 +63,13 @@ namespace FlingTrainerX
             "--capture" or "--mask-check" or "--tip-check" or "--ua-check" or "--corner-check"
             or "--rim-check" or "--count-check" or "--clear-check" or "--tab-check"
             or "--detail-check" or "--tray-check" or "--layout-check" or "--tray-exit"
-            or "--page-check" or "--scroll-check" or "--name-check" or "--name-sync-check"
-            or "--name-fill-check" or "--search-check" or "--suggest-click-check"
+            or "--page-check" or "--scroll-check" or "--name-check"
+            or "--search-check" or "--suggest-click-check"
             or "--about-check" or "--sync-ui-check"
-            or "--sync-run-check" or "--name-setting-check" or "--empty-sync-check");
+            or "--sync-menu-check" or "--local-search-check" or "--sync-combo-check"
+            or "--sync-run-check" or "--empty-sync-check"
+            or "--sync-menu-track-check" or "--dpi-check" or "--text-mode-check" or "--font-check"
+            or "--weight-check");
 #endif
 
         /// <summary>
@@ -46,8 +81,22 @@ namespace FlingTrainerX
             try
             {
                 var path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "fling-crash.log");
-                System.IO.File.AppendAllText(path,
-                    $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] {ex?.GetType().Name}: {ex?.Message}\n{ex?.StackTrace}\n\n");
+
+                // XAML 的异常外层只是一句「提供值时引发了异常」，真正的原因在 InnerException 里，
+                // 所以整条链都写下来，不然等于没日志
+                var text = new System.Text.StringBuilder();
+                text.Append($"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}]\n");
+
+                var depth = 0;
+                for (var e = ex; e is not null && depth < 6; e = e.InnerException, depth++)
+                {
+                    text.Append(depth == 0 ? "" : "  └─ 内层：");
+                    text.Append($"{e.GetType().Name}: {e.Message}\n");
+                    if (depth == 0) text.Append($"{e.StackTrace}\n");
+                }
+
+                text.Append('\n');
+                System.IO.File.AppendAllText(path, text.ToString());
             }
             catch
             {
@@ -58,6 +107,7 @@ namespace FlingTrainerX
         protected override void OnStartup(StartupEventArgs e)
         {
             base.OnStartup(e);
+            BootTrace.Mark("OnStartup 进入");
 
             // 没有主窗口时（第二个实例）也要能自己退干净，别留一个没有窗口的僵尸进程
             ShutdownMode = ShutdownMode.OnExplicitShutdown;
@@ -98,9 +148,17 @@ namespace FlingTrainerX
 
             try
             {
-                var mainWindow = new MainWindow();
+                BootTrace.Mark("开始 new MainWindow");
+
+                // 先把「读本地库」这个活扔到后台，再建窗口：解析 XAML + 建窗口大约要一秒，
+                // 够它把 SQLite 读完、把首屏封面解好码，窗口第一次画出来就是满的卡片
+                var startupData = FlingTrainerX.MainWindow.BeginStartupDataLoad();
+
+                var mainWindow = new MainWindow(startupData);
                 MainWindow = mainWindow;
+                BootTrace.Mark("MainWindow 构造完成，Show");
                 mainWindow.Show();
+                BootTrace.Mark("Show 返回");
             }
             catch (Exception ex)
             {
@@ -264,30 +322,6 @@ namespace FlingTrainerX
                 }));
             }
 
-            // 真跑一次「同步游戏名库」（Debug）：<程序>.exe --name-sync-check <目录>
-            var syncIndex = Array.IndexOf(e.Args, "--name-sync-check");
-            if (syncIndex >= 0 && syncIndex + 1 < e.Args.Length && MainWindow is MainWindow syncWindow)
-            {
-                var syncDir = e.Args[syncIndex + 1];
-                Dispatcher.BeginInvoke(DispatcherPriority.ApplicationIdle, new Action(async () =>
-                {
-                    await syncWindow.RunNameSyncCheckAsync(syncDir);
-                    Shutdown();
-                }));
-            }
-
-            // 只跑「补齐缺的中文名」这一条路（Debug）：<程序>.exe --name-fill-check <目录>
-            var fillIndex = Array.IndexOf(e.Args, "--name-fill-check");
-            if (fillIndex >= 0 && fillIndex + 1 < e.Args.Length && MainWindow is MainWindow fillWindow)
-            {
-                var fillDir = e.Args[fillIndex + 1];
-                Dispatcher.BeginInvoke(DispatcherPriority.ApplicationIdle, new Action(async () =>
-                {
-                    await fillWindow.RunNameFillCheckAsync(fillDir);
-                    Shutdown();
-                }));
-            }
-
             // 鼠标点智能提示项自检（仅 Debug）：<程序>.exe --suggest-click-check <目录>
             var clickIndex = Array.IndexOf(e.Args, "--suggest-click-check");
             if (clickIndex >= 0 && clickIndex + 1 < e.Args.Length && MainWindow is MainWindow clickWindow)
@@ -336,13 +370,110 @@ namespace FlingTrainerX
                 }));
             }
 
+            // 顶栏刷新按钮的悬停同步菜单自检（仅 Debug）：<程序>.exe --sync-menu-check <目录>
+            var syncMenuIndex = Array.IndexOf(e.Args, "--sync-menu-check");
+            if (syncMenuIndex >= 0 && syncMenuIndex + 1 < e.Args.Length && MainWindow is MainWindow syncMenuWindow)
+            {
+                var syncMenuDir = e.Args[syncMenuIndex + 1];
+                Dispatcher.BeginInvoke(DispatcherPriority.ApplicationIdle, new Action(async () =>
+                {
+                    await syncMenuWindow.RunSyncMenuCheckAsync(syncMenuDir);
+                    Shutdown();
+                }));
+            }
+
+            // 拖动窗口时悬停菜单要跟着走（仅 Debug）：<程序>.exe --sync-menu-track-check <目录>
+            var syncTrackIndex = Array.IndexOf(e.Args, "--sync-menu-track-check");
+            if (syncTrackIndex >= 0 && syncTrackIndex + 1 < e.Args.Length && MainWindow is MainWindow syncTrackWindow)
+            {
+                var syncTrackDir = e.Args[syncTrackIndex + 1];
+                Dispatcher.BeginInvoke(DispatcherPriority.ApplicationIdle, new Action(async () =>
+                {
+                    await syncTrackWindow.RunSyncMenuTrackCheckAsync(syncTrackDir);
+                    Shutdown();
+                }));
+            }
+
+            // DPI / 字体清晰度环境自检（仅 Debug）：<程序>.exe --dpi-check <目录>
+            var dpiIndex = Array.IndexOf(e.Args, "--dpi-check");
+            if (dpiIndex >= 0 && dpiIndex + 1 < e.Args.Length && MainWindow is MainWindow dpiWindow)
+            {
+                var dpiDir = e.Args[dpiIndex + 1];
+                Dispatcher.BeginInvoke(DispatcherPriority.ApplicationIdle, new Action(async () =>
+                {
+                    await dpiWindow.RunDpiCheckAsync(dpiDir);
+                    Shutdown();
+                }));
+            }
+
+            // 同一块屏上 Display / Ideal 两种文本模式的对比拍照（仅 Debug）：<程序>.exe --text-mode-check <目录>
+            var textModeIndex = Array.IndexOf(e.Args, "--text-mode-check");
+            if (textModeIndex >= 0 && textModeIndex + 1 < e.Args.Length && MainWindow is MainWindow textModeWindow)
+            {
+                var textModeDir = e.Args[textModeIndex + 1];
+                Dispatcher.BeginInvoke(DispatcherPriority.ApplicationIdle, new Action(async () =>
+                {
+                    await textModeWindow.RunTextModeCheckAsync(textModeDir);
+                    Shutdown();
+                }));
+            }
+
+            // 字重对比自检（仅 Debug）：<程序>.exe --weight-check <目录>
+            var weightIndex = Array.IndexOf(e.Args, "--weight-check");
+            if (weightIndex >= 0 && weightIndex + 1 < e.Args.Length && MainWindow is MainWindow weightWindow)
+            {
+                var weightDir = e.Args[weightIndex + 1];
+                Dispatcher.BeginInvoke(DispatcherPriority.ApplicationIdle, new Action(async () =>
+                {
+                    await weightWindow.RunWeightCheckAsync(weightDir);
+                    Shutdown();
+                }));
+            }
+
+            // 搜索「本地优先」自检（仅 Debug）：<程序>.exe --local-search-check <目录>
+            var localSearchIndex = Array.IndexOf(e.Args, "--local-search-check");
+            if (localSearchIndex >= 0 && localSearchIndex + 1 < e.Args.Length && MainWindow is MainWindow localSearchWindow)
+            {
+                var localSearchDir = e.Args[localSearchIndex + 1];
+                Dispatcher.BeginInvoke(DispatcherPriority.ApplicationIdle, new Action(async () =>
+                {
+                    await localSearchWindow.RunLocalSearchCheckAsync(localSearchDir);
+                    Shutdown();
+                }));
+            }
+
+            // 同步弹框「数据 + 中文名」两段交接自检（仅 Debug）：<程序>.exe --sync-combo-check <目录>
+            var comboIndex = Array.IndexOf(e.Args, "--sync-combo-check");
+            if (comboIndex >= 0 && comboIndex + 1 < e.Args.Length && MainWindow is MainWindow comboWindow)
+            {
+                var comboDir = e.Args[comboIndex + 1];
+                Dispatcher.BeginInvoke(DispatcherPriority.ApplicationIdle, new Action(async () =>
+                {
+                    await comboWindow.RunSyncComboCheckAsync(comboDir);
+                    Shutdown();
+                }));
+            }
+
             // 详情页开关动画 + 点遮罩关闭自检（仅 Debug）：<程序>.exe --detail-check <目录>
-            var detailIndex = Array.IndexOf(e.Args, "--detail-check");            if (detailIndex >= 0 && detailIndex + 1 < e.Args.Length && MainWindow is MainWindow detailWindow)
+            var detailIndex = Array.IndexOf(e.Args, "--detail-check");
+            if (detailIndex >= 0 && detailIndex + 1 < e.Args.Length && MainWindow is MainWindow detailWindow)
             {
                 var detailDir = e.Args[detailIndex + 1];
                 Dispatcher.BeginInvoke(DispatcherPriority.ApplicationIdle, new Action(async () =>
                 {
                     await detailWindow.RunDetailCheckAsync(detailDir);
+                    Shutdown();
+                }));
+            }
+
+            // 字号自检（仅 Debug）：<程序>.exe --font-check <目录>
+            var fontIndex = Array.IndexOf(e.Args, "--font-check");
+            if (fontIndex >= 0 && fontIndex + 1 < e.Args.Length && MainWindow is MainWindow fontWindow)
+            {
+                var fontDir = e.Args[fontIndex + 1];
+                Dispatcher.BeginInvoke(DispatcherPriority.ApplicationIdle, new Action(async () =>
+                {
+                    await fontWindow.RunFontCheckAsync(fontDir);
                     Shutdown();
                 }));
             }
@@ -370,18 +501,6 @@ namespace FlingTrainerX
                 Dispatcher.BeginInvoke(DispatcherPriority.ApplicationIdle, new Action(async () =>
                 {
                     await syncRunWindow.RunSyncRunCheckAsync(syncRunDir, syncRunSeconds);
-                    Shutdown();
-                }));
-            }
-
-            // 设置页「同步中文名」按钮自检（仅 Debug）：<程序>.exe --name-setting-check <目录>
-            var nameSetIndex = Array.IndexOf(e.Args, "--name-setting-check");
-            if (nameSetIndex >= 0 && nameSetIndex + 1 < e.Args.Length && MainWindow is MainWindow nameSetWindow)
-            {
-                var nameSetDir = e.Args[nameSetIndex + 1];
-                Dispatcher.BeginInvoke(DispatcherPriority.ApplicationIdle, new Action(async () =>
-                {
-                    await nameSetWindow.RunNameSettingCheckAsync(nameSetDir);
                     Shutdown();
                 }));
             }

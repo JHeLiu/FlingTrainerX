@@ -128,6 +128,24 @@ public static class TrainerSyncService
     private const int CoverConcurrency = 3;
 
     /// <summary>
+    /// 歇一会儿。故意<b>不</b>把取消标记交给 <c>Task.Delay</c>：那样取消会抛 TaskCanceledException，
+    /// 调试器和日志都会把它当成一次崩溃。这里改成小段轮询，被取消就返回 <c>false</c>，安静收工。
+    /// </summary>
+    private static async Task<bool> PauseAsync(int ms, CancellationToken ct)
+    {
+        var until = Environment.TickCount64 + ms;
+        while (true)
+        {
+            if (ct.IsCancellationRequested) return false;
+
+            var left = until - Environment.TickCount64;
+            if (left <= 0) return true;
+
+            await Task.Delay((int)Math.Min(left, 150)).ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>
     /// 同步全部数据：从第 1 页翻到最后一页，逐条比对官网的修改时间。
     /// 没改动的跳过（封面缺失的顺手补下载），有改动的合并本地路径后写回缓存表。
     /// </summary>
@@ -159,7 +177,7 @@ public static class TrainerSyncService
             var done = 0;
             for (var page = 1; page <= totalPages; page++)
             {
-                ct.ThrowIfCancellationRequested();
+                if (ct.IsCancellationRequested) break;
 
                 var items = page == 1
                     ? firstPage
@@ -169,7 +187,7 @@ public static class TrainerSyncService
 
                 foreach (var item in items)
                 {
-                    ct.ThrowIfCancellationRequested();
+                    if (ct.IsCancellationRequested) break;
                     done++;
 
                     cached.TryGetValue(item.Id, out var prev);
@@ -219,29 +237,43 @@ public static class TrainerSyncService
                         .ConfigureAwait(false);
                 }
 
-                await Task.Delay(PageGapMs, ct).ConfigureAwait(false);
+                if (!await PauseAsync(PageGapMs, ct).ConfigureAwait(false)) break;
             }
 
-            progress?.Report(new SyncProgress
+            // 取消时不报「完成」，直接收尾
+            if (!ct.IsCancellationRequested)
             {
-                Phase = SyncPhase.Finishing,
-                Game = "正在刷新首页…",
-                Done = done,
-                Total = result.Total,
-                Updated = result.Updated,
-                Skipped = result.Skipped,
-                Failed = result.Failed,
-                Ratio = 1
-            });
+                progress?.Report(new SyncProgress
+                {
+                    Phase = SyncPhase.Finishing,
+                    Game = "正在刷新首页…",
+                    Done = done,
+                    Total = result.Total,
+                    Updated = result.Updated,
+                    Skipped = result.Skipped,
+                    Failed = result.Failed,
+                    Ratio = 1
+                });
+            }
         }
         catch (OperationCanceledException)
         {
+            result.Canceled = true;
+        }
+        catch (Exception) when (ct.IsCancellationRequested)
+        {
+            // 取消的瞬间，正在读的 HTTP 连接会被掐断，抛出来的往往是 IOException /
+            // HttpRequestException 而不是 OperationCanceledException。
+            // 这属于「用户取消」，不是「同步失败」，不能弹成错误。
             result.Canceled = true;
         }
         catch (Exception ex)
         {
             result.Error = ex.Message;
         }
+
+        // 循环里发现取消是安静 break 出来的，不会走上面的 catch，这里统一补一次判定
+        if (ct.IsCancellationRequested) result.Canceled = true;
 
         result.Elapsed = watch.Elapsed;
         return result;
@@ -280,7 +312,7 @@ public static class TrainerSyncService
         {
             for (var i = 0; i < items.Count; i++)
             {
-                ct.ThrowIfCancellationRequested();
+                if (ct.IsCancellationRequested) break;
 
                 var item = items[i];
                 var before = Signature(item);
@@ -313,6 +345,11 @@ public static class TrainerSyncService
                 {
                     throw;
                 }
+                catch (Exception) when (ct.IsCancellationRequested)
+                {
+                    // 取消瞬间连接断开，别把它记成「这一款同步失败」
+                    throw new OperationCanceledException(ct);
+                }
                 catch
                 {
                     result.Failed++;
@@ -332,29 +369,43 @@ public static class TrainerSyncService
                 });
 
                 // 别催官网：一款一款来，太快容易被限流
-                await Task.Delay(GameGapMs, ct).ConfigureAwait(false);
+                if (!await PauseAsync(GameGapMs, ct).ConfigureAwait(false)) break;
             }
 
-            progress?.Report(new SyncProgress
+            // 取消时不报「完成」，直接收尾
+            if (!ct.IsCancellationRequested)
             {
-                Phase = SyncPhase.Finishing,
-                Game = "正在刷新首页…",
-                Done = items.Count,
-                Total = items.Count,
-                Updated = result.Updated,
-                Skipped = result.Skipped,
-                Failed = result.Failed,
-                Ratio = 1
-            });
+                progress?.Report(new SyncProgress
+                {
+                    Phase = SyncPhase.Finishing,
+                    Game = "正在刷新首页…",
+                    Done = items.Count,
+                    Total = items.Count,
+                    Updated = result.Updated,
+                    Skipped = result.Skipped,
+                    Failed = result.Failed,
+                    Ratio = 1
+                });
+            }
         }
         catch (OperationCanceledException)
         {
+            result.Canceled = true;
+        }
+        catch (Exception) when (ct.IsCancellationRequested)
+        {
+            // 取消的瞬间，正在读的 HTTP 连接会被掐断，抛出来的往往是 IOException /
+            // HttpRequestException 而不是 OperationCanceledException。
+            // 这属于「用户取消」，不是「同步失败」，不能弹成错误。
             result.Canceled = true;
         }
         catch (Exception ex)
         {
             result.Error = ex.Message;
         }
+
+        // 循环里发现取消是安静 break 出来的，不会走上面的 catch，这里统一补一次判定
+        if (ct.IsCancellationRequested) result.Canceled = true;
 
         result.Elapsed = watch.Elapsed;
         return result;

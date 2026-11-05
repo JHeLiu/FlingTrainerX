@@ -2,9 +2,9 @@
     x:Class="FlingTrainerX.MainWindow"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:ctrl="clr-namespace:FlingTrainerX.Controls"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-    xmlns:ctrl="clr-namespace:FlingTrainerX.Controls"
     xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
     Title="风灵月影宗储物袋"
     Width="1280"
@@ -76,13 +76,13 @@
                                 Stretch="Uniform" />
                             <StackPanel Margin="10,0,0,0" VerticalAlignment="Center">
                                 <TextBlock
-                                    FontSize="13.5"
+                                    FontSize="{StaticResource Fs.Subtitle}"
                                     FontWeight="SemiBold"
                                     Foreground="{StaticResource B.Text}"
                                     Text="风灵月影宗储物袋" />
                                 <TextBlock
                                     Margin="0,1,0,0"
-                                    FontSize="9"
+                                    FontSize="{StaticResource Fs.Caption}"
                                     Foreground="{StaticResource B.TextMute}"
                                     Text="FLiNG Sect Storage" />
                             </StackPanel>
@@ -101,12 +101,12 @@
                                 <TextBlock
                                     VerticalAlignment="Center"
                                     FontFamily="{StaticResource F.Icon}"
-                                    FontSize="14"
+                                    FontSize="16"
                                     Text="&#xE7FC;" />
                                 <TextBlock
                                     Margin="11,0,0,0"
                                     VerticalAlignment="Center"
-                                    FontSize="12.5"
+                                    FontSize="{StaticResource Fs.Body}"
                                     Text="游戏库" />
                             </StackPanel>
                         </ListBoxItem>
@@ -115,13 +115,13 @@
                                 <TextBlock
                                     VerticalAlignment="Center"
                                     FontFamily="{StaticResource F.Icon}"
-                                    FontSize="14"
+                                    FontSize="16"
                                     Text="&#xE734;" />
                                 <TextBlock
                                     x:Name="NavFavLabel"
                                     Margin="11,0,0,0"
                                     VerticalAlignment="Center"
-                                    FontSize="12.5"
+                                    FontSize="{StaticResource Fs.Body}"
                                     Text="收藏夹" />
                             </StackPanel>
                         </ListBoxItem>
@@ -130,13 +130,13 @@
                                 <TextBlock
                                     VerticalAlignment="Center"
                                     FontFamily="{StaticResource F.Icon}"
-                                    FontSize="14"
+                                    FontSize="16"
                                     Text="&#xE896;" />
                                 <TextBlock
                                     x:Name="NavQueueLabel"
                                     Margin="11,0,0,0"
                                     VerticalAlignment="Center"
-                                    FontSize="12.5"
+                                    FontSize="{StaticResource Fs.Body}"
                                     Text="下载队列" />
                             </StackPanel>
                         </ListBoxItem>
@@ -145,12 +145,12 @@
                                 <TextBlock
                                     VerticalAlignment="Center"
                                     FontFamily="{StaticResource F.Icon}"
-                                    FontSize="14"
+                                    FontSize="16"
                                     Text="&#xE713;" />
                                 <TextBlock
                                     Margin="11,0,0,0"
                                     VerticalAlignment="Center"
-                                    FontSize="12.5"
+                                    FontSize="{StaticResource Fs.Body}"
                                     Text="设置" />
                             </StackPanel>
                         </ListBoxItem>
@@ -167,13 +167,13 @@
                         CornerRadius="10">
                         <StackPanel>
                             <TextBlock
-                                FontSize="9.5"
+                                FontSize="{StaticResource Fs.Caption}"
                                 Foreground="{StaticResource B.TextMute}"
                                 Text="数据源" />
                             <!--  整块可点：点一下用默认浏览器打开官网（图标表示「会在外部打开」）  -->
                             <Border
                                 x:Name="DataSourceLink"
-                                Margin="0,1,0,0"
+                                Margin="0,3,0,0"
                                 Padding="0,2"
                                 Background="Transparent"
                                 Cursor="Hand"
@@ -190,19 +190,19 @@
                                     </Style>
                                 </Border.Style>
                                 <StackPanel Orientation="Horizontal">
-                                    <TextBlock FontSize="11" Text="flingtrainer.com" />
+                                    <TextBlock FontSize="{StaticResource Fs.Small}" Text="flingtrainer.com" />
                                     <TextBlock
                                         Margin="4,0,0,1"
                                         VerticalAlignment="Center"
-                                        FontSize="9"
+                                        FontSize="{StaticResource Fs.Caption}"
                                         Opacity="0.75"
                                         Text="↗" />
                                 </StackPanel>
                             </Border>
                             <TextBlock
                                 x:Name="SidebarSyncText"
-                                Margin="0,4,0,0"
-                                FontSize="9.5"
+                                Margin="0,6,0,0"
+                                FontSize="{StaticResource Fs.Caption}"
                                 Foreground="{StaticResource B.TextMute}"
                                 Text="—" />
                         </StackPanel>
@@ -269,7 +269,7 @@
                                     HorizontalAlignment="Center"
                                     VerticalAlignment="Center"
                                     FontFamily="{StaticResource F.Icon}"
-                                    FontSize="12"
+                                    FontSize="14"
                                     Foreground="{StaticResource B.TextMute}"
                                     Text="&#xE721;" />
                             </Border>
@@ -290,7 +290,7 @@
                                 Grid.Column="1"
                                 Margin="7,0,0,0"
                                 VerticalAlignment="Center"
-                                FontSize="12.5"
+                                FontSize="{StaticResource Fs.Body}"
                                 Foreground="{StaticResource B.TextMute}"
                                 IsHitTestVisible="False"
                                 Text="输入游戏名 / 中文名，回车搜索" />
@@ -298,7 +298,7 @@
                                 Grid.Column="2"
                                 Margin="0,0,12,0"
                                 VerticalAlignment="Center"
-                                FontSize="9.5"
+                                FontSize="{StaticResource Fs.Caption}"
                                 Foreground="#FF40556B"
                                 Text="Ctrl+K" />
                         </Grid>
@@ -308,7 +308,7 @@
                         智能提示：输入时从本地 SQLite 的 game_names 里找游戏名（英文名 + Steam 中文名），
                         选中后回填英文名，真正的搜索仍然发给官网。
                         放在 Popup 里，不会被顶栏裁掉，也不会占布局高度。
-
+                        
                         StaysOpen 必须是 True：Popup 自己是一个独立 HWND，StaysOpen=False 时
                         鼠标按在列表上会被当成「点在了外面」，Popup 先关掉、点击也就丢了 ——
                         这正是之前「鼠标点提示项没反应」的原因。关闭改由窗口自己判断（见 OnPreviewMouseDown）。
@@ -353,7 +353,7 @@
                                             </Grid.ColumnDefinitions>
                                             <TextBlock
                                                 VerticalAlignment="Center"
-                                                FontSize="12.5"
+                                                FontSize="{StaticResource Fs.Body}"
                                                 Foreground="#FFF2F7FC"
                                                 Text="{Binding CleanEn}"
                                                 TextTrimming="CharacterEllipsis" />
@@ -362,7 +362,7 @@
                                                 MaxWidth="150"
                                                 Margin="12,0,4,0"
                                                 VerticalAlignment="Center"
-                                                FontSize="11"
+                                                FontSize="{StaticResource Fs.Small}"
                                                 Foreground="{StaticResource B.AccentLight}"
                                                 Text="{Binding NameCn}"
                                                 TextTrimming="CharacterEllipsis" />
@@ -380,73 +380,93 @@
                         VerticalAlignment="Center"
                         Orientation="Horizontal">
                         <!--
-                            Steam 中文名后台同步的小胶囊：只有同步跑起来时才出现在刷新按钮左边，
-                            跑完自己收起来；平时想手动开一轮，用「设置 → 数据更新」里的「同步中文名」。
+                            刷新按钮：鼠标放上去就展开「同步已有游戏 / 同步全部游戏」菜单，
+                            移开自动收起；点按钮本身还是「重读本地库」（不联网）。
                         -->
-                        <Button
-                            x:Name="NamePill"
-                            Height="26"
-                            Margin="0,0,10,0"
-                            Padding="9,0,11,0"
-                            VerticalAlignment="Center"
-                            Click="NamePill_Click"
-                            Cursor="Hand"
-                            ToolTip="Steam 中文名后台同步 · 点开看进度"
-                            Visibility="Collapsed">
-                            <Button.Template>
-                                <ControlTemplate TargetType="Button">
-                                    <Border
-                                        x:Name="PillBody"
-                                        Background="#FF1B2E44"
-                                        BorderBrush="#FF2E4763"
-                                        BorderThickness="1"
-                                        CornerRadius="13">
-                                        <ContentPresenter Margin="{TemplateBinding Padding}" VerticalAlignment="Center" />
-                                    </Border>
-                                    <ControlTemplate.Triggers>
-                                        <Trigger Property="IsMouseOver" Value="True">
-                                            <Setter TargetName="PillBody" Property="Background" Value="#FF27476A" />
-                                            <Setter TargetName="PillBody" Property="BorderBrush" Value="{StaticResource B.Accent}" />
-                                        </Trigger>
-                                    </ControlTemplate.Triggers>
-                                </ControlTemplate>
-                            </Button.Template>
-                            <StackPanel VerticalAlignment="Center" Orientation="Horizontal">
-                                <Ellipse
-                                    x:Name="NamePillDot"
-                                    Width="6"
-                                    Height="6"
-                                    VerticalAlignment="Center"
-                                    Fill="{StaticResource B.TextMute}" />
+                        <Grid
+                            x:Name="RefreshHost"
+                            MouseEnter="RefreshHost_MouseEnter"
+                            MouseLeave="RefreshHost_MouseLeave">
+                            <Button
+                                x:Name="RefreshButton"
+                                Click="Refresh_Click"
+                                Style="{StaticResource IconBtn}"
+                                ToolTip="重新读取本地数据 · 鼠标悬停可同步">
                                 <TextBlock
-                                    x:Name="NamePillText"
-                                    Margin="6,0,0,0"
-                                    VerticalAlignment="Center"
-                                    FontSize="10.5"
-                                    Foreground="#FFCFE0F2"
-                                    Text="同步中 0%" />
-                                <TextBlock
-                                    x:Name="NamePillSub"
-                                    Margin="6,0,0,0"
-                                    VerticalAlignment="Center"
-                                    FontSize="9.5"
-                                    Foreground="{StaticResource B.TextMute}"
-                                    Text="" />
-                            </StackPanel>
-                        </Button>
+                                    x:Name="RefreshGlyph"
+                                    FontFamily="{StaticResource F.Icon}"
+                                    FontSize="16"
+                                    RenderTransformOrigin="0.5,0.5"
+                                    Text="&#xE72C;" />
+                            </Button>
 
-                        <Button
-                            x:Name="RefreshButton"
-                            Click="Refresh_Click"
-                            Style="{StaticResource IconBtn}"
-                            ToolTip="重新读取本地数据（同步请到设置 → 数据更新）">
-                            <TextBlock
-                                x:Name="RefreshGlyph"
-                                FontFamily="{StaticResource F.Icon}"
-                                FontSize="13"
-                                RenderTransformOrigin="0.5,0.5"
-                                Text="&#xE72C;" />
-                        </Button>
+                            <Popup
+                                x:Name="SyncMenuPopup"
+                                AllowsTransparency="True"
+                                HorizontalOffset="-108"
+                                Placement="Bottom"
+                                PlacementTarget="{Binding ElementName=RefreshHost}"
+                                PopupAnimation="Fade"
+                                StaysOpen="True"
+                                VerticalOffset="6">
+                                <Border
+                                    x:Name="SyncMenuBorder"
+                                    Width="142"
+                                    Padding="4"
+                                    Background="#FF16202D"
+                                    BorderBrush="#FF2C3E53"
+                                    BorderThickness="1"
+                                    CornerRadius="8"
+                                    MouseEnter="SyncMenu_MouseEnter"
+                                    MouseLeave="SyncMenu_MouseLeave">
+                                    <Border.Effect>
+                                        <DropShadowEffect
+                                            BlurRadius="18"
+                                            Direction="270"
+                                            Opacity="0.5"
+                                            ShadowDepth="4"
+                                            Color="#FF000000" />
+                                    </Border.Effect>
+                                    <StackPanel>
+                                        <TextBlock Style="{StaticResource MenuCaption}" Text="数据更新" />
+
+                                        <Button
+                                            x:Name="SyncMenuExisting"
+                                            Click="SyncMenuExisting_Click"
+                                            Style="{StaticResource MenuRow}">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="22" />
+                                                    <ColumnDefinition Width="*" />
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Style="{StaticResource MenuRowIcon}" Text="&#xE72C;" />
+                                                <TextBlock
+                                                    Grid.Column="1"
+                                                    Style="{StaticResource MenuRowLabel}"
+                                                    Text="同步已有游戏" />
+                                            </Grid>
+                                        </Button>
+
+                                        <Button
+                                            x:Name="SyncMenuAll"
+                                            Click="SyncMenuAll_Click"
+                                            Style="{StaticResource MenuRow}">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="22" />
+                                                    <ColumnDefinition Width="*" />
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Style="{StaticResource MenuRowIcon}" Text="&#xE895;" />
+                                                <TextBlock
+                                                    Grid.Column="1"
+                                                    Style="{StaticResource MenuRowLabel}"
+                                                    Text="同步全部游戏" />
+                                            </Grid>
+                                        </Button>
+                                    </StackPanel>
+                                </Border>
+                            </Popup>
+                        </Grid>
                         <Border
                             Width="1"
                             Height="16"
@@ -458,7 +478,7 @@
                             ToolTip="最小化到托盘">
                             <TextBlock
                                 FontFamily="{StaticResource F.Icon}"
-                                FontSize="11"
+                                FontSize="14"
                                 Text="&#xE921;" />
                         </Button>
                         <Button
@@ -467,7 +487,7 @@
                             ToolTip="关闭">
                             <TextBlock
                                 FontFamily="{StaticResource F.Icon}"
-                                FontSize="10"
+                                FontSize="14"
                                 Text="&#xE8BB;" />
                         </Button>
                     </StackPanel>
@@ -476,17 +496,17 @@
                 <!--  主体区  -->
                 <Grid x:Name="MainArea" Grid.Row="1">
 
-                    <!--  游戏卡片区：固定版心（最大 1020），再宽的屏幕整块居中  -->
+                    <!--  游戏卡片区：固定版心（最大 1460），再宽的屏幕整块居中  -->
                     <Grid
                         x:Name="CardArea"
-                        Margin="26,4,26,0"
+                        Margin="26,0,26,0"
                         HorizontalAlignment="Center">
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="*" />
                         </Grid.RowDefinitions>
 
-                        <StackPanel Grid.Row="0" Margin="0,0,6,14">
+                        <StackPanel Grid.Row="0" Margin="0,0,6,8">
                             <Grid>
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*" />
@@ -495,19 +515,20 @@
                                 <TextBlock
                                     x:Name="SectionTitle"
                                     VerticalAlignment="Center"
-                                    FontSize="19"
+                                    FontSize="{StaticResource Fs.Head}"
                                     FontWeight="SemiBold"
                                     Style="{StaticResource T.Base}"
-                                    Text="Steam 单机游戏库" />
+                                    Text="{Binding SectionTitle}" />
                                 <StackPanel
                                     x:Name="LibraryTabs"
                                     Grid.Column="1"
-                                    Orientation="Horizontal">
+                                    Orientation="Horizontal"
+                                    Visibility="{Binding LibraryTabsVisible, Converter={StaticResource BoolToVis}}">
                                     <Button
                                         x:Name="RecentTabButton"
                                         Click="LibraryTab_Click"
                                         Content="最近更新"
-                                        IsEnabled="False"
+                                        IsEnabled="{Binding RecentTabEnabled}"
                                         Style="{StaticResource LibraryTabButton}"
                                         Tag="Recent" />
                                     <Button
@@ -515,30 +536,35 @@
                                         Margin="6,0,0,0"
                                         Click="LibraryTab_Click"
                                         Content="热门游戏"
+                                        IsEnabled="{Binding PopularTabEnabled}"
                                         Style="{StaticResource LibraryTabButton}"
                                         Tag="Popular" />
                                 </StackPanel>
                             </Grid>
                             <TextBlock
                                 x:Name="SectionSubtitle"
-                                Margin="1,5,0,0"
+                                Margin="1,4,0,0"
                                 Style="{StaticResource T.Mute}"
-                                Text="—" />
+                                Text="{Binding SectionSubtitle}"
+                                Visibility="{Binding SectionSubtitle, Converter={StaticResource TextToVis}}" />
                         </StackPanel>
 
                         <!--  卡片列表：一行 5 张 × 3 行 = 每页 15 条，默认正好铺满一屏；放不下时才出滚动条  -->
                         <ListBox
                             x:Name="CardList"
                             Grid.Row="1"
-                            Style="{StaticResource CardListBox}">
+                            ItemsSource="{Binding Rows}"
+                            Style="{StaticResource CardListBox}"
+                            Tag="{Binding IsFavoritesView}"
+                            Visibility="{Binding CardListVisible, Converter={StaticResource BoolToVis}}">
                             <ListBox.ItemTemplate>
                                 <DataTemplate>
-                                    <ItemsControl Margin="0,0,0,12" ItemsSource="{Binding Items}">
+                                    <ItemsControl Margin="0,0,0,8" ItemsSource="{Binding Items}">
                                         <ItemsControl.ItemsPanel>
                                             <ItemsPanelTemplate>
                                                 <ctrl:CardRowPanel
                                                     Columns="5"
-                                                    Gap="12"
+                                                    Gap="8"
                                                     MaxChildWidth="{DynamicResource CardW}" />
                                             </ItemsPanelTemplate>
                                         </ItemsControl.ItemsPanel>
@@ -565,8 +591,8 @@
                                                                 HorizontalAlignment="Center"
                                                                 VerticalAlignment="Center"
                                                                 FontFamily="Segoe UI"
-                                                                FontSize="40"
-                                                                FontWeight="Bold"
+                                                                FontSize="{StaticResource Fs.Watermark}"
+                                                                FontWeight="SemiBold"
                                                                 Foreground="#22FFFFFF"
                                                                 IsHitTestVisible="False"
                                                                 Text="{Binding Initials}" />
@@ -596,7 +622,7 @@
                                                         </Grid>
 
                                                         <!--  ===== 文字区：标题 + 两个小标签（更新时间 / 选项数），整卡可点打开详情  =====  -->
-                                                        <Grid Grid.Row="1" Margin="13,8,13,9">
+                                                        <Grid Grid.Row="1" Margin="13,7,13,9">
                                                             <Grid.RowDefinitions>
                                                                 <RowDefinition Height="*" />
                                                                 <RowDefinition Height="Auto" />
@@ -608,55 +634,49 @@
                                                                 也不挂 ToolTip：卡片上已经有名字，鼠标划过再弹一层纯属打扰。
                                                             -->
                                                             <TextBlock
-                                                                MaxHeight="38"
+                                                                MaxHeight="40"
                                                                 VerticalAlignment="Top"
-                                                                FontSize="13.5"
-                                                                FontWeight="Bold"
+                                                                FontSize="{StaticResource Fs.Body}"
+                                                                FontWeight="SemiBold"
                                                                 Foreground="White"
-                                                                LineHeight="19"
+                                                                LineHeight="20"
                                                                 Text="{Binding DisplayTitle}"
                                                                 TextWrapping="Wrap" />
 
                                                             <!--
-                                                                更新时间 / 选项数两个标签：
-                                                                和详情页封面横幅上那几个 Chip 同一套效果——
-                                                                半透明深蓝底 + 细描边 + 小圆角，文字纯白。
+                                                                选项数 / 更新时间两个标签（修改项在前、时间在后）：
+                                                                底色比卡片再暗一档（半透明黑压一层），文字用次级灰蓝而不是纯白，
+                                                                做成「沉在卡片里」的注脚，不再和游戏名抢视线；小圆角、不描边。
                                                                 统一贴底，标题一行 / 两行时都在同一条水平线上
                                                             -->
                                                             <StackPanel
                                                                 Grid.Row="1"
-                                                                Margin="0,5,0,0"
+                                                                Margin="0,6,0,0"
                                                                 Orientation="Horizontal">
                                                                 <Border
                                                                     Padding="7,3"
-                                                                    Background="#CC12243A"
-                                                                    BorderBrush="#FF2C425C"
-                                                                    BorderThickness="1"
-                                                                    CornerRadius="6"
-                                                                    ToolTip="{Binding UpdatedTip}">
-                                                                    <TextBlock
-                                                                        VerticalAlignment="Center"
-                                                                        FontSize="10"
-                                                                        FontWeight="SemiBold"
-                                                                        Foreground="White"
-                                                                        Text="{Binding UpdatedShort}" />
-                                                                </Border>
-
-                                                                <Border
-                                                                    Margin="5,0,0,0"
-                                                                    Padding="7,3"
-                                                                    Background="#CC12243A"
-                                                                    BorderBrush="#FF2C425C"
-                                                                    BorderThickness="1"
+                                                                    Background="#4D08121E"
                                                                     CornerRadius="6"
                                                                     ToolTip="这款游戏可用的修改项数"
                                                                     Visibility="{Binding OptionCountTag, Converter={StaticResource TextToVis}}">
                                                                     <TextBlock
                                                                         VerticalAlignment="Center"
-                                                                        FontSize="10"
-                                                                        FontWeight="SemiBold"
-                                                                        Foreground="White"
+                                                                        FontSize="{StaticResource Fs.Caption}"
+                                                                        Foreground="#FFA9BED3"
                                                                         Text="{Binding OptionCountTag}" />
+                                                                </Border>
+
+                                                                <Border
+                                                                    Margin="4,0,0,0"
+                                                                    Padding="7,3"
+                                                                    Background="#4D08121E"
+                                                                    CornerRadius="6"
+                                                                    ToolTip="{Binding UpdatedTip}">
+                                                                    <TextBlock
+                                                                        VerticalAlignment="Center"
+                                                                        FontSize="{StaticResource Fs.Caption}"
+                                                                        Foreground="#FFA9BED3"
+                                                                        Text="{Binding UpdatedShort}" />
                                                                 </Border>
                                                             </StackPanel>
                                                         </Grid>
@@ -673,7 +693,7 @@
                         <Grid
                             x:Name="EmptyState"
                             Grid.Row="1"
-                            Visibility="Collapsed">
+                            Visibility="{Binding EmptyVisible, Converter={StaticResource BoolToVis}}">
                             <StackPanel
                                 Margin="0,0,0,40"
                                 HorizontalAlignment="Center"
@@ -689,27 +709,27 @@
                                         HorizontalAlignment="Center"
                                         VerticalAlignment="Center"
                                         FontFamily="{StaticResource F.Icon}"
-                                        FontSize="22"
+                                        FontSize="26"
                                         Foreground="#FF3E5670"
-                                        Text="&#xE7FC;" />
+                                        Text="{Binding EmptyGlyph}" />
                                 </Border>
                                 <TextBlock
                                     x:Name="EmptyTitle"
                                     Margin="0,16,0,0"
                                     HorizontalAlignment="Center"
-                                    FontSize="14"
+                                    FontSize="{StaticResource Fs.Title}"
                                     FontWeight="SemiBold"
                                     Foreground="#FFD3E0EE"
-                                    Text="暂无内容" />
+                                    Text="{Binding EmptyTitle}" />
                                 <TextBlock
                                     x:Name="EmptyDesc"
-                                    MaxWidth="460"
+                                    MaxWidth="{Binding EmptyDescMaxWidth}"
                                     Margin="0,7,0,0"
                                     HorizontalAlignment="Center"
-                                    FontSize="11.5"
+                                    FontSize="{StaticResource Fs.Small}"
                                     Foreground="{StaticResource B.TextMute}"
-                                    LineHeight="19"
-                                    Text=""
+                                    LineHeight="21"
+                                    Text="{Binding EmptyDesc}"
                                     TextAlignment="Center"
                                     TextWrapping="Wrap" />
 
@@ -725,16 +745,16 @@
                                     HorizontalAlignment="Center"
                                     Click="EmptySync_Click"
                                     Content="同步数据"
-                                    FontSize="12"
+                                    FontSize="{StaticResource Fs.Body}"
                                     Style="{StaticResource PrimaryBtn}"
-                                    Visibility="Collapsed" />
+                                    Visibility="{Binding EmptySyncVisible, Converter={StaticResource BoolToVis}}" />
                             </StackPanel>
                         </Grid>
                         <!--  ==================== 设置 ====================  -->
                         <Grid
                             x:Name="SettingsPanel"
                             Grid.Row="1"
-                            Visibility="Collapsed">
+                            Visibility="{Binding SettingsPanelVisible, Converter={StaticResource BoolToVis}}">
                             <!--
                                 窗口固定 1280 宽，设置页统一按 760 的版心排版：
                                 不写死宽度的话，这一页的宽度会被内容反推，卡片一窄按钮就顶出去
@@ -750,7 +770,7 @@
                                     -->
                                     <TextBlock
                                         Margin="6,2,0,9"
-                                        FontSize="11.5"
+                                        FontSize="{StaticResource Fs.Small}"
                                         FontWeight="SemiBold"
                                         Foreground="#FF7E93A9"
                                         Text="数据更新" />
@@ -776,18 +796,18 @@
 
                                                 <StackPanel VerticalAlignment="Center">
                                                     <TextBlock
-                                                        FontSize="13.5"
+                                                        FontSize="{StaticResource Fs.Subtitle}"
                                                         FontWeight="SemiBold"
                                                         Foreground="#FFF0F6FD"
-                                                        Text="同步全部数据" />
+                                                        Text="同步全部游戏数据" />
                                                     <TextBlock
-                                                        MaxWidth="470"
+                                                        MaxWidth="560"
                                                         Margin="0,4,0,0"
                                                         HorizontalAlignment="Left"
-                                                        FontSize="10.5"
+                                                        FontSize="{StaticResource Fs.Small}"
                                                         Foreground="#FF8FA3BA"
-                                                        LineHeight="16"
-                                                        Text="从官网第一页翻到最后一页，官网没改动的会自动跳过；首次同步耗时较长。"
+                                                        LineHeight="20"
+                                                        Text="从官网同步最新信息；官网没改动的会自动跳过。"
                                                         TextWrapping="Wrap" />
                                                 </StackPanel>
 
@@ -800,9 +820,9 @@
                                                     VerticalAlignment="Center"
                                                     Click="SyncAll_Click"
                                                     Content="开始同步"
-                                                    FontSize="11.5"
-                                                    Style="{StaticResource PrimaryBtn}"
-                                                    ToolTip="一页一页翻到最后一页，官网没改动的会自动跳过" />
+                                                    FontSize="{StaticResource Fs.Body}"
+                                                    Style="{StaticResource GhostBtn}"
+                                                    ToolTip="官网列表与 Steam 中文名同时开跑，互不等待" />
                                             </Grid>
 
                                             <Border Height="1" Background="#FF3A5570" />
@@ -816,18 +836,18 @@
 
                                                 <StackPanel VerticalAlignment="Center">
                                                     <TextBlock
-                                                        FontSize="13.5"
+                                                        FontSize="{StaticResource Fs.Subtitle}"
                                                         FontWeight="SemiBold"
                                                         Foreground="#FFF0F6FD"
-                                                        Text="同步已有数据" />
+                                                        Text="同步已有游戏数据" />
                                                     <TextBlock
-                                                        MaxWidth="470"
+                                                        MaxWidth="560"
                                                         Margin="0,4,0,0"
                                                         HorizontalAlignment="Left"
-                                                        FontSize="10.5"
+                                                        FontSize="{StaticResource Fs.Small}"
                                                         Foreground="#FF8FA3BA"
-                                                        LineHeight="16"
-                                                        Text="按本地库已有的游戏逐个重抓详情页，补全下载表与介绍图。"
+                                                        LineHeight="20"
+                                                        Text="同步本地已存在的游戏最新信息"
                                                         TextWrapping="Wrap" />
                                                 </StackPanel>
 
@@ -840,58 +860,18 @@
                                                     VerticalAlignment="Center"
                                                     Click="SyncExisting_Click"
                                                     Content="开始同步"
-                                                    FontSize="11.5"
+                                                    FontSize="{StaticResource Fs.Body}"
                                                     Style="{StaticResource GhostBtn}"
-                                                    ToolTip="按本地库一款一款重抓详情页（下载表 / 介绍图），用于补全已有数据" />
+                                                    ToolTip="本地详情与 Steam 中文名同时开跑，互不等待" />
                                             </Grid>
 
-                                            <Border Height="1" Background="#FF3A5570" />
-
-                                            <!--  同步中文名：名单走官网 A-Z，名字走 Steam（原来的左下角入口搬过来了）  -->
-                                            <Grid Margin="0,16">
-                                                <Grid.ColumnDefinitions>
-                                                    <ColumnDefinition Width="*" />
-                                                    <ColumnDefinition Width="Auto" />
-                                                </Grid.ColumnDefinitions>
-
-                                                <StackPanel VerticalAlignment="Center">
-                                                    <TextBlock
-                                                        FontSize="13.5"
-                                                        FontWeight="SemiBold"
-                                                        Foreground="#FFF0F6FD"
-                                                        Text="同步中文名" />
-                                                    <TextBlock
-                                                        x:Name="NameSyncSettingDesc"
-                                                        MaxWidth="470"
-                                                        Margin="0,4,0,0"
-                                                        HorizontalAlignment="Left"
-                                                        FontSize="10.5"
-                                                        Foreground="#FF8FA3BA"
-                                                        LineHeight="16"
-                                                        Text="从 Steam 逐个换取游戏中文名，换过的会自动跳过。"
-                                                        TextWrapping="Wrap" />
-                                                </StackPanel>
-
-                                                <Button
-                                                    x:Name="NameSyncButton"
-                                                    Grid.Column="1"
-                                                    Height="34"
-                                                    Margin="24,0,0,0"
-                                                    Padding="16,0"
-                                                    VerticalAlignment="Center"
-                                                    Click="NameSyncSetting_Click"
-                                                    Content="开始同步"
-                                                    FontSize="11.5"
-                                                    Style="{StaticResource GhostBtn}"
-                                                    ToolTip="打开同步面板并开始换取中文名，已换到的不会重复请求" />
-                                            </Grid>
                                         </StackPanel>
                                     </Border>
 
                                     <!--  ======== 通用：清缓存 + 免责声明 ========  -->
                                     <TextBlock
                                         Margin="6,22,0,9"
-                                        FontSize="11.5"
+                                        FontSize="{StaticResource Fs.Small}"
                                         FontWeight="SemiBold"
                                         Foreground="#FF7E93A9"
                                         Text="通用" />
@@ -911,17 +891,17 @@
 
                                                 <StackPanel VerticalAlignment="Center">
                                                     <TextBlock
-                                                        FontSize="13.5"
+                                                        FontSize="{StaticResource Fs.Subtitle}"
                                                         FontWeight="SemiBold"
                                                         Foreground="#FFF0F6FD"
                                                         Text="清除缓存" />
                                                     <TextBlock
-                                                        MaxWidth="470"
+                                                        MaxWidth="560"
                                                         Margin="0,4,0,0"
                                                         HorizontalAlignment="Left"
-                                                        FontSize="10.5"
+                                                        FontSize="{StaticResource Fs.Small}"
                                                         Foreground="#FF8FA3BA"
-                                                        LineHeight="16"
+                                                        LineHeight="20"
                                                         Text="删除本地缓存的卡片数据、图片和已下载文件；收藏不受影响。"
                                                         TextWrapping="Wrap" />
                                                 </StackPanel>
@@ -935,7 +915,7 @@
                                                     VerticalAlignment="Center"
                                                     Click="ClearCache_Click"
                                                     Content="清除缓存"
-                                                    FontSize="11.5"
+                                                    FontSize="{StaticResource Fs.Body}"
                                                     Style="{StaticResource GhostBtn}" />
                                             </Grid>
 
@@ -949,17 +929,17 @@
 
                                                 <StackPanel VerticalAlignment="Center">
                                                     <TextBlock
-                                                        FontSize="13.5"
+                                                        FontSize="{StaticResource Fs.Subtitle}"
                                                         FontWeight="SemiBold"
                                                         Foreground="#FFF0F6FD"
                                                         Text="免责声明" />
                                                     <TextBlock
-                                                        MaxWidth="470"
+                                                        MaxWidth="560"
                                                         Margin="0,4,0,0"
                                                         HorizontalAlignment="Left"
-                                                        FontSize="10.5"
+                                                        FontSize="{StaticResource Fs.Small}"
                                                         Foreground="#FF8FA3BA"
-                                                        LineHeight="16"
+                                                        LineHeight="20"
                                                         Text="软件性质与使用须知，使用前请务必阅读。"
                                                         TextWrapping="Wrap" />
                                                 </StackPanel>
@@ -972,10 +952,61 @@
                                                     VerticalAlignment="Center"
                                                     Click="About_Click"
                                                     Content="查看声明"
-                                                    FontSize="11.5"
+                                                    FontSize="{StaticResource Fs.Body}"
                                                     Style="{StaticResource GhostBtn}" />
                                             </Grid>
                                         </StackPanel>
+                                    </Border>
+
+                                    <!--  灵石结缘：随喜投喂入口，弹窗里放收款码  -->
+                                    <TextBlock
+                                        Margin="6,22,0,9"
+                                        FontSize="{StaticResource Fs.Small}"
+                                        FontWeight="SemiBold"
+                                        Foreground="#FF7E93A9"
+                                        Text="灵石结缘" />
+
+                                    <Border
+                                        Padding="20,4"
+                                        Background="#FF2B4058"
+                                        BorderBrush="#FF466280"
+                                        BorderThickness="1"
+                                        CornerRadius="12">
+                                        <Grid Margin="0,16">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+
+                                            <StackPanel VerticalAlignment="Center">
+                                                <TextBlock
+                                                    FontSize="{StaticResource Fs.Subtitle}"
+                                                    FontWeight="SemiBold"
+                                                    Foreground="#FFF0F6FD"
+                                                    Text="随喜投喂灵石" />
+                                                <TextBlock
+                                                    MaxWidth="560"
+                                                    Margin="0,4,0,0"
+                                                    HorizontalAlignment="Left"
+                                                    FontSize="{StaticResource Fs.Small}"
+                                                    Foreground="#FF8FA3BA"
+                                                    LineHeight="20"
+                                                    Text="散修炼器，本就不易。若觉此物趁手，可随喜几枚灵石，聊作炼器之资。"
+                                                    TextWrapping="Wrap" />
+                                            </StackPanel>
+
+                                            <Button
+                                                x:Name="SupportButton"
+                                                Grid.Column="1"
+                                                Height="34"
+                                                Margin="24,0,0,0"
+                                                Padding="16,0"
+                                                VerticalAlignment="Center"
+                                                Click="Support_Click"
+                                                Content="随喜投喂灵石"
+                                                FontSize="{StaticResource Fs.Body}"
+                                                Style="{StaticResource GhostBtn}" />
+                                        </Grid>
                                     </Border>
                                 </StackPanel>
                             </ScrollViewer>
@@ -985,7 +1016,7 @@
                         <Grid
                             x:Name="QueuePanel"
                             Grid.Row="1"
-                            Visibility="Collapsed">
+                            Visibility="{Binding QueuePanelVisible, Converter={StaticResource BoolToVis}}">
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto" />
                                 <RowDefinition Height="*" />
@@ -998,7 +1029,7 @@
                                         Padding="12,0"
                                         Click="OpenDownloadDir_Click"
                                         Content="打开下载目录"
-                                        FontSize="11.5"
+                                        FontSize="{StaticResource Fs.Small}"
                                         Style="{StaticResource GhostBtn}" />
                                     <Button
                                         Height="30"
@@ -1006,7 +1037,7 @@
                                         Padding="12,0"
                                         Click="ClearFinished_Click"
                                         Content="清理已完成"
-                                        FontSize="11.5"
+                                        FontSize="{StaticResource Fs.Small}"
                                         Style="{StaticResource GhostBtn}" />
                                 </StackPanel>
                             </Grid>
@@ -1045,7 +1076,7 @@
                                                                 <TextBlock
                                                                     HorizontalAlignment="Center"
                                                                     VerticalAlignment="Center"
-                                                                    FontSize="9"
+                                                                    FontSize="{StaticResource Fs.Caption}"
                                                                     FontWeight="SemiBold"
                                                                     Foreground="#FF8FC2FF"
                                                                     Text="{Binding ExtText}" />
@@ -1055,14 +1086,14 @@
                                                                 Margin="11,0,0,0"
                                                                 VerticalAlignment="Center">
                                                                 <TextBlock
-                                                                    FontSize="13"
+                                                                    FontSize="{StaticResource Fs.Body}"
                                                                     FontWeight="SemiBold"
                                                                     Foreground="#FFDCE7F4"
                                                                     Text="{Binding GameTitle}"
                                                                     TextTrimming="CharacterEllipsis" />
                                                                 <TextBlock
                                                                     Margin="0,3,0,0"
-                                                                    FontSize="10.5"
+                                                                    FontSize="{StaticResource Fs.Caption}"
                                                                     Foreground="#FF6C819A"
                                                                     Text="{Binding FileName}"
                                                                     TextTrimming="CharacterEllipsis"
@@ -1077,7 +1108,7 @@
                                                             <TextBlock
                                                                 Margin="0,0,10,0"
                                                                 VerticalAlignment="Center"
-                                                                FontSize="10.5"
+                                                                FontSize="{StaticResource Fs.Small}"
                                                                 Foreground="#FF8FC2FF"
                                                                 Text="{Binding StateText}" />
                                                             <Button
@@ -1121,13 +1152,13 @@
                                                     <Grid Grid.Row="2" Margin="0,8,0,0">
                                                         <TextBlock
                                                             Margin="0,0,70,0"
-                                                            FontSize="10.5"
+                                                            FontSize="{StaticResource Fs.Caption}"
                                                             Foreground="#FF7C90A6"
                                                             Text="{Binding DetailText}"
                                                             TextTrimming="CharacterEllipsis" />
                                                         <TextBlock
                                                             HorizontalAlignment="Right"
-                                                            FontSize="10.5"
+                                                            FontSize="{StaticResource Fs.Caption}"
                                                             Foreground="#FF8FC2FF"
                                                             Text="{Binding PercentText}" />
                                                     </Grid>
@@ -1155,14 +1186,14 @@
                                         HorizontalAlignment="Center"
                                         VerticalAlignment="Center"
                                         FontFamily="{StaticResource F.Icon}"
-                                        FontSize="22"
+                                        FontSize="26"
                                         Foreground="#FF3E5670"
                                         Text="&#xE896;" />
                                 </Border>
                                 <TextBlock
                                     Margin="0,16,0,0"
                                     HorizontalAlignment="Center"
-                                    FontSize="14"
+                                    FontSize="{StaticResource Fs.Title}"
                                     FontWeight="SemiBold"
                                     Foreground="#FFD3E0EE"
                                     Text="队列是空的" />
@@ -1170,7 +1201,7 @@
                                     MaxWidth="460"
                                     Margin="0,7,0,0"
                                     HorizontalAlignment="Center"
-                                    FontSize="11.5"
+                                    FontSize="{StaticResource Fs.Small}"
                                     Foreground="{StaticResource B.TextMute}"
                                     LineHeight="19"
                                     Text="在任意游戏详情页点「下载」，文件会直接存到本机，进度实时显示在这里。"
@@ -1212,7 +1243,7 @@
                                 Grid.Column="1"
                                 Margin="8,0,0,0"
                                 VerticalAlignment="Center"
-                                FontSize="11.5"
+                                FontSize="{StaticResource Fs.Small}"
                                 Foreground="{StaticResource B.TextDim}"
                                 Text="数据已就绪"
                                 TextTrimming="CharacterEllipsis" />
@@ -1225,15 +1256,15 @@
                             HorizontalAlignment="Right"
                             VerticalAlignment="Center"
                             Orientation="Horizontal"
-                            Visibility="Collapsed">
+                            Visibility="{Binding PagerVisible, Converter={StaticResource BoolToVis}}">
                             <TextBlock
                                 x:Name="PagerLoading"
                                 Margin="0,0,12,0"
                                 VerticalAlignment="Center"
-                                FontSize="11.5"
+                                FontSize="{StaticResource Fs.Small}"
                                 Foreground="{StaticResource B.TextDim}"
                                 Text="加载中…"
-                                Visibility="Collapsed" />
+                                Visibility="{Binding PagerLoadingVisible, Converter={StaticResource BoolToVis}}" />
                             <Button
                                 x:Name="PagerRetry"
                                 Height="28"
@@ -1242,17 +1273,18 @@
                                 VerticalAlignment="Center"
                                 Click="PagerRetry_Click"
                                 Content="重试"
-                                FontSize="11.5"
+                                FontSize="{StaticResource Fs.Small}"
                                 Style="{StaticResource GhostBtn}"
-                                Visibility="Collapsed" />
+                                Visibility="{Binding PagerRetryVisible, Converter={StaticResource BoolToVis}}" />
 
                             <TextBlock
                                 x:Name="PagerTotalText"
                                 Margin="0,0,12,0"
                                 VerticalAlignment="Center"
-                                FontSize="11.5"
+                                FontSize="{StaticResource Fs.Small}"
                                 Foreground="{StaticResource B.TextMute}"
-                                Text="" />
+                                Text="{Binding PagerTotal}"
+                                Visibility="{Binding PagerTotalVisible, Converter={StaticResource BoolToVis}}" />
 
                             <Button
                                 x:Name="PagerPrev"
@@ -1261,11 +1293,12 @@
                                 Padding="0"
                                 VerticalAlignment="Center"
                                 Click="PagerPrev_Click"
+                                IsEnabled="{Binding PagerPrevEnabled}"
                                 Style="{StaticResource PagerButton}"
                                 ToolTip="上一页">
                                 <TextBlock
                                     FontFamily="{StaticResource F.Icon}"
-                                    FontSize="12"
+                                    FontSize="14"
                                     Text="&#xE76B;" />
                             </Button>
 
@@ -1274,10 +1307,10 @@
                                 MinWidth="62"
                                 Margin="6,0"
                                 VerticalAlignment="Center"
-                                FontSize="12"
+                                FontSize="{StaticResource Fs.Small}"
                                 FontWeight="SemiBold"
                                 Foreground="{StaticResource B.Text}"
-                                Text="第 1 页"
+                                Text="{Binding PagerPage}"
                                 TextAlignment="Center" />
 
                             <Button
@@ -1287,11 +1320,12 @@
                                 Padding="0"
                                 VerticalAlignment="Center"
                                 Click="PagerNext_Click"
+                                IsEnabled="{Binding PagerNextEnabled}"
                                 Style="{StaticResource PagerButton}"
                                 ToolTip="下一页">
                                 <TextBlock
                                     FontFamily="{StaticResource F.Icon}"
-                                    FontSize="12"
+                                    FontSize="14"
                                     Text="&#xE76C;" />
                             </Button>
                         </StackPanel>
@@ -1365,16 +1399,16 @@
                     <StackPanel>
                         <TextBlock
                             x:Name="ConfirmTitle"
-                            FontSize="15"
+                            FontSize="{StaticResource Fs.Title}"
                             FontWeight="SemiBold"
                             Foreground="#FFE6EFF8"
                             Text="确认操作？" />
                         <TextBlock
                             x:Name="ConfirmBody"
                             Margin="0,10,0,0"
-                            FontSize="12"
+                            FontSize="{StaticResource Fs.Body}"
                             Foreground="{StaticResource B.TextDim}"
-                            LineHeight="20"
+                            LineHeight="22"
                             TextWrapping="Wrap" />
                         <StackPanel
                             Margin="0,20,0,0"
@@ -1385,7 +1419,7 @@
                                 Padding="18,0"
                                 Click="ConfirmCancel_Click"
                                 Content="取消"
-                                FontSize="12"
+                                FontSize="{StaticResource Fs.Body}"
                                 Style="{StaticResource GhostBtn}" />
                             <Button
                                 x:Name="ConfirmOkButton"
@@ -1415,8 +1449,8 @@
 
                 <Border
                     x:Name="AboutCard"
-                    Width="540"
-                    MaxHeight="620"
+                    Width="760"
+                    MaxHeight="726"
                     Padding="26,24"
                     HorizontalAlignment="Center"
                     VerticalAlignment="Center"
@@ -1449,33 +1483,13 @@
                                 RenderOptions.BitmapScalingMode="HighQuality"
                                 Source="/Assets/logo.png"
                                 Stretch="Uniform" />
-                            <StackPanel Margin="13,0,0,0" VerticalAlignment="Center">
-                                <StackPanel Orientation="Horizontal">
-                                    <TextBlock
-                                        VerticalAlignment="Center"
-                                        FontSize="15"
-                                        FontWeight="SemiBold"
-                                        Foreground="#FFE6EFF8"
-                                        Text="风灵月影宗储物袋" />
-                                    <Border
-                                        Margin="9,1,0,0"
-                                        Padding="7,2"
-                                        VerticalAlignment="Center"
-                                        Background="#FF344F6E"
-                                        CornerRadius="6">
-                                        <TextBlock
-                                            x:Name="VersionBadge"
-                                            FontSize="9.5"
-                                            Foreground="#FF8FC6FF"
-                                            Text="v1.0.0" />
-                                    </Border>
-                                </StackPanel>
-                                <TextBlock
-                                    Margin="0,4,0,0"
-                                    FontSize="10.5"
-                                    Foreground="{StaticResource B.TextMute}"
-                                    Text="FLiNG Sect Storage · 把修改器整理成一个本地游戏库" />
-                            </StackPanel>
+                            <TextBlock
+                                Margin="13,0,0,0"
+                                VerticalAlignment="Center"
+                                FontSize="{StaticResource Fs.Title}"
+                                FontWeight="SemiBold"
+                                Foreground="#FFE6EFF8"
+                                Text="风灵月影宗 · 外门传功阁告示" />
                         </StackPanel>
 
                         <Border
@@ -1483,81 +1497,78 @@
                             Margin="0,18,0,16"
                             Background="{StaticResource B.BorderSoft}" />
 
-                        <!--  声明正文：内容较长，卡片不够高时自己滚  -->
-                        <ScrollViewer
-                            MaxHeight="392"
+                        <!--
+                            声明正文：整段照抄 Assets\免责声明.txt，
+                            文本里的换行、空行、缩进原样保留，界面这边只给一套统一的字号行高。
+                            
+                            这里用只读 TextBox 而不是 TextBlock：TextBlock 选不中，想抄一段条款只能截图。
+                            外观全部按 TextBlock 调（透明底、无边框、同字号同颜色同行高），看不出是输入框；
+                            滚动条交给它自己，原来外面那层 ScrollViewer 就不需要了。
+                        -->
+                        <TextBox
+                            x:Name="AboutBody"
+                            MaxHeight="540"
+                            Padding="0,0,4,0"
+                            AcceptsReturn="True"
+                            Background="Transparent"
+                            BorderThickness="0"
+                            CaretBrush="Transparent"
+                            FocusVisualStyle="{x:Null}"
+                            FontFamily="{StaticResource F.Ui}"
+                            FontSize="{StaticResource Fs.Body}"
+                            Foreground="#FFE8F1FA"
                             HorizontalScrollBarVisibility="Disabled"
+                            IsReadOnly="True"
+                            IsReadOnlyCaretVisible="False"
+                            SelectionBrush="#807CBBFF"
+                            TextBlock.LineHeight="26"
+                            TextWrapping="Wrap"
                             VerticalScrollBarVisibility="Auto">
-                            <StackPanel Margin="0,0,2,0">
-                                <!--  告示标题  -->
-                                <StackPanel Orientation="Horizontal">
-                                    <TextBlock
-                                        VerticalAlignment="Center"
-                                        FontFamily="Segoe UI Emoji"
-                                        FontSize="14"
-                                        Foreground="{StaticResource B.AccentLight}"
-                                        Text="&#x1F4DC;" />
-                                    <TextBlock
-                                        Margin="7,0,0,0"
-                                        VerticalAlignment="Center"
-                                        FontSize="13"
-                                        FontWeight="SemiBold"
-                                        Foreground="#FFDCE8F6"
-                                        Text="【风灵月影宗·外门传功阁告示】" />
-                                </StackPanel>
+                            <TextBox.ContextMenu>
+                                <ContextMenu
+                                    Padding="3"
+                                    Background="#FF1D3249"
+                                    BorderBrush="#FF3A5573"
+                                    BorderThickness="1">
+                                    <ContextMenu.Resources>
+                                        <Style TargetType="MenuItem">
+                                            <Setter Property="FontFamily" Value="{StaticResource F.Ui}" />
+                                            <Setter Property="FontSize" Value="{StaticResource Fs.Small}" />
+                                            <Setter Property="Foreground" Value="#FFDCE8F5" />
+                                            <Setter Property="Padding" Value="12,5" />
+                                            <Setter Property="Template">
+                                                <Setter.Value>
+                                                    <ControlTemplate TargetType="MenuItem">
+                                                        <Border
+                                                            x:Name="Row"
+                                                            Padding="{TemplateBinding Padding}"
+                                                            Background="Transparent"
+                                                            CornerRadius="5">
+                                                            <ContentPresenter VerticalAlignment="Center" ContentSource="Header" />
+                                                        </Border>
+                                                        <ControlTemplate.Triggers>
+                                                            <Trigger Property="IsHighlighted" Value="True">
+                                                                <Setter TargetName="Row" Property="Background" Value="#FF2A4564" />
+                                                            </Trigger>
+                                                        </ControlTemplate.Triggers>
+                                                    </ControlTemplate>
+                                                </Setter.Value>
+                                            </Setter>
+                                        </Style>
+                                    </ContextMenu.Resources>
+                                    <MenuItem
+                                        Command="ApplicationCommands.Copy"
+                                        CommandTarget="{Binding PlacementTarget, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                        Header="复制选中" />
+                                    <MenuItem
+                                        Command="ApplicationCommands.SelectAll"
+                                        CommandTarget="{Binding PlacementTarget, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                        Header="全选" />
+                                </ContextMenu>
+                            </TextBox.ContextMenu>
+                        </TextBox>
 
-                                <TextBlock
-                                    Margin="0,9,0,0"
-                                    FontSize="11.5"
-                                    Foreground="{StaticResource B.TextDim}"
-                                    Text="各位道友、同门请注意：" />
-
-                                <TextBlock
-                                    Margin="0,9,0,0"
-                                    FontSize="11.5"
-                                    Foreground="#FF9FB3C8"
-                                    LineHeight="19"
-                                    TextWrapping="Wrap"><Run FontWeight="SemiBold" Foreground="#FF6FB1FF" Text="【散修所创，非本宗正统】" /><Run Text=" 此宝乃外门散修自行炼制的辅助法器，与“风灵月影宗”本宗（flingtrainer.com）并无直接隶属与血脉渊源。宝内言论，绝不代表本宗长老会的立场。" /></TextBlock>
-
-                                <TextBlock
-                                    Margin="0,9,0,0"
-                                    FontSize="11.5"
-                                    Foreground="#FF9FB3C8"
-                                    LineHeight="19"
-                                    TextWrapping="Wrap"><Run FontWeight="SemiBold" Foreground="#FF6FB1FF" Text="【敬重先辈，不破根基】" /><Run Text=" 阁内所藏一切秘籍功法（Trainer），其著作者皆归创法前辈所有。本阁向来遵守道义，绝不篡改秘籍、不强行破解、也不逆向推演各位道友的洞天福地（游戏本体），更不会私自兜售洞天。" /></TextBlock>
-
-                                <TextBlock
-                                    Margin="0,9,0,0"
-                                    FontSize="11.5"
-                                    Foreground="#FF9FB3C8"
-                                    LineHeight="19"
-                                    TextWrapping="Wrap"><Run FontWeight="SemiBold" Foreground="#FF6FB1FF" Text="【传送直通，不设镜像】" /><Run Text=" 宝内的功法目录、详情与传送阵（下载链接），皆由本宗官网实时接引。本阁只做引路人，绝不私自拓印、转存或二次分发任何第三方玉简（文件）。" /></TextBlock>
-
-                                <TextBlock
-                                    Margin="0,9,0,0"
-                                    FontSize="11.5"
-                                    Foreground="#FF9FB3C8"
-                                    LineHeight="19"
-                                    TextWrapping="Wrap"><Run FontWeight="SemiBold" Foreground="#FF6FB1FF" Text="【闭关自用，因果自负】" /><Run Text=" 此类功法仅限各位道友在单人洞府或离线秘境中参悟娱乐，以证大道。切勿将其带入联机演武场扰乱同门，更不可用于坊市谋利（商业用途）。若因强行运功导致走火入魔，此等因果需由道友自行承担。" /></TextBlock>
-
-                                <TextBlock
-                                    Margin="0,9,0,0"
-                                    FontSize="11.5"
-                                    Foreground="#FF9FB3C8"
-                                    LineHeight="19"
-                                    TextWrapping="Wrap"><Run FontWeight="SemiBold" Foreground="#FF6FB1FF" Text="【产权争议，寻本宗处理】" /><Run Text=" 若发现官网所载功法有侵犯他人道统之嫌，请直接飞剑传书（联系）至 flingtrainer.com 处理。本阁仅仅是一枚浏览与引路的辅助罗盘，不沾因果。" /></TextBlock>
-
-                                <TextBlock
-                                    Margin="0,14,0,2"
-                                    HorizontalAlignment="Center"
-                                    FontSize="11.5"
-                                    FontStyle="Italic"
-                                    Foreground="{StaticResource B.TextMute}"
-                                    Text="—— 愿诸位道友修为精进，适度修改，切莫贪杯。" />
-                            </StackPanel>
-                        </ScrollViewer>
-
-                        <!--  底部：官网链接 + 关闭  -->
+                        <!--  底部：宗门圣地直通 + 关闭  -->
                         <Grid Margin="0,20,0,0">
                             <Border
                                 Padding="0,2"
@@ -1567,24 +1578,41 @@
                                 Cursor="Hand"
                                 MouseLeftButtonUp="DataSourceLink_Click"
                                 ToolTip="在浏览器中打开 https://flingtrainer.com">
-                                <StackPanel Orientation="Horizontal">
+                                <!--
+                                    图标比中文「高」一截：Segoe MDL2 的字形几乎占满整个 em、
+                                    中文只占约 0.86 em，两者放在同一基线上时图标顶边会冒出去，
+                                    看上去就是没对齐。所以图标按行盒居中、再按字形高度差往下压一点，
+                                    让三者的视觉中心落在同一条水平线上。
+                                -->
+                                <Grid VerticalAlignment="Center">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
                                     <TextBlock
+                                        Grid.Column="0"
+                                        Margin="0,1.5,0,0"
+                                        VerticalAlignment="Center"
                                         FontFamily="{StaticResource F.Icon}"
-                                        FontSize="11"
+                                        FontSize="12.5"
                                         Foreground="{StaticResource B.TextMute}"
                                         Text="&#xE774;" />
                                     <TextBlock
-                                        Margin="6,0,0,0"
-                                        FontSize="11"
-                                        Foreground="{StaticResource B.TextDim}"
-                                        Text="flingtrainer.com" />
-                                    <TextBlock
-                                        Margin="3,0,0,1"
+                                        Grid.Column="1"
+                                        Margin="7,0,0,0"
                                         VerticalAlignment="Center"
-                                        FontSize="10"
+                                        FontSize="{StaticResource Fs.Small}"
+                                        Foreground="{StaticResource B.TextDim}"
+                                        Text="前往宗门圣地" />
+                                    <TextBlock
+                                        Grid.Column="2"
+                                        Margin="3,0,0,0"
+                                        VerticalAlignment="Center"
+                                        FontSize="{StaticResource Fs.Caption}"
                                         Foreground="{StaticResource B.TextMute}"
                                         Text="↗" />
-                                </StackPanel>
+                                </Grid>
                             </Border>
 
                             <Button
@@ -1599,32 +1627,36 @@
                 </Border>
             </Grid>
 
-            <!--  ==================== 中文名同步 · 进度面板 ====================  -->
-            <!--
-                同步已经改成后台跑，这层只是「看进度的地方」，不是模态框：
-                点遮罩、右上角 ×、Esc 都能收起，同步继续跑；真要让同步停下只有「取消同步」。
-            -->
+            <!--  ==================== 灵石结缘 · 随喜投喂 弹窗 ====================  -->
+            <!--  结构和「关于」弹窗一样：遮罩点一下就关，卡片不会误关；动画见 ShowSupport / CloseSupport  -->
             <Grid
-                x:Name="NameSyncLayer"
+                x:Name="SupportLayer"
                 Grid.ColumnSpan="2"
                 Visibility="Collapsed">
                 <Rectangle
-                    x:Name="NameSyncBackdrop"
-                    Fill="#A6080D15"
-                    MouseLeftButtonDown="NameSyncBackdrop_MouseLeftButtonDown"
+                    x:Name="SupportBackdrop"
+                    Fill="#66080D15"
+                    MouseLeftButtonDown="SupportBackdrop_MouseLeftButtonDown"
                     Opacity="0" />
 
                 <Border
-                    x:Name="NameSyncCard"
-                    Width="486"
-                    Padding="26,20,22,18"
+                    x:Name="SupportCard"
+                    Width="560"
+                    Padding="26,24"
                     HorizontalAlignment="Center"
                     VerticalAlignment="Center"
                     Background="#FF1D3249"
                     BorderBrush="{StaticResource B.Border}"
                     BorderThickness="1"
                     CornerRadius="14"
-                    Opacity="0">
+                    Opacity="0"
+                    RenderTransformOrigin="0.5,0.5">
+                    <Border.RenderTransform>
+                        <TransformGroup>
+                            <ScaleTransform x:Name="SupportScale" ScaleX="0.93" ScaleY="0.93" />
+                            <TranslateTransform x:Name="SupportShift" Y="10" />
+                        </TransformGroup>
+                    </Border.RenderTransform>
                     <Border.Effect>
                         <DropShadowEffect
                             BlurRadius="28"
@@ -1633,117 +1665,97 @@
                             ShadowDepth="10"
                             Color="#FF000000" />
                     </Border.Effect>
-
                     <StackPanel>
-                        <Grid>
-                            <StackPanel Orientation="Horizontal">
-                                <TextBlock
-                                    VerticalAlignment="Center"
-                                    FontFamily="{StaticResource F.Icon}"
-                                    FontSize="16"
-                                    Foreground="{StaticResource B.AccentLight}"
-                                    Text="&#xE895;" />
-                                <TextBlock
-                                    x:Name="NameSyncTitle"
-                                    Margin="10,0,0,0"
-                                    VerticalAlignment="Center"
-                                    FontSize="14.5"
-                                    FontWeight="SemiBold"
-                                    Foreground="#FFF2F7FC"
-                                    Text="Steam 中文名同步" />
-                            </StackPanel>
-                            <Button
-                                HorizontalAlignment="Right"
+                        <!--  头部  -->
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock
                                 VerticalAlignment="Center"
-                                Click="NameSyncClose_Click"
-                                Style="{StaticResource IconBtn}"
-                                ToolTip="收起来（同步继续在后台跑）">
-                                <TextBlock
-                                    FontFamily="{StaticResource F.Icon}"
-                                    FontSize="10"
-                                    Text="&#xE711;" />
-                            </Button>
-                        </Grid>
+                                FontFamily="{StaticResource F.Icon}"
+                                FontSize="16"
+                                Foreground="{StaticResource B.AccentLight}"
+                                Text="&#xEB52;" />
+                            <TextBlock
+                                Margin="11,0,0,0"
+                                VerticalAlignment="Center"
+                                FontSize="{StaticResource Fs.Title}"
+                                FontWeight="SemiBold"
+                                Foreground="#FFE6EFF8"
+                                Text="灵石结缘" />
+                        </StackPanel>
 
+                        <Border
+                            Height="1"
+                            Margin="0,18,0,16"
+                            Background="{StaticResource B.BorderSoft}" />
+
+                        <!--
+                            结缘文案 + 两张收款码。
+                            图片已经从原图（4M / 3M）压到 170K / 120K（640 宽、质量 85），
+                            显示尺寸 220~250，清晰度看不出差别，扫码也没问题。
+                        -->
                         <TextBlock
-                            x:Name="NameSyncPhase"
-                            Margin="0,14,0,0"
-                            FontSize="12.5"
-                            Foreground="{StaticResource B.TextDim}"
-                            Text="尚未同步"
+                            FontSize="{StaticResource Fs.Body}"
+                            Foreground="#FFE8F1FA"
+                            LineHeight="26"
+                            Text="散修炼器，本就不易。诸位宗门高足若觉此物还算趁手，可于下方结缘法印处随喜投喂几枚灵石，聊作炼器之资，也为日后铸宝备些材料。"
                             TextWrapping="Wrap" />
 
-                        <ProgressBar
-                            x:Name="NameSyncBar"
-                            Height="6"
-                            Margin="0,12,0,0"
-                            IsIndeterminate="True"
-                            Maximum="100"
-                            Style="{StaticResource ThinProgress}"
-                            Value="0" />
+                        <StackPanel
+                            Margin="0,18,0,0"
+                            HorizontalAlignment="Center"
+                            Orientation="Horizontal">
+                            <!--
+                                两张图各自套一个圆角容器：图片走 Border 的 ImageBrush 背景
+                                （圆角才会真的裁掉四角）。
+                                尺寸按各自比例给：支付宝 2:3、微信 1312:1792。
+                            -->
+                            <Grid
+                                x:Name="AlipayFrame"
+                                Width="220"
+                                Height="330"
+>
+                                <Border CornerRadius="10">
+                                    <Border.Background>
+                                        <!--
+                                            图片源在 EnsureSupportFlow 里用代码挂（带 try/catch）。
+                                            XAML 里直接写 pack URI 的话，资源一旦没打进程序集，
+                                            整个窗口加载就会抛 XamlParseException —— 启动即崩。
+                                        -->
+                                        <ImageBrush
+                                            x:Name="AlipayBrush"
+                                            RenderOptions.BitmapScalingMode="HighQuality"
+                                            Stretch="UniformToFill" />
+                                    </Border.Background>
+                                </Border>
+                            </Grid>
 
-                        <Grid Margin="0,10,0,0">
-                            <TextBlock
-                                x:Name="NameSyncDetail"
-                                Margin="0,0,90,0"
-                                FontSize="11"
-                                Foreground="{StaticResource B.TextMute}"
-                                Text=""
-                                TextTrimming="CharacterEllipsis" />
-                            <TextBlock
-                                x:Name="NameSyncCount"
-                                HorizontalAlignment="Right"
-                                FontSize="11"
-                                Foreground="{StaticResource B.TextMute}"
-                                Text="" />
-                        </Grid>
+                            <Grid
+                                x:Name="WxpayFrame"
+                                Width="242"
+                                Height="330"
+                                Margin="16,0,0,0"
+>
+                                <Border CornerRadius="10">
+                                    <Border.Background>
+                                        <ImageBrush
+                                            x:Name="WxpayBrush"
+                                            RenderOptions.BitmapScalingMode="HighQuality"
+                                            Stretch="UniformToFill" />
+                                    </Border.Background>
+                                </Border>
+                            </Grid>
+                        </StackPanel>
 
-                        <TextBlock
-                            x:Name="NameSyncHint"
-                            Margin="0,14,0,0"
-                            FontSize="10.5"
-                            Foreground="{StaticResource B.TextMute}"
-                            LineHeight="16"
-                            Text="同步在后台慢慢跑，收起这个面板也不影响，可以继续浏览游戏库。"
-                            TextWrapping="Wrap" />
-
-                        <Grid Margin="0,16,0,0">
-                            <Button
-                                x:Name="NameSyncRebuild"
-                                Height="32"
-                                Padding="14,0"
-                                HorizontalAlignment="Left"
-                                VerticalAlignment="Center"
-                                Click="NameSyncRebuild_Click"
-                                Content="重新抓取完整名单"
-                                FontSize="11.5"
-                                Style="{StaticResource GhostBtn}"
-                                ToolTip="清空游戏名表，重新抓全量，再换一遍中文名" />
-
-                            <StackPanel HorizontalAlignment="Right" Orientation="Horizontal">
-                                <Button
-                                    x:Name="NameSyncCancel"
-                                    Height="32"
-                                    Padding="16,0"
-                                    VerticalAlignment="Center"
-                                    Click="NameSyncCancel_Click"
-                                    Content="取消同步"
-                                    FontSize="12"
-                                    Style="{StaticResource GhostBtn}"
-                                    Visibility="Collapsed" />
-                                <Button
-                                    x:Name="NameSyncStart"
-                                    Height="32"
-                                    Margin="8,0,0,0"
-                                    Padding="18,0"
-                                    VerticalAlignment="Center"
-                                    Click="NameSyncStart_Click"
-                                    Content="开始同步"
-                                    FontSize="12"
-                                    Style="{StaticResource PrimaryBtn}"
-                                    Visibility="Collapsed" />
-                            </StackPanel>
-                        </Grid>
+                        <!--  底部：关闭  -->
+                        <Button
+                            Height="32"
+                            MinWidth="96"
+                            Padding="20,0"
+                            Margin="0,20,0,0"
+                            HorizontalAlignment="Right"
+                            Click="SupportClose_Click"
+                            Content="知道了"
+                            Style="{StaticResource PrimaryBtn}" />
                     </StackPanel>
                 </Border>
             </Grid>
@@ -1761,8 +1773,8 @@
                 <Rectangle Fill="#CC080D15" />
 
                 <Border
-                    Width="486"
-                    Padding="24,22"
+                    Width="560"
+                    Padding="26,22"
                     HorizontalAlignment="Center"
                     VerticalAlignment="Center"
                     Background="#FF1D3249"
@@ -1788,76 +1800,158 @@
                                     HorizontalAlignment="Center"
                                     VerticalAlignment="Center"
                                     FontFamily="{StaticResource F.Icon}"
-                                    FontSize="15"
+                                    FontSize="18"
                                     Foreground="#FF8FC6FF"
                                     Text="&#xE895;" />
                             </Border>
                             <StackPanel Margin="12,0,0,0" VerticalAlignment="Center">
                                 <TextBlock
                                     x:Name="SyncTitle"
-                                    FontSize="15"
+                                    FontSize="{StaticResource Fs.Title}"
                                     FontWeight="SemiBold"
                                     Foreground="#FFE6EFF8"
-                                    Text="同步全部数据" />
+                                    Text="同步全部游戏数据" />
                                 <TextBlock
                                     x:Name="SyncSubtitle"
                                     Margin="0,3,0,0"
-                                    FontSize="10.5"
+                                    FontSize="{StaticResource Fs.Small}"
                                     Foreground="#FF8FA3BA"
-                                    Text="正在从官网读取数据" />
+                                    Text="游戏数据与 Steam 中文名并行同步" />
                             </StackPanel>
                         </StackPanel>
 
                         <Border
-                            Margin="0,18,0,0"
-                            Padding="14,12"
+                            Margin="0,16,0,0"
+                            Padding="14,11"
                             Background="#FF24384F"
                             CornerRadius="9">
                             <TextBlock
-                                FontSize="11"
+                                FontSize="{StaticResource Fs.Small}"
                                 Foreground="#FFA9C0D6"
-                                LineHeight="18"
-                                TextWrapping="Wrap"><Run Text="同步快慢完全取决于你的网络，有时快有时慢，不要着急哦。" /><LineBreak /><Run Text="如果实在过慢，可以开启 VPN 加速后再重新同步。" /></TextBlock>
+                                LineHeight="20"
+                                TextWrapping="Wrap"><Run Text="游戏数据和中文名同时跑，快慢取决于你的网络，不要着急哦。" /><LineBreak /><Run Text="中文名走 Steam 商店接口，为避免限流大约每秒查一款，慢是正常的。" /></TextBlock>
                         </Border>
 
-                        <TextBlock
-                            x:Name="SyncGameText"
-                            Margin="0,16,0,0"
-                            FontSize="12.5"
-                            Foreground="#FFF0F6FD"
-                            Text="正在准备…"
-                            TextTrimming="CharacterEllipsis" />
-                        <TextBlock
-                            x:Name="SyncPhaseText"
-                            Margin="0,4,0,0"
-                            FontSize="10.5"
-                            Foreground="#FF8FA3BA"
-                            Text=""
-                            TextTrimming="CharacterEllipsis" />
+                        <!--  ① 游戏数据：官网列表 / 本地详情页  -->
+                        <Grid Margin="0,16,0,0">
+                            <StackPanel VerticalAlignment="Center" Orientation="Horizontal">
+                                <Border
+                                    Width="3"
+                                    Height="12"
+                                    VerticalAlignment="Center"
+                                    Background="{StaticResource B.Accent}"
+                                    CornerRadius="2" />
+                                <TextBlock
+                                    Margin="8,0,0,0"
+                                    VerticalAlignment="Center"
+                                    FontSize="{StaticResource Fs.Small}"
+                                    FontWeight="SemiBold"
+                                    Foreground="#FFCFE0F2"
+                                    Text="同步游戏数据" />
+                            </StackPanel>
+                            <TextBlock
+                                x:Name="SyncPercentText"
+                                HorizontalAlignment="Right"
+                                VerticalAlignment="Center"
+                                FontSize="{StaticResource Fs.Small}"
+                                Foreground="#FF8FC2FF"
+                                Text="" />
+                        </Grid>
 
                         <ProgressBar
                             x:Name="SyncBar"
                             Height="6"
-                            Margin="0,12,0,0"
+                            Margin="0,8,0,0"
                             IsIndeterminate="True"
                             Maximum="1"
                             Minimum="0"
                             Style="{StaticResource ThinProgress}"
                             Value="0" />
 
-                        <Grid Margin="0,10,0,0">
+                        <TextBlock
+                            x:Name="SyncGameText"
+                            Margin="0,8,0,0"
+                            FontSize="{StaticResource Fs.Body}"
+                            Foreground="#FFF0F6FD"
+                            Text="正在准备…"
+                            TextTrimming="CharacterEllipsis" />
+                        <TextBlock
+                            x:Name="SyncPhaseText"
+                            Margin="0,3,0,0"
+                            FontSize="{StaticResource Fs.Caption}"
+                            Foreground="#FF8FA3BA"
+                            Text=""
+                            TextTrimming="CharacterEllipsis" />
+                        <TextBlock
+                            x:Name="SyncCountText"
+                            Margin="0,3,0,0"
+                            FontSize="{StaticResource Fs.Caption}"
+                            Foreground="#FF8FA3BA"
+                            Text=""
+                            TextTrimming="CharacterEllipsis" />
+
+                        <Border
+                            Height="1"
+                            Margin="0,16,0,0"
+                            Background="#FF2C4259" />
+
+                        <!--  ② 中文名：数据同步跑完之后自动接着换中文名  -->
+                        <Grid Margin="0,15,0,0">
+                            <StackPanel VerticalAlignment="Center" Orientation="Horizontal">
+                                <Border
+                                    Width="3"
+                                    Height="12"
+                                    VerticalAlignment="Center"
+                                    Background="{StaticResource B.Cyan}"
+                                    CornerRadius="2" />
+                                <TextBlock
+                                    Margin="8,0,0,0"
+                                    VerticalAlignment="Center"
+                                    FontSize="{StaticResource Fs.Small}"
+                                    FontWeight="SemiBold"
+                                    Foreground="#FFCFE0F2"
+                                    Text="同步中文名" />
+                            </StackPanel>
                             <TextBlock
-                                x:Name="SyncCountText"
-                                FontSize="10.5"
-                                Foreground="#FF8FA3BA"
-                                Text="" />
-                            <TextBlock
-                                x:Name="SyncPercentText"
+                                x:Name="SyncNamePercentText"
                                 HorizontalAlignment="Right"
-                                FontSize="10.5"
+                                VerticalAlignment="Center"
+                                FontSize="{StaticResource Fs.Small}"
                                 Foreground="#FF8FC2FF"
                                 Text="" />
                         </Grid>
+
+                        <ProgressBar
+                            x:Name="SyncNameBar"
+                            Height="6"
+                            Margin="0,8,0,0"
+                            IsIndeterminate="False"
+                            Maximum="1"
+                            Minimum="0"
+                            Style="{StaticResource ThinProgress}"
+                            Value="0" />
+
+                        <TextBlock
+                            x:Name="SyncNameStateText"
+                            Margin="0,8,0,0"
+                            FontSize="{StaticResource Fs.Body}"
+                            Foreground="#FFF0F6FD"
+                            Text="等待游戏数据同步完成"
+                            TextTrimming="CharacterEllipsis" />
+                        <TextBlock
+                            x:Name="SyncNameDetailText"
+                            Margin="0,3,0,0"
+                            FontSize="{StaticResource Fs.Caption}"
+                            Foreground="#FF8FA3BA"
+                            Text=""
+                            TextTrimming="CharacterEllipsis" />
+                        <TextBlock
+                            x:Name="SyncNameCountText"
+                            Margin="0,3,0,0"
+                            FontSize="{StaticResource Fs.Caption}"
+                            Foreground="#FF8FA3BA"
+                            Text=""
+                            TextTrimming="CharacterEllipsis" />
 
                         <Button
                             x:Name="SyncCancelButton"
@@ -1867,7 +1961,7 @@
                             HorizontalAlignment="Right"
                             Click="SyncCancel_Click"
                             Content="取消同步"
-                            FontSize="12"
+                            FontSize="{StaticResource Fs.Body}"
                             Style="{StaticResource GhostBtn}" />
                     </StackPanel>
                 </Border>

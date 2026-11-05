@@ -3,25 +3,25 @@
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     Width="228"
-    Height="102"
+    Height="114"
     AllowsTransparency="True"
     Background="Transparent"
     ResizeMode="NoResize"
     ShowActivated="True"
     ShowInTaskbar="False"
     SnapsToDevicePixels="True"
-    TextOptions.TextFormattingMode="Ideal"
+    TextOptions.TextFormattingMode="Display"
     Topmost="True"
     WindowStyle="None">
     <Window.Resources>
-        <!--  Steam 风格菜单项：34 高、左侧 16px 图标、悬停整行浅蓝底 + 5px 圆角  -->
+        <!--  Steam 风格菜单项：38 高、左侧 16px 图标、悬停整行浅蓝底 + 5px 圆角  -->
         <Style x:Key="TrayMenuItem" TargetType="Button">
-            <Setter Property="Height" Value="34" />
+            <Setter Property="Height" Value="38" />
             <Setter Property="Padding" Value="10,0,12,0" />
             <Setter Property="Background" Value="Transparent" />
             <Setter Property="Foreground" Value="#FFD3E1F0" />
             <Setter Property="FontFamily" Value="{StaticResource F.Ui}" />
-            <Setter Property="FontSize" Value="12.5" />
+            <Setter Property="FontSize" Value="{StaticResource Fs.Body}" />
             <Setter Property="BorderThickness" Value="0" />
             <Setter Property="Cursor" Value="Hand" />
             <Setter Property="Focusable" Value="False" />
@@ -55,7 +55,7 @@
         <!--  菜单里的图标：跟着条目走，不抢文字的注意力  -->
         <Style x:Key="TrayMenuIcon" TargetType="TextBlock">
             <Setter Property="FontFamily" Value="{StaticResource F.Icon}" />
-            <Setter Property="FontSize" Value="13" />
+            <Setter Property="FontSize" Value="16" />
             <Setter Property="Foreground" Value="#FF8CA3BB" />
             <Setter Property="VerticalAlignment" Value="Center" />
             <Setter Property="TextOptions.TextRenderingMode" Value="ClearType" />
@@ -64,7 +64,7 @@
         <Style x:Key="TrayMenuLabel" TargetType="TextBlock">
             <Setter Property="VerticalAlignment" Value="Center" />
             <Setter Property="FontFamily" Value="{StaticResource F.Ui}" />
-            <Setter Property="FontSize" Value="12.5" />
+            <Setter Property="FontSize" Value="{StaticResource Fs.Body}" />
             <Setter Property="Foreground" Value="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" />
         </Style>
     </Window.Resources>

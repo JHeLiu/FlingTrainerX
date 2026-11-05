@@ -616,6 +616,93 @@ public sealed class AppDatabase
         }, 0);
     }
 
+    /// <summary>
+    /// 把官网搜索 / 同步抓到的游戏补进游戏名库：已存在的行一律不动（中文名不会丢），
+    /// 只补没有的。这样下次再搜同一个游戏就能直接在本地命中，不用再联网。
+    /// </summary>
+    /// <param name="items">刚抓到的条目。</param>
+    public int AddGameNamesIfMissing(IEnumerable<TrainerItem> items)
+    {
+        var rows = items
+            .Where(i => i.Id > 0 && !string.IsNullOrWhiteSpace(i.Title))
+            .Select(i => new GameNameRow
+            {
+                TrainerId = i.Id.ToString(),
+                NameEn = i.Title,
+                NameCn = "",
+                UpdatedAt = DateTime.Now
+            })
+            .GroupBy(r => r.TrainerId)
+            .Select(g => g.First())
+            .ToList();
+
+        if (rows.Count == 0) return 0;
+
+        return Run(db =>
+        {
+            var ids = rows.Select(r => r.TrainerId).ToList();
+            var exist = db.Queryable<GameNameRow>()
+                .Where(r => ids.Contains(r.TrainerId))
+                .Select(r => r.TrainerId)
+                .ToList()
+                .ToHashSet();
+
+            var added = rows.Where(r => !exist.Contains(r.TrainerId)).ToList();
+            if (added.Count == 0) return 0;
+
+            db.Insertable(added).ExecuteCommand();
+            return added.Count;
+        }, 0);
+    }
+
+    /// <summary>
+    /// 本地搜索：官网标题（英文名）或已换到的中文名里包含关键词的缓存条目。
+    /// 搜索框提交时先用它，命中就直接给本地结果、不联网；最多返回 <paramref name="limit"/> 条。
+    /// </summary>
+    /// <param name="keyword">关键词，中文 / 英文都行。</param>
+    /// <param name="limit">最多返回多少条。</param>
+    public List<TrainerItem> SearchCache(string keyword, int limit)
+    {
+        var kw = keyword.Trim();
+        if (kw.Length == 0 || limit <= 0) return new List<TrainerItem>();
+
+        // ① 官网标题直接命中
+        var rows = Run(db => db.Queryable<TrainerCacheRow>()
+            .Where(r => r.Title.Contains(kw))
+            .OrderBy(r => r.Title)
+            .Take(limit)
+            .ToList(), new List<TrainerCacheRow>());
+
+        // ② 中文名 / 英文名命中：先从游戏名库换成 trainer_id，再从缓存表取整条
+        var hitIds = Run(db => db.Queryable<GameNameRow>()
+            .Where(r => r.NameEn.Contains(kw) || r.NameCn.Contains(kw))
+            .OrderBy(r => r.NameEn)
+            .Take(limit)
+            .Select(r => r.TrainerId)
+            .ToList(), new List<string>());
+
+        var have = rows.Select(r => r.TrainerId).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var missing = hitIds.Where(id => !have.Contains(id)).ToList();
+
+        if (missing.Count > 0)
+        {
+            rows.AddRange(Run(db => db.Queryable<TrainerCacheRow>()
+                .Where(r => missing.Contains(r.TrainerId))
+                .ToList(), new List<TrainerCacheRow>()));
+        }
+
+        var items = new List<TrainerItem>(rows.Count);
+        foreach (var row in rows)
+        {
+            if (row.ToItem() is { } item) items.Add(item);
+        }
+
+        return items
+            .OrderBy(i => i.CleanTitle, StringComparer.OrdinalIgnoreCase)
+            .Take(limit)
+            .ToList();
+    }
+
     /// <summary>给某一款游戏补上中文名（同步过程中来一个写一个，取消时已写的不丢）。</summary>
     public bool UpdateGameNameCn(string trainerId, string nameCn) => Run(db =>
         db.Updateable<GameNameRow>()

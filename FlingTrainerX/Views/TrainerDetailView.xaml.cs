@@ -220,7 +220,6 @@ public partial class TrainerDetailView : System.Windows.Controls.UserControl
             ShotsList.ItemsSource = null;
             ShotsEmpty.Text = "官网这篇文章没有配图";
             ShotsEmpty.Visibility = Visibility.Visible;
-            ShotsCountText.Text = "0";
             return;
         }
 
@@ -230,7 +229,6 @@ public partial class TrainerDetailView : System.Windows.Controls.UserControl
 
         ShotsList.ItemsSource = shots;
         ShotsEmpty.Visibility = Visibility.Collapsed;
-        ShotsCountText.Text = shots.Count.ToString();
     }
 
     /// <summary>截图落盘后重绑一次，之后即使断网也能看图。</summary>
@@ -277,7 +275,6 @@ public partial class TrainerDetailView : System.Windows.Controls.UserControl
                 o.Key.Contains(filter, StringComparison.OrdinalIgnoreCase)).ToList();
 
         OptionsList.ItemsSource = list;
-        CountText.Text = list.Count.ToString();
         OptionsLoading.Visibility = Visibility.Collapsed;
         EmptyHint.Visibility = list.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
     }
@@ -302,7 +299,6 @@ public partial class TrainerDetailView : System.Windows.Controls.UserControl
         OptionsTabCount.Text = options.ToString();
         DownloadTabCount.Text = files.ToString();
         ShotsTabCount.Text = _item.Images.Count.ToString();
-        CountText.Text = options.ToString();
 
         RefreshLaunchState();
     }
@@ -368,6 +364,10 @@ public partial class TrainerDetailView : System.Windows.Controls.UserControl
         _detailLoading = true;
         ReloadDownloadsButton.IsEnabled = false;
 
+        // 走到这里就说明要联网了（本地有下载表的话上面已经 return），把遮层打开
+        var startedAt = Environment.TickCount64;
+        ShowLoadingOverlay();
+
         if (!_item.HasDownloads)
         {
             DownloadEmpty.Text = "正在从官网读取下载信息…";
@@ -421,7 +421,32 @@ public partial class TrainerDetailView : System.Windows.Controls.UserControl
         {
             _detailLoading = false;
             ReloadDownloadsButton.IsEnabled = true;
+
+            // 太快返回会让遮层「闪一下」，补到 0.4 秒再收，观感上是一次完整的加载
+            var left = 400 - (Environment.TickCount64 - startedAt);
+            if (left > 0) await Task.Delay((int)left);
+            HideLoadingOverlay();
         }
+    }
+
+    /// <summary>打开遮层并开始转圈（只有需要联网取数据时才调）。</summary>
+    private void ShowLoadingOverlay()
+    {
+        if (LoadingOverlay.Visibility == Visibility.Visible) return;
+
+        LoadingOverlay.Visibility = Visibility.Visible;
+        SpinnerRotate.BeginAnimation(
+            RotateTransform.AngleProperty,
+            new DoubleAnimation(0, 360, TimeSpan.FromSeconds(0.9)) { RepeatBehavior = RepeatBehavior.Forever });
+    }
+
+    /// <summary>收起遮层并停掉动画（留着动画会一直占着渲染线程）。</summary>
+    private void HideLoadingOverlay()
+    {
+        if (LoadingOverlay.Visibility != Visibility.Visible) return;
+
+        SpinnerRotate.BeginAnimation(RotateTransform.AngleProperty, null);
+        LoadingOverlay.Visibility = Visibility.Collapsed;
     }
 
     private async void ReloadDownloads_Click(object sender, RoutedEventArgs e)
@@ -546,6 +571,19 @@ public partial class TrainerDetailView : System.Windows.Controls.UserControl
 
     /// <summary>自检用：切到软件截图选项卡。</summary>
     public void ShowShotsTab() => SelectTab(0);
+
+    /// <summary>自检用：强制打开加载遮层，返回它的可见状态。</summary>
+    public bool ShowLoadingForCheck()
+    {
+        ShowLoadingOverlay();
+        return LoadingOverlay.Visibility == Visibility.Visible;
+    }
+
+    /// <summary>自检用：遮层当前是否可见（本地数据进来应该是 false）。</summary>
+    public bool OverlayVisible => LoadingOverlay.Visibility == Visibility.Visible;
+
+    /// <summary>自检用：等同于点右上角那个刷新按钮。</summary>
+    public void ReloadForCheck() => ReloadDownloads_Click(this, new RoutedEventArgs());
 
     /// <summary>自检用：下载第一条文件。</summary>
     public void DownloadFirst() => Download_Click(this, new RoutedEventArgs());
