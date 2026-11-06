@@ -13,3 +13,6 @@ bin
 .pro/.stage
 .pro/tools
 .pro/version.txt
+.ai-temp-pair
+/.pro/installer-template/tmp
+/.pro/out
