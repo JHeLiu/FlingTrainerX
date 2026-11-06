@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.Windows;
 using System.Windows.Threading;
+using CommunityToolkit.Mvvm.ComponentModel;
 using FlingTrainerX.Models;
 using FlingTrainerX.Services;
 
@@ -10,7 +11,7 @@ namespace FlingTrainerX.ViewModels;
 /// 详情页下载表格的一行。原表格数据 + 对应下载任务的实时进度合成一个可绑定对象，
 /// 任务状态变了就整体通知一次，界面不用写转换器。
 /// </summary>
-public sealed class DownloadRowVm : INotifyPropertyChanged
+public sealed class DownloadRowVm : ObservableObject
 {
     private readonly TrainerDownload _file;
     private DownloadTask? _task;
@@ -20,8 +21,6 @@ public sealed class DownloadRowVm : INotifyPropertyChanged
         _file = file;
         Attach(DownloadManager.Instance.Find(file.Url));
     }
-
-    public event PropertyChangedEventHandler? PropertyChanged;
 
     public string FileName => _file.File;
     public string Url => _file.Url;
@@ -39,12 +38,7 @@ public sealed class DownloadRowVm : INotifyPropertyChanged
     public bool IsSelected
     {
         get => _selected;
-        set
-        {
-            if (_selected == value) return;
-            _selected = value;
-            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsSelected)));
-        }
+        set => SetProperty(ref _selected, value);
     }
 
     /// <summary>状态列文案：已下载 / 未下载 / 正在下载。</summary>
@@ -147,7 +141,7 @@ public sealed class DownloadRowVm : INotifyPropertyChanged
                      nameof(StateText), nameof(StateKind), nameof(ShowProgress), nameof(IsSelected)
                  })
         {
-            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
+            OnPropertyChanged(name);
         }
     }
 }

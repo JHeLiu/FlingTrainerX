@@ -1,6 +1,6 @@
 using System.Collections.ObjectModel;
+using CommunityToolkit.Mvvm.ComponentModel;
 using FlingTrainerX.Models;
-using FlingTrainerX.Mvvm;
 
 namespace FlingTrainerX.ViewModels;
 
@@ -313,7 +313,7 @@ public sealed class LibraryViewModel : ObservableObject
                 EmptyGlyph = "\uE783";
                 EmptyTitle = "读取失败";
                 EmptyDesc = $"读取本地数据库失败：{state.FirstError}\n\n" +
-                            "可以到「设置 → 数据更新」里重新同步一次。";
+                            "可以到「设置 → 数据更新」里重新更新一次。";
             }
 
             return;

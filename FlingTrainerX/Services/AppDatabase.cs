@@ -161,7 +161,14 @@ public sealed class TrainerCacheRow
 [SugarTable("game_names")]
 public sealed class GameNameRow
 {
-    /// <summary>官网文章 ID，按字符串存（和收藏 / 缓存两张表同一套约定）。</summary>
+    /// <summary>
+    /// 官网唯一键。新数据是链接里的 slug（<c>ace-combat-8-wings-of-theve-trainer</c>），
+    /// 老数据（以及接口兜底抓来的）是数字文章 ID。
+    /// <para>
+    /// 只当<b>不透明主键</b>用：查提示、补中文名都不需要它是数字，别拿它做数值比较；
+    /// 缓存表 / 收藏表里的 ID 是另一套，靠标题或 slug 对，不要直接拿这列去 join。
+    /// </para>
+    /// </summary>
     [SugarColumn(ColumnName = "trainer_id", Length = 64, IsPrimaryKey = true, IsIdentity = false)]
     public string TrainerId { get; set; } = "";
 
@@ -179,6 +186,23 @@ public sealed class GameNameRow
     /// <summary>去掉 " Trainer" / " Enhanced" 后的游戏名，提示列表展示和回填搜索框都用它。</summary>
     [SugarColumn(IsIgnore = true)]
     public string CleanEn => NameEn.Replace(" Trainer", "").Replace(" Enhanced", "").Trim();
+
+    /// <summary>
+    /// 从官网链接里取唯一键：<c>https://flingtrainer.com/trainer/elden-ring-trainer/</c> → <c>elden-ring-trainer</c>。
+    /// 取不到（空链接 / 没有路径）返回空串，调用方自己决定要不要落库。
+    /// </summary>
+    public static string KeyOf(string url)
+    {
+        if (string.IsNullOrWhiteSpace(url)) return "";
+
+        var text = url.Trim();
+        var cut = text.IndexOfAny(new[] { '?', '#' });
+        if (cut >= 0) text = text[..cut];
+        text = text.TrimEnd('/');
+
+        var slash = text.LastIndexOf('/');
+        return slash >= 0 && slash + 1 < text.Length ? text[(slash + 1)..] : "";
+    }
 }
 
 /// <summary>
@@ -555,9 +579,13 @@ public sealed class AppDatabase
     public int ClearGameNames() => Run(db => db.Deleteable<GameNameRow>().ExecuteCommand(), 0);
 
     /// <summary>
-    /// 用官网新名单重建游戏名表，<b>但把已经换到的中文名按 trainer_id 原样带过去</b>。
+    /// 用官网新名单重建游戏名表，<b>但把已经换到的中文名原样带过去</b>。
     /// 之前「重新抓取完整名单」是清表重写，396 个中文名跟着一起没了、又要从头问一遍 Steam；
     /// 现在只换名单本身：新条目中文名为空，老条目继续用原来的中文名，官网已经下架的自然消失。
+    /// <para>
+    /// 中文名先按主键对；主键对不上（老数据是数字 ID、新名单是 slug，或者两种来源混着）时
+    /// 再按英文标题对一次 —— 同一条游戏换了个键不该把问好的中文名丢掉。
+    /// </para>
     /// 返回保留下来的中文名条数。
     /// </summary>
     public int RebuildGameNames(List<GameNameRow> fresh)
@@ -567,16 +595,26 @@ public sealed class AppDatabase
 
         return Run(db =>
         {
-            var cnById = db.Queryable<GameNameRow>()
+            var withCn = db.Queryable<GameNameRow>()
                 .Where(r => r.NameCn != "" && r.NameCn != null)
-                .ToList()
+                .ToList();
+
+            var cnById = withCn
                 .GroupBy(r => r.TrainerId)
                 .ToDictionary(g => g.Key, g => g.First().NameCn);
+
+            var cnByName = withCn
+                .GroupBy(r => r.NameEn.Trim(), StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(g => g.Key, g => g.First().NameCn, StringComparer.OrdinalIgnoreCase);
 
             var kept = 0;
             foreach (var row in list)
             {
-                if (!cnById.TryGetValue(row.TrainerId, out var cn) || cn.Length == 0) continue;
+                var cn = "";
+                if (!cnById.TryGetValue(row.TrainerId, out cn) || string.IsNullOrEmpty(cn))
+                    cnByName.TryGetValue(row.NameEn.Trim(), out cn);
+
+                if (string.IsNullOrEmpty(cn)) continue;
 
                 row.NameCn = cn;
                 kept++;
@@ -591,8 +629,7 @@ public sealed class AppDatabase
         }, 0);
     }
 
-    /// <summary>
-    /// 还没有中文名的那些行：后台「慢慢补齐」时只拿它们去问 Steam，
+    /// <summary>还没有中文名的那些行：后台「慢慢补齐」时只拿它们去问 Steam，
     /// 已经有中文名的就不重复请求了。
     /// </summary>
     public List<GameNameRow> LoadGameNamesMissingCn() =>
@@ -600,6 +637,41 @@ public sealed class AppDatabase
             .Where(r => r.NameCn == "" || r.NameCn == null)
             .OrderBy(r => r.NameEn)
             .ToList(), new List<GameNameRow>());
+
+    /// <summary>
+    /// 按官网链接批量取中文名（卡片标题切中文时用）。
+    /// 一次 IN 查询取回当前这一页的十几条，键是 <see cref="GameNameRow.KeyOf"/> 算出来的 slug；
+    /// 查不到的那些不会出现在结果里，调用方把标题退回游戏数据里的英文名即可。
+    /// </summary>
+    public Dictionary<string, string> LoadChineseNames(IEnumerable<string> urls)
+    {
+        var keys = urls
+            .Select(GameNameRow.KeyOf)
+            .Where(k => k.Length > 0)
+            .Distinct()
+            .ToList();
+
+        var empty = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        if (keys.Count == 0) return empty;
+
+        return Run(db =>
+        {
+            var rows = db.Queryable<GameNameRow>()
+                .Where(r => keys.Contains(r.TrainerId))
+                .Where(r => r.NameCn != "" && r.NameCn != null)
+                .Select(r => new { r.TrainerId, r.NameCn })
+                .ToList();
+
+            var map = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var row in rows)
+            {
+                var cn = row.NameCn?.Trim() ?? "";
+                if (cn.Length > 0) map[row.TrainerId] = cn;
+            }
+
+            return map;
+        }, empty);
+    }
 
     /// <summary>批量写入全量游戏名（调用前一般刚清空过表，直接 insert）。</summary>
     public int SaveGameNames(IEnumerable<GameNameRow> rows)
@@ -625,12 +697,17 @@ public sealed class AppDatabase
     {
         var rows = items
             .Where(i => i.Id > 0 && !string.IsNullOrWhiteSpace(i.Title))
-            .Select(i => new GameNameRow
+            .Select(i =>
             {
-                TrainerId = i.Id.ToString(),
-                NameEn = i.Title,
-                NameCn = "",
-                UpdatedAt = DateTime.Now
+                // 和 A-Z 名单用同一套键：链接里的 slug，取不到才退回文章 ID
+                var key = GameNameRow.KeyOf(i.Url);
+                return new GameNameRow
+                {
+                    TrainerId = key.Length > 0 ? key : i.Id.ToString(),
+                    NameEn = i.Title,
+                    NameCn = "",
+                    UpdatedAt = DateTime.Now
+                };
             })
             .GroupBy(r => r.TrainerId)
             .Select(g => g.First())
@@ -640,14 +717,27 @@ public sealed class AppDatabase
 
         return Run(db =>
         {
-            var ids = rows.Select(r => r.TrainerId).ToList();
-            var exist = db.Queryable<GameNameRow>()
-                .Where(r => ids.Contains(r.TrainerId))
+            var keys = rows.Select(r => r.TrainerId).ToList();
+            var names = rows.Select(r => r.NameEn.Trim()).ToList();
+
+            var existKeys = db.Queryable<GameNameRow>()
+                .Where(r => keys.Contains(r.TrainerId))
                 .Select(r => r.TrainerId)
                 .ToList()
-                .ToHashSet();
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
-            var added = rows.Where(r => !exist.Contains(r.TrainerId)).ToList();
+            // 键不同但标题一样的也算「已经有了」：老库是数字 ID、新名单是 slug，
+            // 不按标题再挡一次，同一款游戏会在提示里出现两遍
+            var existNames = db.Queryable<GameNameRow>()
+                .Where(r => names.Contains(r.NameEn))
+                .Select(r => r.NameEn)
+                .ToList()
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            var added = rows
+                .Where(r => !existKeys.Contains(r.TrainerId) && !existNames.Contains(r.NameEn.Trim()))
+                .ToList();
+
             if (added.Count == 0) return 0;
 
             db.Insertable(added).ExecuteCommand();
@@ -673,21 +763,26 @@ public sealed class AppDatabase
             .Take(limit)
             .ToList(), new List<TrainerCacheRow>());
 
-        // ② 中文名 / 英文名命中：先从游戏名库换成 trainer_id，再从缓存表取整条
-        var hitIds = Run(db => db.Queryable<GameNameRow>()
+        // ② 中文名 / 英文名命中：先从游戏名库拿到英文标题，再按标题从缓存表取整条。
+        //    游戏名库的键是官网 slug（老数据是数字 ID），和缓存表的主键不是一套，所以这里按标题对，
+        //    比按主键 join 更经得住「名单换键」这种事。
+        var hitTitles = Run(db => db.Queryable<GameNameRow>()
             .Where(r => r.NameEn.Contains(kw) || r.NameCn.Contains(kw))
             .OrderBy(r => r.NameEn)
             .Take(limit)
-            .Select(r => r.TrainerId)
+            .Select(r => r.NameEn)
             .ToList(), new List<string>());
 
-        var have = rows.Select(r => r.TrainerId).ToHashSet(StringComparer.OrdinalIgnoreCase);
-        var missing = hitIds.Where(id => !have.Contains(id)).ToList();
+        var have = rows.Select(r => r.Title).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var missing = hitTitles
+            .Where(t => !string.IsNullOrWhiteSpace(t) && !have.Contains(t))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
 
         if (missing.Count > 0)
         {
             rows.AddRange(Run(db => db.Queryable<TrainerCacheRow>()
-                .Where(r => missing.Contains(r.TrainerId))
+                .Where(r => missing.Contains(r.Title))
                 .ToList(), new List<TrainerCacheRow>()));
         }
 

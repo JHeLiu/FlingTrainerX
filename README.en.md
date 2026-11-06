@@ -1,6 +1,6 @@
-# 风灵月影宗储物袋 (FlingTrainerX)
+﻿# 风灵月影宗藏宝阁 (FlingTrainerX)
 
-**风灵月影宗储物袋** — a WPF desktop browser for [flingtrainer.com](https://flingtrainer.com/) game trainers:
+**风灵月影宗藏宝阁** — a WPF desktop browser for [flingtrainer.com](https://flingtrainer.com/) game trainers:
 launcher-style UI, data shown exactly as the site publishes it, and **in-app downloads** instead of
 handing you off to a browser.
 
@@ -82,6 +82,13 @@ handing you off to a browser.
   writes the result back into `trainer_cache`.
 - **Browser-grade headers** — the site returns 403 to plain `HttpClient`; requests carry the local
   Edge UA (version read from the registry / `msedge.exe`) plus `sec-ch-ua`, `sec-fetch-*`, etc.
+- **Online updates (Gitee releases)** — the app checks the Gitee release feed a few seconds after
+  startup and offers a Steam-style "new version" dialog (version, release notes, update now). The
+  Settings page has an **About** group with a manual "Check for updates" and a read-only
+  "What's new" view. Downloading and installing is handled by
+  [AutoUpdater.NET](https://github.com/ravibpatel/AutoUpdater.NET): its `ZipExtractor` waits for the
+  process to exit, unpacks the update package over the install folder and relaunches the app
+  (`dbs\` and `f\` are untouched).
 - **PerMonitorV2 DPI awareness** — declared in `app.manifest`, window sized from the monitor's
   physical work area ÷ DPI scale, recomputed on `DpiChanged`.
 

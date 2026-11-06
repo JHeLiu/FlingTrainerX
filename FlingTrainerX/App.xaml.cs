@@ -69,7 +69,8 @@ namespace FlingTrainerX
             or "--sync-menu-check" or "--local-search-check" or "--sync-combo-check"
             or "--sync-run-check" or "--empty-sync-check"
             or "--sync-menu-track-check" or "--dpi-check" or "--text-mode-check" or "--font-check"
-            or "--weight-check");
+            or "--weight-check" or "--update-check" or "--quick-names-check"
+            or "--sync-existing-check");
 #endif
 
         /// <summary>
@@ -108,6 +109,11 @@ namespace FlingTrainerX
         {
             base.OnStartup(e);
             BootTrace.Mark("OnStartup 进入");
+
+            // 官网偶尔有页面在响应头 / meta 里声明 iso-2022-cn 这类冷门编码。
+            // .NET 默认只认 UTF-8 / UTF-16 等少数几种，遇到没注册的编码会直接抛
+            // ArgumentException，那一款游戏的抓取就白跑了。启动时把代码页编码全注册上。
+            System.Text.Encoding.RegisterProvider(System.Text.CodePagesEncodingProvider.Instance);
 
             // 没有主窗口时（第二个实例）也要能自己退干净，别留一个没有窗口的僵尸进程
             ShutdownMode = ShutdownMode.OnExplicitShutdown;
@@ -370,6 +376,30 @@ namespace FlingTrainerX
                 }));
             }
 
+            // 设置页「关于」分组 + 更新弹窗自检（仅 Debug）：<程序>.exe --update-check <目录>
+            var updateIndex = Array.IndexOf(e.Args, "--update-check");
+            if (updateIndex >= 0 && updateIndex + 1 < e.Args.Length && MainWindow is MainWindow updateWindow)
+            {
+                var updateDir = e.Args[updateIndex + 1];
+                Dispatcher.BeginInvoke(DispatcherPriority.ApplicationIdle, new Action(async () =>
+                {
+                    await updateWindow.RunUpdateCheckAsync(updateDir);
+                    Shutdown();
+                }));
+            }
+
+            // 设置页「快速搜索游戏名」+ 真点一次更新游戏名（仅 Debug）：<程序>.exe --quick-names-check <目录>
+            var quickNamesIndex = Array.IndexOf(e.Args, "--quick-names-check");
+            if (quickNamesIndex >= 0 && quickNamesIndex + 1 < e.Args.Length && MainWindow is MainWindow quickNamesWindow)
+            {
+                var quickNamesDir = e.Args[quickNamesIndex + 1];
+                Dispatcher.BeginInvoke(DispatcherPriority.ApplicationIdle, new Action(async () =>
+                {
+                    await quickNamesWindow.RunQuickNamesCheckAsync(quickNamesDir);
+                    Shutdown();
+                }));
+            }
+
             // 顶栏刷新按钮的悬停同步菜单自检（仅 Debug）：<程序>.exe --sync-menu-check <目录>
             var syncMenuIndex = Array.IndexOf(e.Args, "--sync-menu-check");
             if (syncMenuIndex >= 0 && syncMenuIndex + 1 < e.Args.Length && MainWindow is MainWindow syncMenuWindow)
@@ -501,6 +531,24 @@ namespace FlingTrainerX
                 Dispatcher.BeginInvoke(DispatcherPriority.ApplicationIdle, new Action(async () =>
                 {
                     await syncRunWindow.RunSyncRunCheckAsync(syncRunDir, syncRunSeconds);
+                    Shutdown();
+                }));
+            }
+
+            // 真跑一次「更新已有游戏数据」再取消（仅 Debug）：<程序>.exe --sync-existing-check <目录> [秒数]
+            var syncExistingIndex = Array.IndexOf(e.Args, "--sync-existing-check");
+            if (syncExistingIndex >= 0 && syncExistingIndex + 1 < e.Args.Length &&
+                MainWindow is MainWindow syncExistingWindow)
+            {
+                var syncExistingDir = e.Args[syncExistingIndex + 1];
+                var syncExistingSeconds = syncExistingIndex + 2 < e.Args.Length &&
+                                          int.TryParse(e.Args[syncExistingIndex + 2], out var parsedExisting)
+                    ? parsedExisting
+                    : 12;
+
+                Dispatcher.BeginInvoke(DispatcherPriority.ApplicationIdle, new Action(async () =>
+                {
+                    await syncExistingWindow.RunSyncExistingCheckAsync(syncExistingDir, syncExistingSeconds);
                     Shutdown();
                 }));
             }

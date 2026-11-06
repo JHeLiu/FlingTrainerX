@@ -8,6 +8,15 @@ using FlingTrainerX.Models;
 namespace FlingTrainerX.Services;
 
 /// <summary>
+/// 「抓全量游戏名」过程中的一条进度快照，给更新弹框第二段用。
+/// 名录是一个请求一次拿全的，中途没有条数可算，所以只报「读到多少款、当前是哪款」。
+/// </summary>
+/// <param name="Count">目前已经解析出的条数。</param>
+/// <param name="Current">刚读到的游戏名，给面板滚动展示用。</param>
+/// <param name="Detail">阶段说明，例如「第 3 / 8 页」。</param>
+public sealed record NameFetchProgress(int Count, string Current, string Detail);
+
+/// <summary>
 /// 从 flingtrainer.com 抓取文章并解析。所有 HTML 都用 AngleSharp 走 DOM，
 /// 只有「拼 URL / 拆版本号」这类纯字符串处理，不再用正则去啃页面结构。
 /// </summary>
@@ -138,12 +147,158 @@ public static class TrainerWeb
         string keyword, int page, CancellationToken ct = default)
         => FetchListAsync(SearchEndpointOf(keyword, page), ct);
 
+    /// <summary>官网「全部游戏名」页：官网把它叫 All Trainers (A-Z)，一页列完 700 多款。</summary>
+    public const string AllTrainersUrl = "https://flingtrainer.com/all-trainers/";
+
     /// <summary>
-    /// 抓「全部游戏名」——和官网 <c>All Trainers (A-Z)</c> 页面同一份数据：
-    /// 按标题 A-Z 排序、每页 100 条翻完为止（767 款 ≈ 8 个请求）。
-    /// 只取 id 和标题，不带正文，比抓详情页便宜得多。
+    /// 抓「全部游戏名」——直接解析官网 <c>All Trainers (A-Z)</c> 页面（<see cref="AllTrainersUrl"/>）。
+    /// <para>
+    /// 这一页把 700 多款游戏按字母排在同一个页面里，<b>一个请求</b>就够；按 WP 接口翻页要 8 次（每页 100 条），
+    /// 慢一个量级。每条的键取链接里的 slug（官网改标题也不会变），只用于本地提示，不需要文章 ID。
+    /// </para>
+    /// <para>
+    /// 页面的 <c>#</c> 分组是空的，而且它是按某次快照生成的 —— 数字开头的游戏、以及页面生成之后
+    /// 才上架的游戏都不会出现在里面（实测「007 First Light」「Disney Dreamlight Valley」都缺）。
+    /// 所以再补一个很小的接口请求，把最近发布的 100 篇按标题合进来，缺的几款就齐了。
+    /// </para>
+    /// <para>
+    /// 页面结构解析不出东西时（改版 / 被拦），退回 WP 接口那套分页抓法，保证「更新游戏名」不会因为
+    /// 页面改版直接失效。
+    /// </para>
     /// </summary>
-    public static async Task<List<GameNameRow>> FetchAllNamesAsync(CancellationToken ct = default)
+    public static async Task<List<GameNameRow>> FetchAllNamesAsync(
+        CancellationToken ct = default, IProgress<NameFetchProgress>? progress = null)
+    {
+        List<GameNameRow> rows;
+        try
+        {
+            rows = await FetchAllNamesFromPageAsync(ct, progress).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch
+        {
+            // 页面这条路走不通就换接口，不把异常抛给调用方
+            rows = new List<GameNameRow>();
+        }
+
+        if (rows.Count == 0) return await FetchAllNamesFromApiAsync(ct, progress).ConfigureAwait(false);
+
+        progress?.Report(new NameFetchProgress(rows.Count, "", "官网名录读取完成，正在补最新上架的游戏"));
+
+        // 补上 A-Z 页面生成之后新上架的游戏（页面是快照，不会自己长出新条目）
+        try
+        {
+            var seenNames = rows.Select(r => r.NameEn.Trim()).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            foreach (var row in await FetchRecentNamesAsync(ct).ConfigureAwait(false))
+            {
+                if (seenNames.Add(row.NameEn.Trim())) rows.Add(row);
+            }
+
+            progress?.Report(new NameFetchProgress(rows.Count, "", "名录读取完成"));
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch
+        {
+            // 补漏失败不影响主名单
+        }
+
+        return rows;
+    }
+
+    /// <summary>
+    /// 解析 A-Z 页面：<c>ul.az-columns &gt; li &gt; a</c> 一条一款游戏，链接文字就是官网标题
+    /// （带 " Trainer" 后缀，和列表接口给的标题一致）。
+    /// </summary>
+    private static async Task<List<GameNameRow>> FetchAllNamesFromPageAsync(
+        CancellationToken ct, IProgress<NameFetchProgress>? progress)
+    {
+        using var request = Request(AllTrainersUrl, false);
+        request.Headers.TryAddWithoutValidation("Accept", "text/html,application/xhtml+xml,*/*");
+        using var res = await Http.SendAsync(request, ct).ConfigureAwait(false);
+        res.EnsureSuccessStatusCode();
+
+        var html = await res.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+        var doc = Parser.ParseDocument(html);
+
+        var all = new List<GameNameRow>();
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        var now = DateTime.Now;
+
+        progress?.Report(new NameFetchProgress(0, "", "正在解析官网名录"));
+
+        foreach (var link in doc.QuerySelectorAll("ul.az-columns a[href]"))
+        {
+            var key = GameNameRow.KeyOf(link.GetAttribute("href") ?? "");
+            if (key.Length == 0 || !seen.Add(key)) continue;
+
+            var title = Collapse(link.TextContent);
+            if (title.Length == 0) continue;
+
+            all.Add(new GameNameRow { TrainerId = key, NameEn = title, UpdatedAt = now });
+
+            // 每 30 条报一次：面板上游戏名一路滚过去，看得出在动。
+            // 解析 700 多条只要几十毫秒，不在这里稍微让一下，界面只会看到最后一帧、名字全被跳过，
+            // 所以每条进度后面留一点点时间给界面把这一帧画出来（只在有人监听时才让，约拖慢 0.4 秒）。
+            if (all.Count % 30 == 0)
+            {
+                progress?.Report(new NameFetchProgress(all.Count, title, "正在解析官网名录"));
+                if (progress is not null) await Task.Delay(10, ct).ConfigureAwait(false);
+            }
+        }
+
+        progress?.Report(new NameFetchProgress(all.Count, all[^1].NameEn, "官网名录解析完成"));
+
+        return all;
+    }
+
+    /// <summary>
+    /// 补 A-Z 页面漏掉的条目。官网这一页是按某次快照生成的，<b>之后新上架的游戏不会自动出现</b>
+    /// （实测「Disney Dreamlight Valley」「007 First Light」都不在页面上），而新游戏恰恰是用户最想搜到的。
+    /// <para>
+    /// 这里按发布时间倒序取最近 100 篇，和页面名单按标题合并；两边都有的以页面（slug）为准，
+    /// 只补页面没有的那几条，所以正常情况下只会多出几款。
+    /// </para>
+    /// </summary>
+    private static async Task<List<GameNameRow>> FetchRecentNamesAsync(CancellationToken ct)
+    {
+        using var request = Request(
+            $"{ApiBase}?per_page=100&page=1&orderby=date&order=desc&_fields=id,title", true);
+        using var res = await Http.SendAsync(request, ct).ConfigureAwait(false);
+        res.EnsureSuccessStatusCode();
+
+        var json = await res.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+        using var doc = JsonDocument.Parse(json);
+        if (doc.RootElement.ValueKind != JsonValueKind.Array) return new List<GameNameRow>();
+
+        var rows = new List<GameNameRow>();
+        var now = DateTime.Now;
+
+        foreach (var post in doc.RootElement.EnumerateArray())
+        {
+            if (!post.TryGetProperty("id", out var idEl) || !idEl.TryGetInt32(out var id) || id <= 0)
+                continue;
+
+            var title = HtmlText(post.GetProperty("title").GetProperty("rendered").GetString() ?? "");
+            if (title.Length == 0) continue;
+
+            rows.Add(new GameNameRow { TrainerId = id.ToString(), NameEn = title, UpdatedAt = now });
+        }
+
+        return rows;
+    }
+
+    /// <summary>
+    /// 退路：WP 接口按标题 A-Z 分页翻完（767 款 ≈ 8 个请求，每页只取 id 和标题）。
+    /// 能拿到真正的文章 ID，主键就用 ID。
+    /// </summary>
+    private static async Task<List<GameNameRow>> FetchAllNamesFromApiAsync(
+        CancellationToken ct, IProgress<NameFetchProgress>? progress)
     {
         var all = new List<GameNameRow>();
         var page = 1;
@@ -178,6 +333,11 @@ public static class TrainerWeb
 
                 all.Add(new GameNameRow { TrainerId = id.ToString(), NameEn = title, UpdatedAt = now });
             }
+
+            progress?.Report(new NameFetchProgress(
+                all.Count,
+                all.Count > 0 ? all[^1].NameEn : "",
+                $"第 {page} / {totalPages} 页"));
         } while (page++ < totalPages);
 
         return all;

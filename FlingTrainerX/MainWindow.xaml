@@ -6,7 +6,7 @@
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
-    Title="风灵月影宗储物袋"
+    Title="风灵月影宗藏宝阁"
     Width="1280"
     Height="780"
     Background="{StaticResource B.BgDeep}"
@@ -74,18 +74,13 @@
                                 RenderOptions.BitmapScalingMode="HighQuality"
                                 Source="/Assets/logo.png"
                                 Stretch="Uniform" />
-                            <StackPanel Margin="10,0,0,0" VerticalAlignment="Center">
-                                <TextBlock
-                                    FontSize="{StaticResource Fs.Subtitle}"
-                                    FontWeight="SemiBold"
-                                    Foreground="{StaticResource B.Text}"
-                                    Text="风灵月影宗储物袋" />
-                                <TextBlock
-                                    Margin="0,1,0,0"
-                                    FontSize="{StaticResource Fs.Caption}"
-                                    Foreground="{StaticResource B.TextMute}"
-                                    Text="FLiNG Sect Storage" />
-                            </StackPanel>
+                            <TextBlock
+                                Margin="10,0,0,0"
+                                VerticalAlignment="Center"
+                                FontSize="{StaticResource Fs.Subtitle}"
+                                FontWeight="SemiBold"
+                                Foreground="{StaticResource B.Text}"
+                                Text="风灵月影宗藏宝阁" />
                         </StackPanel>
                     </Grid>
 
@@ -380,7 +375,7 @@
                         VerticalAlignment="Center"
                         Orientation="Horizontal">
                         <!--
-                            刷新按钮：鼠标放上去就展开「同步已有游戏 / 同步全部游戏」菜单，
+                            刷新按钮：鼠标放上去就展开「更新已有游戏 / 更新全部游戏」菜单，
                             移开自动收起；点按钮本身还是「重读本地库」（不联网）。
                         -->
                         <Grid
@@ -391,7 +386,7 @@
                                 x:Name="RefreshButton"
                                 Click="Refresh_Click"
                                 Style="{StaticResource IconBtn}"
-                                ToolTip="重新读取本地数据 · 鼠标悬停可同步">
+                                ToolTip="重新读取本地数据 · 鼠标悬停可更新">
                                 <TextBlock
                                     x:Name="RefreshGlyph"
                                     FontFamily="{StaticResource F.Icon}"
@@ -443,7 +438,7 @@
                                                 <TextBlock
                                                     Grid.Column="1"
                                                     Style="{StaticResource MenuRowLabel}"
-                                                    Text="同步已有游戏" />
+                                                    Text="更新已有游戏" />
                                             </Grid>
                                         </Button>
 
@@ -460,7 +455,7 @@
                                                 <TextBlock
                                                     Grid.Column="1"
                                                     Style="{StaticResource MenuRowLabel}"
-                                                    Text="同步全部游戏" />
+                                                    Text="更新全部游戏" />
                                             </Grid>
                                         </Button>
                                     </StackPanel>
@@ -734,7 +729,7 @@
                                     TextWrapping="Wrap" />
 
                                 <!--
-                                    本地一条数据都没有时唯一该做的事：这里直接给一个同步入口，
+                                    本地一条数据都没有时唯一该做的事：这里直接给一个更新入口，
                                     不用再让用户自己找「设置 → 数据更新」。
                                 -->
                                 <Button
@@ -744,7 +739,7 @@
                                     Padding="20,0"
                                     HorizontalAlignment="Center"
                                     Click="EmptySync_Click"
-                                    Content="同步数据"
+                                    Content="更新数据"
                                     FontSize="{StaticResource Fs.Body}"
                                     Style="{StaticResource PrimaryBtn}"
                                     Visibility="{Binding EmptySyncVisible, Converter={StaticResource BoolToVis}}" />
@@ -755,20 +750,52 @@
                             x:Name="SettingsPanel"
                             Grid.Row="1"
                             Visibility="{Binding SettingsPanelVisible, Converter={StaticResource BoolToVis}}">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+
                             <!--
-                                窗口固定 1280 宽，设置页统一按 760 的版心排版：
-                                不写死宽度的话，这一页的宽度会被内容反推，卡片一窄按钮就顶出去
+                                左侧分组菜单：一条对应右边一个分组，选中哪条就只显示那一块内容，
+                                其余分组整块隐藏（见 SettingsMenu_SelectionChanged）
+                            -->
+                            <ListBox
+                                x:Name="SettingsMenu"
+                                Grid.Column="0"
+                                Width="128"
+                                Margin="26,2,0,0"
+                                VerticalAlignment="Top"
+                                SelectedIndex="{Binding GroupIndex, Mode=TwoWay}"
+                                SelectionChanged="SettingsMenu_SelectionChanged"
+                                Style="{StaticResource SetNavList}">
+                                <ListBoxItem Content="数据更新" />
+                                <ListBoxItem Content="通用" />
+                                <ListBoxItem Content="打赏赞助" />
+                                <ListBoxItem Content="关于" />
+                            </ListBox>
+
+                            <!--
+                                右侧内容不再写死版心宽度：吃掉菜单之外的全部宽度，左右各留一点呼吸，
+                                分组卡片随之 100% 自适应，窗口若改成可缩放也不用再调这里。
+                                内容按分组切成四块（SettingsGroupXxx），左边点哪一项就只显示那一块，
+                                其余整块收起不参与布局（见 SettingsMenu_SelectionChanged）
                             -->
                             <ScrollViewer
-                                Margin="0,0,6,0"
+                                x:Name="SettingsScroll"
+                                Grid.Column="1"
+                                Margin="18,0,26,0"
                                 HorizontalScrollBarVisibility="Disabled"
                                 VerticalScrollBarVisibility="Auto">
-                                <StackPanel Width="760" HorizontalAlignment="Left">
+                                <StackPanel x:Name="SettingsContent">
                                     <!--
                                         版式参考系统「设置」页：分组标题放在卡片外面（小号灰字），
                                         标题 + 副标题在左、操作按钮在右，一行一件事，行间用极淡的线分隔。
                                     -->
+                                    <StackPanel
+                                        x:Name="SettingsGroupData"
+                                        Visibility="{Binding ShowData, Converter={StaticResource BoolToVis}}">
                                     <TextBlock
+                                        x:Name="SettingsHeaderData"
                                         Margin="6,2,0,9"
                                         FontSize="{StaticResource Fs.Small}"
                                         FontWeight="SemiBold"
@@ -787,7 +814,10 @@
                                         BorderThickness="1"
                                         CornerRadius="12">
                                         <StackPanel>
-                                            <!--  同步全部数据：按官网分页从头翻到尾  -->
+                                            <!--
+                                                快速更新游戏名：只解析官网 All Trainers (A-Z) 一页名录写进本地库，
+                                                一个请求跑完，不抓详情、不碰 Steam 中文名 —— 搜索框的提示靠它。
+                                            -->
                                             <Grid Margin="0,16">
                                                 <Grid.ColumnDefinitions>
                                                     <ColumnDefinition Width="*" />
@@ -799,7 +829,7 @@
                                                         FontSize="{StaticResource Fs.Subtitle}"
                                                         FontWeight="SemiBold"
                                                         Foreground="#FFF0F6FD"
-                                                        Text="同步全部游戏数据" />
+                                                        Text="快速搜索游戏名" />
                                                     <TextBlock
                                                         MaxWidth="560"
                                                         Margin="0,4,0,0"
@@ -807,7 +837,48 @@
                                                         FontSize="{StaticResource Fs.Small}"
                                                         Foreground="#FF8FA3BA"
                                                         LineHeight="20"
-                                                        Text="从官网同步最新信息；官网没改动的会自动跳过。"
+                                                        Text="快速更新游戏名方便快速查询"
+                                                        TextWrapping="Wrap" />
+                                                </StackPanel>
+
+                                                <Button
+                                                    x:Name="QuickNamesButton"
+                                                    Grid.Column="1"
+                                                    Height="34"
+                                                    Margin="24,0,0,0"
+                                                    Padding="16,0"
+                                                    VerticalAlignment="Center"
+                                                    Click="QuickNames_Click"
+                                                    Content="{Binding QuickNamesText}"
+                                                    FontSize="{StaticResource Fs.Body}"
+                                                    IsEnabled="{Binding UpdateButtonsEnabled}"
+                                                    Style="{StaticResource GhostBtn}"
+                                                    ToolTip="只更新搜索提示用的游戏名库，不下载详情、不更新 Steam 中文名" />
+                                            </Grid>
+
+                                            <Border Height="1" Background="#FF3A5570" />
+
+                                            <!--  更新全部数据：按官网分页从头翻到尾  -->
+                                            <Grid Margin="0,16">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+
+                                                <StackPanel VerticalAlignment="Center">
+                                                    <TextBlock
+                                                        FontSize="{StaticResource Fs.Subtitle}"
+                                                        FontWeight="SemiBold"
+                                                        Foreground="#FFF0F6FD"
+                                                        Text="更新全部游戏数据" />
+                                                    <TextBlock
+                                                        MaxWidth="560"
+                                                        Margin="0,4,0,0"
+                                                        HorizontalAlignment="Left"
+                                                        FontSize="{StaticResource Fs.Small}"
+                                                        Foreground="#FF8FA3BA"
+                                                        LineHeight="20"
+                                                        Text="从官网更新最新信息；官网没改动的会自动跳过。"
                                                         TextWrapping="Wrap" />
                                                 </StackPanel>
 
@@ -819,15 +890,16 @@
                                                     Padding="16,0"
                                                     VerticalAlignment="Center"
                                                     Click="SyncAll_Click"
-                                                    Content="开始同步"
+                                                    Content="{Binding UpdateAllText}"
                                                     FontSize="{StaticResource Fs.Body}"
+                                                    IsEnabled="{Binding UpdateButtonsEnabled}"
                                                     Style="{StaticResource GhostBtn}"
                                                     ToolTip="官网列表与 Steam 中文名同时开跑，互不等待" />
                                             </Grid>
 
                                             <Border Height="1" Background="#FF3A5570" />
 
-                                            <!--  同步已有数据：按本地库逐款重抓详情页  -->
+                                            <!--  更新已有数据：按本地库逐款重抓详情页  -->
                                             <Grid Margin="0,16">
                                                 <Grid.ColumnDefinitions>
                                                     <ColumnDefinition Width="*" />
@@ -839,7 +911,7 @@
                                                         FontSize="{StaticResource Fs.Subtitle}"
                                                         FontWeight="SemiBold"
                                                         Foreground="#FFF0F6FD"
-                                                        Text="同步已有游戏数据" />
+                                                        Text="更新已有游戏数据" />
                                                     <TextBlock
                                                         MaxWidth="560"
                                                         Margin="0,4,0,0"
@@ -847,7 +919,7 @@
                                                         FontSize="{StaticResource Fs.Small}"
                                                         Foreground="#FF8FA3BA"
                                                         LineHeight="20"
-                                                        Text="同步本地已存在的游戏最新信息"
+                                                        Text="更新本地已存在的游戏最新信息"
                                                         TextWrapping="Wrap" />
                                                 </StackPanel>
 
@@ -859,8 +931,9 @@
                                                     Padding="16,0"
                                                     VerticalAlignment="Center"
                                                     Click="SyncExisting_Click"
-                                                    Content="开始同步"
+                                                    Content="{Binding UpdateExistingText}"
                                                     FontSize="{StaticResource Fs.Body}"
+                                                    IsEnabled="{Binding UpdateButtonsEnabled}"
                                                     Style="{StaticResource GhostBtn}"
                                                     ToolTip="本地详情与 Steam 中文名同时开跑，互不等待" />
                                             </Grid>
@@ -868,9 +941,15 @@
                                         </StackPanel>
                                     </Border>
 
+                                    </StackPanel>
+
                                     <!--  ======== 通用：清缓存 + 免责声明 ========  -->
+                                    <StackPanel
+                                        x:Name="SettingsGroupGeneral"
+                                        Visibility="{Binding ShowGeneral, Converter={StaticResource BoolToVis}}">
                                     <TextBlock
-                                        Margin="6,22,0,9"
+                                        x:Name="SettingsHeaderGeneral"
+                                        Margin="6,2,0,9"
                                         FontSize="{StaticResource Fs.Small}"
                                         FontWeight="SemiBold"
                                         Foreground="#FF7E93A9"
@@ -958,13 +1037,19 @@
                                         </StackPanel>
                                     </Border>
 
-                                    <!--  灵石结缘：随喜投喂入口，弹窗里放收款码  -->
+                                    </StackPanel>
+
+                                    <!--  打赏赞助：随喜投喂入口，弹窗里放收款码  -->
+                                    <StackPanel
+                                        x:Name="SettingsGroupDonate"
+                                        Visibility="{Binding ShowDonate, Converter={StaticResource BoolToVis}}">
                                     <TextBlock
-                                        Margin="6,22,0,9"
+                                        x:Name="SettingsHeaderDonate"
+                                        Margin="6,2,0,9"
                                         FontSize="{StaticResource Fs.Small}"
                                         FontWeight="SemiBold"
                                         Foreground="#FF7E93A9"
-                                        Text="灵石结缘" />
+                                        Text="打赏赞助" />
 
                                     <Border
                                         Padding="20,4"
@@ -1008,6 +1093,111 @@
                                                 Style="{StaticResource GhostBtn}" />
                                         </Grid>
                                     </Border>
+
+                                    </StackPanel>
+
+                                    <!--  关于：版本 / 在线更新 / 更新内容  -->
+                                    <StackPanel
+                                        x:Name="SettingsGroupAbout"
+                                        Visibility="{Binding ShowAbout, Converter={StaticResource BoolToVis}}">
+                                    <TextBlock
+                                        x:Name="SettingsHeaderAbout"
+                                        Margin="6,2,0,9"
+                                        FontSize="{StaticResource Fs.Small}"
+                                        FontWeight="SemiBold"
+                                        Foreground="#FF7E93A9"
+                                        Text="关于" />
+
+                                    <Border
+                                        Padding="20,4"
+                                        Background="#FF2B4058"
+                                        BorderBrush="#FF466280"
+                                        BorderThickness="1"
+                                        CornerRadius="12">
+                                        <StackPanel>
+                                            <!--  软件更新：查 Gitee 发行版；有新版本就弹「发现新版本」  -->
+                                            <Grid Margin="0,16">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+
+                                                <StackPanel VerticalAlignment="Center">
+                                                    <TextBlock
+                                                        FontSize="{StaticResource Fs.Subtitle}"
+                                                        FontWeight="SemiBold"
+                                                        Foreground="#FFF0F6FD"
+                                                        Text="软件更新" />
+                                                    <TextBlock
+                                                        x:Name="UpdateStatusText"
+                                                        MaxWidth="560"
+                                                        Margin="0,4,0,0"
+                                                        HorizontalAlignment="Left"
+                                                        FontSize="{StaticResource Fs.Small}"
+                                                        Foreground="#FF8FA3BA"
+                                                        LineHeight="20"
+                                                        Text="{Binding VersionLine}"
+                                                        TextWrapping="Wrap" />
+                                                </StackPanel>
+
+                                                <Button
+                                                    x:Name="CheckUpdateButton"
+                                                    Grid.Column="1"
+                                                    Height="34"
+                                                    Margin="24,0,0,0"
+                                                    Padding="16,0"
+                                                    VerticalAlignment="Center"
+                                                    Click="CheckUpdate_Click"
+                                                    Content="检查更新"
+                                                    FontSize="{StaticResource Fs.Body}"
+                                                    IsEnabled="{Binding UpdateButtonEnabled}"
+                                                    Style="{StaticResource GhostBtn}"
+                                                    ToolTip="从 Gitee 发行版取最新版本，启动时也会自动查一次" />
+                                            </Grid>
+
+                                            <Border Height="1" Background="#FF3A5570" />
+
+                                            <!--  更新内容：只读，看发版说明，不会安装任何东西  -->
+                                            <Grid Margin="0,16">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+
+                                                <StackPanel VerticalAlignment="Center">
+                                                    <TextBlock
+                                                        FontSize="{StaticResource Fs.Subtitle}"
+                                                        FontWeight="SemiBold"
+                                                        Foreground="#FFF0F6FD"
+                                                        Text="更新内容" />
+                                                    <TextBlock
+                                                        x:Name="UpdateNotesText"
+                                                        MaxWidth="560"
+                                                        Margin="0,4,0,0"
+                                                        HorizontalAlignment="Left"
+                                                        FontSize="{StaticResource Fs.Small}"
+                                                        Foreground="#FF8FA3BA"
+                                                        LineHeight="20"
+                                                        Text="{Binding NotesLine}"
+                                                        TextWrapping="Wrap" />
+                                                </StackPanel>
+
+                                                <Button
+                                                    x:Name="UpdateNotesButton"
+                                                    Grid.Column="1"
+                                                    Height="34"
+                                                    Margin="24,0,0,0"
+                                                    Padding="16,0"
+                                                    VerticalAlignment="Center"
+                                                    Click="UpdateNotes_Click"
+                                                    Content="查看更新"
+                                                    FontSize="{StaticResource Fs.Body}"
+                                                    Style="{StaticResource GhostBtn}"
+                                                    ToolTip="查看 Gitee 上最近一次发行版的说明" />
+                                            </Grid>
+                                        </StackPanel>
+                                    </Border>
+                                    </StackPanel>
                                 </StackPanel>
                             </ScrollViewer>
                         </Grid>
@@ -1249,14 +1439,43 @@
                                 TextTrimming="CharacterEllipsis" />
                         </Grid>
 
-                        <!--  ===== 分页：状态栏最右侧，只有上一页 / 下一页 =====  -->
+                        <!--  ===== 右下角：当前游戏名的语言 + 分页 =====  -->
                         <StackPanel
-                            x:Name="PagerBar"
                             Grid.Column="2"
                             HorizontalAlignment="Right"
                             VerticalAlignment="Center"
-                            Orientation="Horizontal"
-                            Visibility="{Binding PagerVisible, Converter={StaticResource BoolToVis}}">
+                            Orientation="Horizontal">
+
+                            <!--  卡片标题只显示一种语言：默认英文，选了中文才去 game_names 左连取中文名  -->
+                            <StackPanel
+                                x:Name="TitleLangPanel"
+                                Margin="0,0,16,0"
+                                VerticalAlignment="Center"
+                                Orientation="Horizontal"
+                                Visibility="{Binding CardListVisible, Converter={StaticResource BoolToVis}}">
+                                <TextBlock
+                                    Margin="0,0,8,0"
+                                    VerticalAlignment="Center"
+                                    FontSize="{StaticResource Fs.Small}"
+                                    Foreground="{StaticResource B.TextMute}"
+                                    Text="当前游戏名：" />
+                                <ComboBox
+                                    x:Name="TitleLangCombo"
+                                    SelectedIndex="0"
+                                    SelectionChanged="TitleLangCombo_SelectionChanged"
+                                    Style="{StaticResource LangCombo}"
+                                    ToolTip="卡片标题显示英文还是中文；没有中文名时显示官网英文名">
+                                    <ComboBoxItem Content="英文" />
+                                    <ComboBoxItem Content="中文" />
+                                </ComboBox>
+                            </StackPanel>
+
+                            <StackPanel
+                                x:Name="PagerBar"
+                                HorizontalAlignment="Right"
+                                VerticalAlignment="Center"
+                                Orientation="Horizontal"
+                                Visibility="{Binding PagerVisible, Converter={StaticResource BoolToVis}}">
                             <TextBlock
                                 x:Name="PagerLoading"
                                 Margin="0,0,12,0"
@@ -1328,6 +1547,7 @@
                                     FontSize="14"
                                     Text="&#xE76C;" />
                             </Button>
+                            </StackPanel>
                         </StackPanel>
                     </Grid>
                 </Border>
@@ -1410,6 +1630,38 @@
                             Foreground="{StaticResource B.TextDim}"
                             LineHeight="22"
                             TextWrapping="Wrap" />
+
+                        <!--  可选项：只在需要「顺手多做一件事」的确认框里显示（默认整块收起）  -->
+                        <StackPanel
+                            x:Name="ConfirmOptionPanel"
+                            Margin="0,16,0,0"
+                            Visibility="Collapsed">
+                            <Border
+                                Padding="12,10"
+                                Background="#FF18293D"
+                                BorderBrush="{StaticResource B.BorderSoft}"
+                                BorderThickness="1"
+                                CornerRadius="9">
+                                <CheckBox x:Name="ConfirmOptionCheck" Style="{StaticResource CheckRow}">
+                                    <StackPanel>
+                                        <TextBlock
+                                            x:Name="ConfirmOptionText"
+                                            FontSize="{StaticResource Fs.Body}"
+                                            Foreground="{StaticResource B.Text}"
+                                            Text="同时做另一件事" />
+                                        <TextBlock
+                                            x:Name="ConfirmOptionHint"
+                                            Margin="0,4,0,0"
+                                            FontSize="{StaticResource Fs.Caption}"
+                                            Foreground="{StaticResource B.TextMute}"
+                                            LineHeight="18"
+                                            TextWrapping="Wrap"
+                                            Text="" />
+                                    </StackPanel>
+                                </CheckBox>
+                            </Border>
+                        </StackPanel>
+
                         <StackPanel
                             Margin="0,20,0,0"
                             HorizontalAlignment="Right"
@@ -1680,7 +1932,7 @@
                                 FontSize="{StaticResource Fs.Title}"
                                 FontWeight="SemiBold"
                                 Foreground="#FFE6EFF8"
-                                Text="灵石结缘" />
+                                Text="打赏赞助" />
                         </StackPanel>
 
                         <Border
@@ -1712,8 +1964,7 @@
                             <Grid
                                 x:Name="AlipayFrame"
                                 Width="220"
-                                Height="330"
->
+                                Height="330">
                                 <Border CornerRadius="10">
                                     <Border.Background>
                                         <!--
@@ -1733,8 +1984,7 @@
                                 x:Name="WxpayFrame"
                                 Width="242"
                                 Height="330"
-                                Margin="16,0,0,0"
->
+                                Margin="16,0,0,0">
                                 <Border CornerRadius="10">
                                     <Border.Background>
                                         <ImageBrush
@@ -1750,8 +2000,8 @@
                         <Button
                             Height="32"
                             MinWidth="96"
-                            Padding="20,0"
                             Margin="0,20,0,0"
+                            Padding="20,0"
                             HorizontalAlignment="Right"
                             Click="SupportClose_Click"
                             Content="知道了"
@@ -1760,16 +2010,19 @@
                 </Border>
             </Grid>
 
-            <!--  ==================== 数据更新 · 同步进度（模态） ====================  -->
+            <!--  ==================== 数据更新 · 更新进度（模态） ====================  -->
             <!--
                 这是真正意义上的模态框：遮罩故意不挂任何鼠标事件，点它什么也不会发生；
-                Esc 在 OnPreviewKeyDown 里也被挡住。想离开只有「取消同步」，
-                同步本身跑在后台线程，取消靠 CancellationToken，不会把界面卡住。
+                Esc 在 OnPreviewKeyDown 里也被挡住。想离开只有「取消更新」，
+                更新本身跑在后台线程，取消靠 CancellationToken，不会把界面卡住。
+
+                这一块整棵子树的 DataContext 是 SyncViewModel（构造函数里挂的），
+                下面所有内容都是单向绑定：代码里只改 Sync.* 的状态，不再直接摸控件。
             -->
             <Grid
                 x:Name="SyncLayer"
                 Grid.ColumnSpan="2"
-                Visibility="Collapsed">
+                Visibility="{Binding IsOpen, Converter={StaticResource BoolToVis}}">
                 <Rectangle Fill="#CC080D15" />
 
                 <Border
@@ -1810,13 +2063,13 @@
                                     FontSize="{StaticResource Fs.Title}"
                                     FontWeight="SemiBold"
                                     Foreground="#FFE6EFF8"
-                                    Text="同步全部游戏数据" />
+                                    Text="{Binding Title}" />
                                 <TextBlock
                                     x:Name="SyncSubtitle"
                                     Margin="0,3,0,0"
                                     FontSize="{StaticResource Fs.Small}"
                                     Foreground="#FF8FA3BA"
-                                    Text="游戏数据与 Steam 中文名并行同步" />
+                                    Text="{Binding Subtitle}" />
                             </StackPanel>
                         </StackPanel>
 
@@ -1826,76 +2079,85 @@
                             Background="#FF24384F"
                             CornerRadius="9">
                             <TextBlock
+                                x:Name="SyncTipText"
                                 FontSize="{StaticResource Fs.Small}"
                                 Foreground="#FFA9C0D6"
                                 LineHeight="20"
-                                TextWrapping="Wrap"><Run Text="游戏数据和中文名同时跑，快慢取决于你的网络，不要着急哦。" /><LineBreak /><Run Text="中文名走 Steam 商店接口，为避免限流大约每秒查一款，慢是正常的。" /></TextBlock>
+                                Text="{Binding Tip}"
+                                TextWrapping="Wrap" />
                         </Border>
 
-                        <!--  ① 游戏数据：官网列表 / 本地详情页  -->
-                        <Grid Margin="0,16,0,0">
-                            <StackPanel VerticalAlignment="Center" Orientation="Horizontal">
-                                <Border
-                                    Width="3"
-                                    Height="12"
-                                    VerticalAlignment="Center"
-                                    Background="{StaticResource B.Accent}"
-                                    CornerRadius="2" />
+                        <!--  ① 游戏数据：官网列表 / 本地详情页（只更新游戏名时整段收起）  -->
+                        <StackPanel
+                            x:Name="SyncDataSection"
+                            Visibility="{Binding Data.Visible, Converter={StaticResource BoolToVis}}">
+                            <Grid Margin="0,16,0,0">
+                                <StackPanel VerticalAlignment="Center" Orientation="Horizontal">
+                                    <Border
+                                        Width="3"
+                                        Height="12"
+                                        VerticalAlignment="Center"
+                                        Background="{StaticResource B.Accent}"
+                                        CornerRadius="2" />
+                                    <TextBlock
+                                        Margin="8,0,0,0"
+                                        VerticalAlignment="Center"
+                                        FontSize="{StaticResource Fs.Small}"
+                                        FontWeight="SemiBold"
+                                        Foreground="#FFCFE0F2"
+                                        Text="更新游戏数据" />
+                                </StackPanel>
                                 <TextBlock
-                                    Margin="8,0,0,0"
+                                    x:Name="SyncPercentText"
+                                    HorizontalAlignment="Right"
                                     VerticalAlignment="Center"
                                     FontSize="{StaticResource Fs.Small}"
-                                    FontWeight="SemiBold"
-                                    Foreground="#FFCFE0F2"
-                                    Text="同步游戏数据" />
-                            </StackPanel>
+                                    Foreground="#FF8FC2FF"
+                                    Text="{Binding Data.Percent}" />
+                            </Grid>
+
+                            <ProgressBar
+                                x:Name="SyncBar"
+                                Height="6"
+                                Margin="0,8,0,0"
+                                IsIndeterminate="{Binding Data.Indeterminate}"
+                                Maximum="1"
+                                Minimum="0"
+                                Style="{StaticResource ThinProgress}"
+                                Value="{Binding Data.Value, Mode=OneWay}" />
+
                             <TextBlock
-                                x:Name="SyncPercentText"
-                                HorizontalAlignment="Right"
-                                VerticalAlignment="Center"
-                                FontSize="{StaticResource Fs.Small}"
-                                Foreground="#FF8FC2FF"
-                                Text="" />
-                        </Grid>
+                                x:Name="SyncGameText"
+                                Margin="0,8,0,0"
+                                FontSize="{StaticResource Fs.Body}"
+                                Foreground="#FFF0F6FD"
+                                Text="{Binding Data.State}"
+                                TextTrimming="CharacterEllipsis" />
+                            <TextBlock
+                                x:Name="SyncPhaseText"
+                                Margin="0,3,0,0"
+                                FontSize="{StaticResource Fs.Caption}"
+                                Foreground="#FF8FA3BA"
+                                Text="{Binding Data.Detail}"
+                                TextTrimming="CharacterEllipsis"
+                                Visibility="{Binding Data.DetailVisible, Converter={StaticResource BoolToVis}}" />
+                            <TextBlock
+                                x:Name="SyncCountText"
+                                Margin="0,3,0,0"
+                                FontSize="{StaticResource Fs.Caption}"
+                                Foreground="#FF8FA3BA"
+                                Text="{Binding Data.Count}"
+                                TextTrimming="CharacterEllipsis"
+                                Visibility="{Binding Data.Count, Converter={StaticResource TextToVis}}" />
 
-                        <ProgressBar
-                            x:Name="SyncBar"
-                            Height="6"
-                            Margin="0,8,0,0"
-                            IsIndeterminate="True"
-                            Maximum="1"
-                            Minimum="0"
-                            Style="{StaticResource ThinProgress}"
-                            Value="0" />
+                            <Border
+                                x:Name="SyncSectionDivider"
+                                Height="1"
+                                Margin="0,16,0,0"
+                                Background="#FF2C4259" />
+                        </StackPanel>
 
-                        <TextBlock
-                            x:Name="SyncGameText"
-                            Margin="0,8,0,0"
-                            FontSize="{StaticResource Fs.Body}"
-                            Foreground="#FFF0F6FD"
-                            Text="正在准备…"
-                            TextTrimming="CharacterEllipsis" />
-                        <TextBlock
-                            x:Name="SyncPhaseText"
-                            Margin="0,3,0,0"
-                            FontSize="{StaticResource Fs.Caption}"
-                            Foreground="#FF8FA3BA"
-                            Text=""
-                            TextTrimming="CharacterEllipsis" />
-                        <TextBlock
-                            x:Name="SyncCountText"
-                            Margin="0,3,0,0"
-                            FontSize="{StaticResource Fs.Caption}"
-                            Foreground="#FF8FA3BA"
-                            Text=""
-                            TextTrimming="CharacterEllipsis" />
-
-                        <Border
-                            Height="1"
-                            Margin="0,16,0,0"
-                            Background="#FF2C4259" />
-
-                        <!--  ② 中文名：数据同步跑完之后自动接着换中文名  -->
+                        <!--  ② 游戏名 + 中文名：名录走官网 All Trainers，中文名走 Steam  -->
                         <Grid Margin="0,15,0,0">
                             <StackPanel VerticalAlignment="Center" Orientation="Horizontal">
                                 <Border
@@ -1905,12 +2167,13 @@
                                     Background="{StaticResource B.Cyan}"
                                     CornerRadius="2" />
                                 <TextBlock
+                                    x:Name="SyncNameLabel"
                                     Margin="8,0,0,0"
                                     VerticalAlignment="Center"
                                     FontSize="{StaticResource Fs.Small}"
                                     FontWeight="SemiBold"
                                     Foreground="#FFCFE0F2"
-                                    Text="同步中文名" />
+                                    Text="{Binding NamesLabel}" />
                             </StackPanel>
                             <TextBlock
                                 x:Name="SyncNamePercentText"
@@ -1918,51 +2181,351 @@
                                 VerticalAlignment="Center"
                                 FontSize="{StaticResource Fs.Small}"
                                 Foreground="#FF8FC2FF"
-                                Text="" />
+                                Text="{Binding Names.Percent}" />
                         </Grid>
 
                         <ProgressBar
                             x:Name="SyncNameBar"
                             Height="6"
                             Margin="0,8,0,0"
-                            IsIndeterminate="False"
+                            IsIndeterminate="{Binding Names.Indeterminate}"
                             Maximum="1"
                             Minimum="0"
                             Style="{StaticResource ThinProgress}"
-                            Value="0" />
+                            Value="{Binding Names.Value, Mode=OneWay}" />
 
                         <TextBlock
                             x:Name="SyncNameStateText"
                             Margin="0,8,0,0"
                             FontSize="{StaticResource Fs.Body}"
                             Foreground="#FFF0F6FD"
-                            Text="等待游戏数据同步完成"
+                            Text="{Binding Names.State}"
                             TextTrimming="CharacterEllipsis" />
                         <TextBlock
                             x:Name="SyncNameDetailText"
                             Margin="0,3,0,0"
                             FontSize="{StaticResource Fs.Caption}"
                             Foreground="#FF8FA3BA"
-                            Text=""
-                            TextTrimming="CharacterEllipsis" />
+                            Text="{Binding Names.Detail}"
+                            TextTrimming="CharacterEllipsis"
+                            Visibility="{Binding Names.DetailVisible, Converter={StaticResource BoolToVis}}" />
+                        <TextBlock
+                            x:Name="SyncNamePairText"
+                            Margin="0,3,0,0"
+                            FontSize="{StaticResource Fs.Caption}"
+                            TextTrimming="CharacterEllipsis"
+                            ToolTip="{Binding Names.PairTooltip}"
+                            Visibility="{Binding Names.ShowPair, Converter={StaticResource BoolToVis}}">
+                            <Run Foreground="#FF8FA3BA" Text="{Binding Names.PairEnglish, Mode=OneWay}" />
+                            <Run Foreground="#FF647E99" Text="{Binding Names.PairArrow, Mode=OneWay}" />
+                            <Run Text="{Binding Names.ChineseText, Mode=OneWay}">
+                                <Run.Style>
+                                    <Style TargetType="Run">
+                                        <Setter Property="Foreground" Value="#FF647E99" />
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding Names.HasChinese}" Value="True">
+                                                <Setter Property="Foreground" Value="#FFDCECFB" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Run.Style>
+                            </Run>
+                        </TextBlock>
                         <TextBlock
                             x:Name="SyncNameCountText"
                             Margin="0,3,0,0"
                             FontSize="{StaticResource Fs.Caption}"
                             Foreground="#FF8FA3BA"
-                            Text=""
-                            TextTrimming="CharacterEllipsis" />
+                            Text="{Binding Names.Count}"
+                            TextTrimming="CharacterEllipsis"
+                            Visibility="{Binding Names.Count, Converter={StaticResource TextToVis}}" />
 
-                        <Button
-                            x:Name="SyncCancelButton"
-                            Height="32"
+                        <!--
+                            ③ Steam 中文名：只有「快速更新游戏名」这一路会单独显示，
+                            和上面的游戏名进度各走各的条，勾了同步才出现。
+                        -->
+                        <StackPanel
+                            x:Name="SyncCnSection"
+                            Opacity="{Binding Chinese.Opacity}"
+                            Visibility="{Binding Chinese.Visible, Converter={StaticResource BoolToVis}}">
+                            <Grid Margin="0,15,0,0">
+                                <StackPanel VerticalAlignment="Center" Orientation="Horizontal">
+                                    <Border
+                                        Width="3"
+                                        Height="12"
+                                        VerticalAlignment="Center"
+                                        Background="{StaticResource B.AccentLight}"
+                                        CornerRadius="2" />
+                                    <TextBlock
+                                        Margin="8,0,0,0"
+                                        VerticalAlignment="Center"
+                                        FontSize="{StaticResource Fs.Small}"
+                                        FontWeight="SemiBold"
+                                        Foreground="#FFCFE0F2"
+                                        Text="更新 Steam 中文名" />
+                                </StackPanel>
+                                <TextBlock
+                                    x:Name="SyncCnPercentText"
+                                    HorizontalAlignment="Right"
+                                    VerticalAlignment="Center"
+                                    FontSize="{StaticResource Fs.Small}"
+                                    Foreground="#FF8FC2FF"
+                                    Text="{Binding Chinese.Percent}" />
+                            </Grid>
+
+                            <ProgressBar
+                                x:Name="SyncCnBar"
+                                Height="6"
+                                Margin="0,8,0,0"
+                                IsIndeterminate="{Binding Chinese.Indeterminate}"
+                                Maximum="1"
+                                Minimum="0"
+                                Style="{StaticResource ThinProgress}"
+                                Value="{Binding Chinese.Value, Mode=OneWay}" />
+
+                            <TextBlock
+                                x:Name="SyncCnStateText"
+                                Margin="0,8,0,0"
+                                FontSize="{StaticResource Fs.Body}"
+                                Foreground="#FFF0F6FD"
+                                Text="{Binding Chinese.State}"
+                                TextTrimming="CharacterEllipsis" />
+
+                            <!--  明细行有两种：普通说明，或者「英文名 >> 中文名」的三色对照，互斥只显示一个  -->
+                            <TextBlock
+                                x:Name="SyncCnDetailText"
+                                Margin="0,3,0,0"
+                                FontSize="{StaticResource Fs.Caption}"
+                                Foreground="#FF8FA3BA"
+                                Text="{Binding Chinese.Detail}"
+                                TextTrimming="CharacterEllipsis"
+                                Visibility="{Binding Chinese.DetailVisible, Converter={StaticResource BoolToVis}}" />
+                            <TextBlock
+                                x:Name="SyncCnPairText"
+                                Margin="0,3,0,0"
+                                FontSize="{StaticResource Fs.Caption}"
+                                TextTrimming="CharacterEllipsis"
+                                ToolTip="{Binding Chinese.PairTooltip}"
+                                Visibility="{Binding Chinese.ShowPair, Converter={StaticResource BoolToVis}}">
+                                <Run Foreground="#FF8FA3BA" Text="{Binding Chinese.PairEnglish, Mode=OneWay}" />
+                                <Run Foreground="#FF647E99" Text="{Binding Chinese.PairArrow, Mode=OneWay}" />
+                                <Run Text="{Binding Chinese.ChineseText, Mode=OneWay}">
+                                    <Run.Style>
+                                        <Style TargetType="Run">
+                                            <Setter Property="Foreground" Value="#FF647E99" />
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding Chinese.HasChinese}" Value="True">
+                                                    <Setter Property="Foreground" Value="#FFDCECFB" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Run.Style>
+                                </Run>
+                            </TextBlock>
+
+                            <TextBlock
+                                x:Name="SyncCnCountText"
+                                Margin="0,3,0,0"
+                                FontSize="{StaticResource Fs.Caption}"
+                                Foreground="#FF8FA3BA"
+                                Text="{Binding Chinese.Count}"
+                                TextTrimming="CharacterEllipsis"
+                                Visibility="{Binding Chinese.Count, Converter={StaticResource TextToVis}}" />
+                        </StackPanel>
+
+                        <!--  开始前的可选项：勾了才连带查 Steam 中文名（默认不勾，开跑后整块锁住）  -->
+                        <StackPanel
+                            x:Name="SyncSteamOptionPanel"
+                            Margin="0,16,0,0"
+                            IsEnabled="{Binding SteamOptionEnabled}"
+                            Visibility="{Binding SteamOptionVisible, Converter={StaticResource BoolToVis}}">
+                            <Border
+                                Padding="12,10"
+                                Background="#FF18293D"
+                                BorderBrush="{StaticResource B.BorderSoft}"
+                                BorderThickness="1"
+                                CornerRadius="9">
+                                <CheckBox
+                                    x:Name="SyncSteamCheck"
+                                    IsChecked="{Binding SteamChecked, Mode=TwoWay}"
+                                    Style="{StaticResource CheckRow}">
+                                    <StackPanel>
+                                        <TextBlock
+                                            FontSize="{StaticResource Fs.Body}"
+                                            Foreground="{StaticResource B.Text}"
+                                            Text="同时更新 Steam 中文名" />
+                                        <TextBlock
+                                            Margin="0,4,0,0"
+                                            FontSize="{StaticResource Fs.Caption}"
+                                            Foreground="{StaticResource B.TextMute}"
+                                            LineHeight="18"
+                                            Text="如果同步中文名可能会需要一点时间"
+                                            TextWrapping="Wrap" />
+                                    </StackPanel>
+                                </CheckBox>
+                            </Border>
+                        </StackPanel>
+
+                        <StackPanel
                             Margin="0,18,0,0"
-                            Padding="18,0"
                             HorizontalAlignment="Right"
-                            Click="SyncCancel_Click"
-                            Content="取消同步"
+                            Orientation="Horizontal">
+                            <Button
+                                x:Name="SyncCancelButton"
+                                Height="32"
+                                Padding="18,0"
+                                Command="{Binding CancelCommand}"
+                                Content="{Binding CancelText}"
+                                FontSize="{StaticResource Fs.Body}"
+                                IsEnabled="{Binding CancelEnabled}"
+                                Style="{StaticResource GhostBtn}" />
+                            <Button
+                                x:Name="SyncStartButton"
+                                Height="32"
+                                Margin="10,0,0,0"
+                                Padding="18,0"
+                                Command="{Binding StartCommand}"
+                                Content="{Binding StartText}"
+                                FontSize="{StaticResource Fs.Body}"
+                                IsEnabled="{Binding StartEnabled}"
+                                Style="{StaticResource PrimaryBtn}"
+                                Visibility="{Binding StartVisible, Converter={StaticResource BoolToVis}}" />
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+            </Grid>
+
+            <!--  ==================== 更新弹窗（发现新版本 / 更新内容） ====================  -->
+            <!--
+                同一个弹窗两种用法：启动检查或手动检查发现新版本 → 带「立即更新」；
+                设置里点「查看更新」→ 只读说明，按钮变成「知道了」。
+                结构和「关于」弹窗一致：点遮罩关闭、点卡片不关，动画见 ShowUpdateDialog / CloseUpdateDialog。
+            -->
+            <Grid
+                x:Name="UpdateLayer"
+                Grid.ColumnSpan="2"
+                Visibility="Collapsed">
+                <Rectangle
+                    x:Name="UpdateBackdrop"
+                    Fill="#66080D15"
+                    MouseLeftButtonDown="UpdateBackdrop_MouseLeftButtonDown"
+                    Opacity="0" />
+
+                <Border
+                    x:Name="UpdateCard"
+                    Width="700"
+                    MaxHeight="700"
+                    Padding="26,24"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    Background="#FF1D3249"
+                    BorderBrush="{StaticResource B.Border}"
+                    BorderThickness="1"
+                    CornerRadius="14"
+                    Opacity="0"
+                    RenderTransformOrigin="0.5,0.5">
+                    <Border.RenderTransform>
+                        <TransformGroup>
+                            <ScaleTransform x:Name="UpdateScale" ScaleX="0.93" ScaleY="0.93" />
+                            <TranslateTransform x:Name="UpdateShift" Y="10" />
+                        </TransformGroup>
+                    </Border.RenderTransform>
+                    <Border.Effect>
+                        <DropShadowEffect
+                            BlurRadius="28"
+                            Direction="270"
+                            Opacity="0.45"
+                            ShadowDepth="10"
+                            Color="#FF000000" />
+                    </Border.Effect>
+
+                    <StackPanel>
+                        <!--  头部：Logo + 标题 + 版本变化  -->
+                        <StackPanel Orientation="Horizontal">
+                            <Image
+                                Width="42"
+                                Height="42"
+                                RenderOptions.BitmapScalingMode="HighQuality"
+                                Source="/Assets/logo.png"
+                                Stretch="Uniform" />
+                            <StackPanel Margin="13,0,0,0" VerticalAlignment="Center">
+                                <TextBlock
+                                    x:Name="UpdateTitleText"
+                                    FontSize="{StaticResource Fs.Title}"
+                                    FontWeight="SemiBold"
+                                    Foreground="#FFE6EFF8"
+                                    Text="发现新版本" />
+                                <TextBlock
+                                    x:Name="UpdateVersionText"
+                                    Margin="0,4,0,0"
+                                    FontSize="{StaticResource Fs.Small}"
+                                    Foreground="#FF8FA3BA"
+                                    Text="" />
+                            </StackPanel>
+                        </StackPanel>
+
+                        <Border
+                            Height="1"
+                            Margin="0,18,0,14"
+                            Background="{StaticResource B.BorderSoft}" />
+
+                        <!--  更新内容正文：只读 TextBox（能拖选 / Ctrl+C），外观按 TextBlock 调  -->
+                        <TextBox
+                            x:Name="UpdateNotesBox"
+                            MaxHeight="392"
+                            Padding="0,0,4,0"
+                            AcceptsReturn="True"
+                            Background="Transparent"
+                            BorderThickness="0"
+                            CaretBrush="Transparent"
+                            FocusVisualStyle="{x:Null}"
+                            FontFamily="{StaticResource F.Ui}"
                             FontSize="{StaticResource Fs.Body}"
-                            Style="{StaticResource GhostBtn}" />
+                            Foreground="#FFE8F1FA"
+                            HorizontalScrollBarVisibility="Disabled"
+                            IsReadOnly="True"
+                            IsReadOnlyCaretVisible="False"
+                            SelectionBrush="#807CBBFF"
+                            TextBlock.LineHeight="25"
+                            TextWrapping="Wrap"
+                            VerticalScrollBarVisibility="Auto" />
+
+                        <!--  底部：左边一句说明，右边两个按钮  -->
+                        <Grid Margin="0,20,0,0">
+                            <TextBlock
+                                x:Name="UpdateHintText"
+                                MaxWidth="360"
+                                HorizontalAlignment="Left"
+                                VerticalAlignment="Center"
+                                FontSize="{StaticResource Fs.Caption}"
+                                Foreground="#FF7E93A9"
+                                LineHeight="18"
+                                Text="下载完成后会自动覆盖安装，程序会重启一次。"
+                                TextWrapping="Wrap" />
+
+                            <StackPanel
+                                HorizontalAlignment="Right"
+                                VerticalAlignment="Center"
+                                Orientation="Horizontal">
+                                <Button
+                                    x:Name="UpdateLaterButton"
+                                    Height="32"
+                                    Padding="18,0"
+                                    Click="UpdateLater_Click"
+                                    Content="稍后再说"
+                                    FontSize="{StaticResource Fs.Body}"
+                                    Style="{StaticResource GhostBtn}" />
+                                <Button
+                                    x:Name="UpdateNowButton"
+                                    Height="32"
+                                    Margin="10,0,0,0"
+                                    Padding="20,0"
+                                    Click="UpdateNow_Click"
+                                    Content="立即更新"
+                                    FontSize="{StaticResource Fs.Body}"
+                                    Style="{StaticResource PrimaryBtn}" />
+                            </StackPanel>
+                        </Grid>
                     </StackPanel>
                 </Border>
             </Grid>

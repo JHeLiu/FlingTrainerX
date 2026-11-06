@@ -11,7 +11,13 @@ public enum SyncKind
     All,
 
     /// <summary>逐款重抓本地已有游戏的详情页（下载表 + 介绍图）。</summary>
-    Existing
+    Existing,
+
+    /// <summary>
+    /// 只更新游戏名库（搜索提示用）：重抓官网名录，不抓详情、不查 Steam 中文名。
+    /// 这一段不经过 <see cref="TrainerSyncService"/>，由界面自己跑，枚举里放它只是为了共用同一套进度框。
+    /// </summary>
+    Names
 }
 
 /// <summary>同步走到哪一步，界面按它切换文案。</summary>
@@ -87,9 +93,9 @@ public sealed class SyncResult
     {
         get
         {
-            if (Error is not null) return $"同步失败：{Error}";
+            if (Error is not null) return $"更新失败：{Error}";
 
-            var head = Canceled ? "已取消同步" : "同步完成";
+            var head = Canceled ? "已取消更新" : "更新完成";
             var body = $"检查 {Total} 款 · 更新 {Updated} · 跳过 {Skipped}";
             if (Failed > 0) body += $" · 失败 {Failed}";
 
@@ -295,7 +301,7 @@ public static class TrainerSyncService
 
         if (items.Count == 0)
         {
-            result.Error = "本地还没有数据，先点一次「同步全部数据」";
+            result.Error = "本地还没有数据，先点一次「更新全部游戏数据」";
             result.Elapsed = watch.Elapsed;
             return result;
         }

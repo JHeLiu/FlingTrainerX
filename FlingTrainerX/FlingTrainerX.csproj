@@ -12,12 +12,17 @@
     <NoWarn>$(NoWarn);WFO0003</NoWarn>
     <RootNamespace>FlingTrainerX</RootNamespace>
     <!-- 程序集/可执行文件名就用中文，桌面、开始菜单里的快捷方式名才会跟着对 -->
-    <AssemblyName>风灵月影宗储物袋</AssemblyName>
-    <AssemblyTitle>风灵月影宗储物袋</AssemblyTitle>
-    <Product>风灵月影宗储物袋</Product>
-    <Description>风灵月影宗储物袋 · FLiNG 修改器库</Description>
+    <AssemblyName>风灵月影宗藏宝阁</AssemblyName>
+    <AssemblyTitle>风灵月影宗藏宝阁</AssemblyTitle>
+    <Product>风灵月影宗藏宝阁</Product>
+    <Description>风灵月影宗藏宝阁 · FLiNG 修改器库</Description>
     <Company>风灵月影宗</Company>
-    <Version>1.0.0</Version>
+    <!--
+        在线更新靠这个版本号判断新旧（读的是程序集版本，见 UpdateService.CurrentVersion）。
+        打包脚本 .pro\publish.ps1 会用 -p:Version=<version.txt> 覆盖它，
+        这里写的是「开发机直接编译」时的版本，跟 .pro\version.txt 保持一致即可。
+    -->
+    <Version>1.0.2</Version>
     <!-- exe / 任务栏 / 桌面快捷方式统一用这个多尺寸图标 -->
     <ApplicationIcon>Assets\app.ico</ApplicationIcon>
     <!-- PerMonitorV2：高 DPI 与多屏混合缩放的关键，清单位于 app.manifest -->
@@ -35,10 +40,15 @@
   <ItemGroup>
     <!-- 免责声明正文：放成独立文本文件，随程序一起发布，改文案不用重新编译 -->
     <None Update="Assets\免责声明.txt" CopyToOutputDirectory="PreserveNewest" />
+    <!-- 在线更新的仓库地址：换仓库 / 私有库填 token 都改这个文件，不用重新编译 -->
+    <None Update="Assets\update.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="AngleSharp" Version="1.9.0" />
+    <!-- 在线更新：下载 + 解压覆盖 + 重启整套流程都交给它（见 Services\UpdateService.cs） -->
+    <PackageReference Include="Autoupdater.NET.Official" Version="1.9.3" />
+    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.0" />
     <PackageReference Include="SqlSugarCore" Version="5.1.4.221" />
   </ItemGroup>
 

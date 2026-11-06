@@ -165,8 +165,38 @@ public sealed class TrainerItem : INotifyPropertyChanged
         ? string.Join(" · ", Platforms)
         : "";
 
-    /// <summary>卡片/标题上显示的主标题：官网原始标题（去掉固定的 "Trainer" 后缀）。</summary>
-    [JsonIgnore] public string DisplayTitle => CleanTitle;
+    /// <summary>
+    /// 卡片标题用中文还是英文（全局开关，设置栏那个「当前游戏名」下拉控制，默认英文）。
+    /// 切语言时各卡片重新取一次 <see cref="DisplayTitle"/> 即可。
+    /// </summary>
+    public static bool UseChineseTitle { get; set; }
+
+    private string _nameCn = "";
+
+    /// <summary>
+    /// 从 game_names 表左连过来的简体中文名；查不到就是空串，标题自动退回官网英文名。
+    /// </summary>
+    [JsonIgnore]
+    public string NameCn
+    {
+        get => _nameCn;
+        set
+        {
+            var text = value ?? "";
+            if (_nameCn == text) return;
+            _nameCn = text;
+            Raise(nameof(NameCn));
+            Raise(nameof(DisplayTitle));
+        }
+    }
+
+    /// <summary>
+    /// 卡片/标题上显示的主标题：跟着全局语言开关走，只显示一种语言。
+    /// 选了中文但这款没有中文名时，退回官网英文标题（以游戏数据表为准）。
+    /// </summary>
+    [JsonIgnore]
+    public string DisplayTitle =>
+        UseChineseTitle && _nameCn.Length > 0 ? _nameCn : CleanTitle;
 
     [JsonIgnore] public string CleanTitle =>
         Title.Replace(" Trainer", "").Replace(" Enhanced", "").Trim();

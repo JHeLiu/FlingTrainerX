@@ -1,6 +1,6 @@
-# 风灵月影宗储物袋 · FlingTrainerX
+﻿# 风灵月影宗藏宝阁 · FlingTrainerX
 
-**风灵月影宗储物袋** —— 一个 WPF 版的「单机游戏修改器」浏览器，界面参考现代化游戏启动器，
+**风灵月影宗藏宝阁** —— 一个 WPF 版的「单机游戏修改器」浏览器，界面参考现代化游戏启动器，
 数据来自 [flingtrainer.com](https://flingtrainer.com/)。浏览器里能做的事，这里都能做：
 翻游戏库、看修改项、**把修改器直接下到本机**。
 
@@ -73,9 +73,18 @@
 - **收藏夹（本地 SQLite）**：详情页「加入收藏夹」写入 `<程序目录>\dbs\fling.db`，
   收藏夹视图按收藏时间倒序展示，卡片左上角可直接取消收藏；库里没加载到的游戏用数据库里的
   JSON 快照还原，重启/翻页都不会丢。侧栏实时显示收藏数量。
-- **官网数据同步**：右上角同步按钮会调用 WordPress REST 接口
-  `https://flingtrainer.com/wp-json/wp/v2/posts` 重新抓取游戏名称、更新时间与修改项，
-  抓到的数据同时刷新 `trainer_cache` 表。
+- **官网数据更新**：设置 → 数据更新里的「更新全部 / 更新已有游戏数据」，两条线**同时开跑、互不等待**：
+  一条走官网列表 / 详情页刷新游戏名称、更新时间与修改项（写 `trainer_cache`），
+  另一条走官网 [All Trainers 名录](https://flingtrainer.com/all-trainers/) 重建 `game_names`、再去 Steam 换中文名 ——
+  两条线写不同的表，谁也不等谁，弹框里两条进度条各自跟着自己的线走。
+- **快速更新游戏名**：设置 → 数据更新里的「快速搜索游戏名」，只解析官网
+  [All Trainers (A-Z)](https://flingtrainer.com/all-trainers/) 一页名录（缺的数字开头 / 新上架条目
+  再用一个很小的接口请求补齐），约 3 秒把 700 多款游戏写进 `game_names` 表 ——
+  不抓详情、不查 Steam 中文名，已经换到的中文名按标题带过去。搜索框的智能提示靠它。
+  点「开始更新」会先弹一个确认框，**可勾选「同时更新 Steam 中文名」**（默认不勾，勾了要逐款查 Steam，
+  耗时会明显变长），点确认才真的开跑。它和上面两行共用同一套**模态**进度框
+  （点遮层、按 `Esc` 都关不掉，只能点「取消更新」），读名录时逐条滚出游戏名，
+  收尾写明多少款、保留了多少中文名。
 - **搜索走官网**：输入过程中不发请求、不动列表，**按回车**才带 `search=` 参数向官网要结果
   （`/wp-json/wp/v2/posts?search=…`，和官网搜索页 `/?s=` 同一套结果与顺序），
   结果同样支持滚动翻页；清空后回车（或 Esc）回到原来的游戏库，翻页进度不受影响。
@@ -89,6 +98,10 @@
   确认后清空 SQLite 的 `trainer_cache` 表并删除 `f` 目录下的全部文件与子目录（收藏表不动）。
   清除期间缓存写入「静音」—— 在途的封面 / 修改器下载会被立刻取消并清掉半成品，
   之后多轮扫尾直到目录真的一尘不染；状态栏汇报清掉的记录数、文件数与总大小。
+- **在线更新（Gitee 发行版）**：每次启动后自动查一次有没有新版本，查到就弹「发现新版本」
+  （版本号 + 更新说明 + 立即更新）；设置页新增「关于」分组，可以手动「检查更新」，
+  也可以只「查看更新」看发版说明。点「立即更新」由 AutoUpdater.NET 下载更新包、等程序退出后
+  解压覆盖、再把新版本拉起来 —— 详见 [在线更新](#在线更新gitee-发行版)。
 - 自绘标题栏、圆角卡片、悬停高亮 + 封面轻微放大、弹框淡入上滑动画。
 
 ## 直接下载与下载队列
@@ -326,6 +339,51 @@ Services/AppDatabase.cs
 - 断网时保留缓存内容，副标题追加「离线显示本地缓存」，只在完全没有数据时才进空状态。
 - 想强制重新抓：删掉 `dbs\fling.db` 里的 `trainer_cache` 表（或整个 `f` 文件夹）即可。
 
+## 在线更新（Gitee 发行版）
+
+更新源就是本仓库的**发行版（releases）**：`https://gitee.com/misslius/FlingTrainerX/releases`。
+
+### 客户端怎么查
+
+1. 启动 4 秒后（不和读库 / 拉封面抢带宽）请求 Gitee 接口
+   `https://gitee.com/api/v5/repos/misslius/FlingTrainerX/releases/latest`；
+2. 用 `tag_name` 当版本号（`v` 前缀自动去掉），和 exe 里的程序集版本比大小；
+3. 比本机新就弹「发现新版本」，`body` 里的发行说明洗完标记后直接铺进弹窗；
+4. 附件优先挑 `.zip`（更新包），没有 zip 才退回 `.exe`（安装包）。
+
+检查失败（断网 / 仓库没公开 / 接口抽风）一律安静处理：启动检查不打扰用户，
+手动检查才在状态栏写一句原因，例如「没找到 Gitee 仓库或发行版（404）」。
+
+### 怎么装
+
+点「立即更新」后交给 [AutoUpdater.NET](https://github.com/ravibpatel/AutoUpdater.NET)：
+
+- **zip 更新包**：内置的 `ZipExtractor` 会等本进程完全退出再解压覆盖，替换完自动把新版本拉起来；
+  `dbs\`（收藏、缓存）和 `f\`（封面、修改器）不在包里，原样保留；
+- **exe 安装包**：以 `/SILENT /CLOSEAPPLICATIONS /RESTARTAPPLICATIONS` 静默安装。
+
+### 发版时要做的事
+
+1. 双击 `.pro\BuildPackage.bat`，按提示输入版本号（如 `1.0.3`）；
+2. 产物两个，都在 `.pro\<版本号>\` 下：
+   - `风灵月影宗藏宝阁-安装包-<版本号>.exe` —— 首次安装用
+   - `风灵月影宗藏宝阁-更新包-<版本号>.zip` —— **在线更新用，必须传**
+3. 到 Gitee 新建发行版，**tag 用 `v<版本号>`**（如 `v1.0.3`），把上面两个文件传成附件，
+   发行说明写在正文里（就是客户端弹窗里显示的那段文字）。
+
+> 版本号是打包脚本用 `-p:Version=` 写进 exe 的，所以**必须走打包脚本**发布；
+> 直接 `dotnet publish` 出来的 exe 版本号还是 csproj 里的值，会让更新判断失准。
+
+### 换仓库 / 私有仓库
+
+仓库地址写在 `Assets\update.json`（随程序发布，改完不用重新编译）：
+
+```json
+{ "owner": "misslius", "repo": "FlingTrainerX", "token": "" }
+```
+
+仓库是私有的就填一个 Gitee `access_token`，公开仓库留空即可。
+
 ## 项目结构
 
 ```
@@ -333,10 +391,12 @@ FlingTrainerX/
 ├─ app.manifest            PerMonitorV2 高 DPI 声明
 ├─ Assets/
 │  ├─ app.ico             应用图标（16/20/24/32/40/48/64/96/128/256 共 10 档，exe / 任务栏 / 快捷方式共用）
-│  └─ logo.png            侧栏 Logo 与窗口图标（256 PNG）
+│  ├─ logo.png            侧栏 Logo 与窗口图标（256 PNG）
+│  └─ update.json         在线更新的仓库地址（owner / repo / token），随程序发布
 ├─ Models/
 │  ├─ TrainerItem.cs       数据模型（封面 / 截图的本地路径、显示用计算属性、属性变更通知）
 │  ├─ CardRow.cs           虚拟滚动的行容器（一行几张随窗口宽度变）
+│  ├─ UpdateRelease.cs     一个可用版本：版本号、发行说明、更新包直链与大小
 │  └─ DownloadTask.cs      下载任务状态机 + 进度 / 速度 / 剩余时间显示
 ├─ ViewModels/
 │  ├─ DownloadRowVm.cs     下载表格的一行：官网下载记录 + 下载任务
@@ -350,6 +410,7 @@ FlingTrainerX/
 │  ├─ NetImages.cs         图片统一入口（本地文件读盘 + 网络地址在线加载 + 内存复用）
 │  ├─ TrainerDataService.cs 缓存读写 / 本地路径合并 / 收藏读写
 │  ├─ AppDatabase.cs       SQLite（SqlSugar 单例）：收藏表 + 卡片缓存表
+│  ├─ UpdateService.cs     在线更新：查 Gitee 发行版、解析版本 / 说明 / 附件，下载安装交给 AutoUpdater.NET
 │  └─ UserAgentProvider.cs 按本机 Edge 版本生成 UA 与浏览器请求头
 ├─ Converters/Converters.cs 图片、可见性转换器
 ├─ Themes/Theme.xaml       配色、按钮、卡片、虚拟滚动列表、选项卡、下载行、截图卡等样式
@@ -365,11 +426,11 @@ dotnet run --project FlingTrainerX/FlingTrainerX.csproj
 ```
 
 产物在 `FlingTrainerX\bin\Release\net10.0-windows\`，可执行文件名取自 `<AssemblyName>`，
-即 **`风灵月影宗储物袋.exe`**（解决方案名、命名空间仍是 `FlingTrainerX`，不影响编译路径）。
+即 **`风灵月影宗藏宝阁.exe`**（解决方案名、命名空间仍是 `FlingTrainerX`，不影响编译路径）。
 图标已经编译进 exe 的 Win32 资源，从它建出的桌面 / 任务栏快捷方式会自动继承同一枚图标。
 
 需要 .NET 10 SDK（`net10.0-windows`），NuGet 依赖：`SqlSugarCore`（含 `Microsoft.Data.Sqlite`）、
-`AngleSharp`。
+`AngleSharp`、`Autoupdater.NET.Official`（在线更新的下载 / 解压 / 重启）。
 
 ## 快捷键
 

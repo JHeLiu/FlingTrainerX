@@ -265,6 +265,19 @@
         <Setter Property="ScrollViewer.VerticalScrollBarVisibility" Value="Disabled" />
     </Style>
 
+    <!--
+        设置页左侧的分组菜单：比主导航矮一档、字号也小一点，
+        选中态沿用主导航那根蓝色小竖条，视觉上还是同一套语言。
+    -->
+    <Style x:Key="SetNavItem" TargetType="ListBoxItem" BasedOn="{StaticResource NavItem}">
+        <Setter Property="Height" Value="34" />
+        <Setter Property="FontSize" Value="{StaticResource Fs.Body}" />
+    </Style>
+
+    <Style x:Key="SetNavList" TargetType="ListBox" BasedOn="{StaticResource NavList}">
+        <Setter Property="ItemContainerStyle" Value="{StaticResource SetNavItem}" />
+    </Style>
+
     <!--  ============ 按钮 ============  -->
     <Style x:Key="IconBtn" TargetType="Button">
         <Setter Property="Width" Value="34" />
@@ -805,6 +818,128 @@
         </Setter>
     </Style>
 
+    <!--  ============ 下拉框（右下角「当前游戏名」） ============  -->
+    <Style x:Key="LangComboItem" TargetType="ComboBoxItem">
+        <Setter Property="Height" Value="30" />
+        <Setter Property="Padding" Value="10,0" />
+        <Setter Property="Foreground" Value="#FFC3D4E6" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ComboBoxItem">
+                    <Border
+                        x:Name="Root"
+                        Padding="{TemplateBinding Padding}"
+                        Background="Transparent"
+                        CornerRadius="6">
+                        <ContentPresenter VerticalAlignment="Center" />
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Root" Property="Background" Value="#FF1E3348" />
+                            <Setter Property="Foreground" Value="#FFE4EEF9" />
+                        </Trigger>
+                        <Trigger Property="IsSelected" Value="True">
+                            <Setter TargetName="Root" Property="Background" Value="#FF1D324C" />
+                            <Setter Property="Foreground" Value="#FFF4F9FF" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style x:Key="LangCombo" TargetType="ComboBox">
+        <Setter Property="Height" Value="28" />
+        <Setter Property="MinWidth" Value="86" />
+        <Setter Property="Foreground" Value="#FFDCE8F5" />
+        <Setter Property="FontSize" Value="{StaticResource Fs.Small}" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="ItemContainerStyle" Value="{StaticResource LangComboItem}" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ComboBox">
+                    <Grid>
+                        <Border
+                            x:Name="Bd"
+                            Background="#FF1B2B40"
+                            BorderBrush="#FF2F4967"
+                            BorderThickness="1"
+                            CornerRadius="8">
+                            <Grid>
+                                <ContentPresenter
+                                    Margin="10,0,24,0"
+                                    VerticalAlignment="Center"
+                                    Content="{TemplateBinding SelectionBoxItem}"
+                                    ContentStringFormat="{TemplateBinding SelectionBoxItemStringFormat}"
+                                    ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}" />
+                                <TextBlock
+                                    Margin="0,0,9,0"
+                                    HorizontalAlignment="Right"
+                                    VerticalAlignment="Center"
+                                    FontFamily="{StaticResource F.Icon}"
+                                    FontSize="10"
+                                    Foreground="#FF8FA3BA"
+                                    Text="&#xE70D;" />
+                            </Grid>
+                        </Border>
+
+                        <!--  透明按钮盖在上面：点整块都能展开，外观全交给下面的 Border  -->
+                        <ToggleButton
+                            x:Name="ToggleButton"
+                            Background="Transparent"
+                            ClickMode="Press"
+                            Focusable="False"
+                            IsChecked="{Binding IsDropDownOpen, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}">
+                            <ToggleButton.Template>
+                                <ControlTemplate TargetType="ToggleButton">
+                                    <Border Background="Transparent" />
+                                </ControlTemplate>
+                            </ToggleButton.Template>
+                        </ToggleButton>
+
+                        <Popup
+                            x:Name="PART_Popup"
+                            AllowsTransparency="True"
+                            IsOpen="{TemplateBinding IsDropDownOpen}"
+                            Placement="Top"
+                            PopupAnimation="Fade"
+                            StaysOpen="False">
+                            <Border
+                                MinWidth="{Binding ActualWidth, RelativeSource={RelativeSource TemplatedParent}}"
+                                Margin="0,6,0,6"
+                                Padding="4"
+                                Background="#FF16202D"
+                                BorderBrush="#FF2C3E53"
+                                BorderThickness="1"
+                                CornerRadius="8">
+                                <Border.Effect>
+                                    <DropShadowEffect
+                                        BlurRadius="18"
+                                        Direction="270"
+                                        Opacity="0.5"
+                                        ShadowDepth="4"
+                                        Color="#FF000000" />
+                                </Border.Effect>
+                                <ScrollViewer MaxHeight="200" VerticalScrollBarVisibility="Auto">
+                                    <ItemsPresenter />
+                                </ScrollViewer>
+                            </Border>
+                        </Popup>
+                    </Grid>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Bd" Property="BorderBrush" Value="#FF4A6C8F" />
+                        </Trigger>
+                        <Trigger Property="IsDropDownOpen" Value="True">
+                            <Setter TargetName="Bd" Property="BorderBrush" Value="{StaticResource B.Accent}" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
     <!--  ============ 详情弹框：选项卡 ============  -->
     <Style x:Key="DetailTab" TargetType="Button">
         <Setter Property="Background" Value="Transparent" />
@@ -1210,6 +1345,70 @@
         <Setter Property="Margin" Value="10,6,0,4" />
         <Setter Property="FontSize" Value="{StaticResource Fs.Caption}" />
         <Setter Property="Foreground" Value="{StaticResource B.TextMute}" />
+    </Style>
+
+    <!--
+        带说明的复选框行（确认框里的「同时更新 Steam 中文名」这类开关）：
+        系统自带那个小方框在深蓝底上很扎眼，这里自己画一个 18×18 的圆角方框，
+        勾上时变成主题蓝底 + 白色对勾，说明文字挂在 Content 下面。
+    -->
+    <Style x:Key="CheckRow" TargetType="CheckBox">
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="Focusable" Value="False" />
+        <Setter Property="FontFamily" Value="{StaticResource F.Ui}" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="CheckBox">
+                    <Grid Background="Transparent">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+
+                        <Border
+                            x:Name="box"
+                            Width="18"
+                            Height="18"
+                            Margin="0,1,0,0"
+                            VerticalAlignment="Top"
+                            Background="#FF16283B"
+                            BorderBrush="#FF4A6582"
+                            BorderThickness="1"
+                            CornerRadius="5">
+                            <TextBlock
+                                x:Name="tick"
+                                HorizontalAlignment="Center"
+                                VerticalAlignment="Center"
+                                FontFamily="{StaticResource F.Icon}"
+                                FontSize="11"
+                                FontWeight="Bold"
+                                Foreground="White"
+                                Text="&#xE73E;"
+                                Visibility="Collapsed" />
+                        </Border>
+
+                        <ContentPresenter
+                            Grid.Column="1"
+                            Margin="10,0,0,0"
+                            VerticalAlignment="Top" />
+                    </Grid>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsChecked" Value="True">
+                            <Setter TargetName="box" Property="Background" Value="{StaticResource B.Accent}" />
+                            <Setter TargetName="box" Property="BorderBrush" Value="{StaticResource B.Accent}" />
+                            <Setter TargetName="tick" Property="Visibility" Value="Visible" />
+                        </Trigger>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="box" Property="BorderBrush" Value="{StaticResource B.AccentLight}" />
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter Property="Opacity" Value="0.45" />
+                            <Setter Property="Cursor" Value="Arrow" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
     </Style>
 
 </ResourceDictionary>
