@@ -67,14 +67,14 @@
                     FontSize="{StaticResource Fs.Body}"
                     Foreground="{StaticResource B.TextDim}"
                     LineHeight="21"
-                    Text="已经在运行，已为你切回原来的窗口。"
+                    Text="{Binding Message}"
                     TextWrapping="Wrap" />
                 <Button
                     Height="34"
                     Margin="0,16,0,0"
                     Padding="16,0"
                     HorizontalAlignment="Right"
-                    Click="Ok_Click"
+                    Command="{Binding CloseCommand}"
                     Content="知道了"
                     FontSize="{StaticResource Fs.Body}"
                     Style="{StaticResource PrimaryBtn}" />

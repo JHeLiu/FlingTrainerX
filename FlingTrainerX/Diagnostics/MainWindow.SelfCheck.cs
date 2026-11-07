@@ -20,6 +20,7 @@ using WinForms = System.Windows.Forms;
 using FlingTrainerX.Models;
 using FlingTrainerX.Services;
 using FlingTrainerX.ViewModels;
+using FlingTrainerX.Interop;
 using FlingTrainerX.Views;
 
 namespace FlingTrainerX;
@@ -29,6 +30,144 @@ namespace FlingTrainerX;
 /// </summary>
 public partial class MainWindow
 {
+    // ==================== 自检兼容层 ====================
+    //
+    // 业务状态已经搬进 ViewModel / 服务里了，自检代码仍然按老名字读状态。
+    // 这里统一转一层：自检不用为了「字段搬家」整篇改写，正式代码也不会用到这些。
+
+#if DEBUG
+    /// <summary>当前页的条目（只读）。</summary>
+    private IReadOnlyList<TrainerItem> _items => Library.Items;
+
+    /// <summary>内存里那份库（只读）。</summary>
+    private TrainerLibrary _library => _catalog.Library;
+
+    /// <summary>收藏夹（只读）。</summary>
+    private List<TrainerItem> _favorites => _catalog.Favorites;
+
+    /// <summary>游戏库分页进度。</summary>
+    private PageCursor _libraryPager => Library.LibraryPager;
+
+    /// <summary>搜索分页进度。</summary>
+    private PageCursor _searchPager => Library.SearchPager;
+
+    /// <summary>首屏是否还在读本地库。</summary>
+    private bool _firstLoading => Library.IsFirstLoading;
+
+    /// <summary>首屏读库失败的原因（没有就是空串）。</summary>
+    private string _firstError => Library.FirstError ?? "";
+
+    /// <summary>当前生效的搜索词。</summary>
+    private string _keyword => Library.Keyword;
+
+    /// <summary>这次搜索结果是不是来自本地。</summary>
+    private bool _searchFromLocal => Library.SearchFromLocal;
+
+    /// <summary>当前显示哪一块。</summary>
+    private ViewMode _mode => Library.Mode;
+
+    /// <summary>上一次清缓存 + 重载是否走完。</summary>
+    private bool _resetDone => _cacheReset.IsDone;
+
+    /// <summary>搜索提示列表。</summary>
+    private ObservableCollection<GameNameRow> _suggests => Library.Suggestions;
+
+    /// <summary>是否正在跑更新（自检会假装置忙）。</summary>
+    private bool _syncRunning
+    {
+        get => Sync.IsRunning;
+        set => Sync.IsRunning = value;
+    }
+
+    /// <summary>更新任务的取消源（自检会假装开一个）。</summary>
+    private CancellationTokenSource? _syncCts
+    {
+        get => Sync.Cts;
+        set => Sync.Cts = value;
+    }
+
+    /// <summary>托盘菜单窗口。</summary>
+    private TrayMenuWindow? _trayMenu => _tray.Menu;
+
+    /// <summary>托盘图标。</summary>
+    private WinForms.NotifyIcon? _trayIcon => _tray.Icon;
+
+    /// <summary>托盘图标在首帧之后已经建好，自检不用再催。</summary>
+    private void EnsureTray() => _tray.EnsureCreated("风灵月影宗藏宝阁");
+
+    private void CloseSuggest() => Library.CloseSuggest();
+
+    private void MoveSuggest(int delta) => Library.MoveSuggest(delta);
+
+    // ---- Win32 薄包装：真实现搬到了 Interop/WindowChrome ----
+
+    private const uint MouseEventLeftDown = 0x0002;
+    private const uint MouseEventLeftUp = 0x0004;
+
+    private static void SetCursorPos(int x, int y) => WindowChrome.SetCursorPos(x, y);
+
+    private static bool GetWindowRect(IntPtr hwnd, out WindowChrome.PixelRect rect) => WindowChrome.TryGetWindowRect(hwnd, out rect);
+
+    private static uint GetDpiForWindow(IntPtr hwnd) => WindowChrome.DpiOf(hwnd);
+
+    private static bool IsWindowVisible(IntPtr hwnd) => WindowChrome.IsHwndVisible(hwnd);
+
+    private static bool SetForegroundWindow(IntPtr hwnd) => WindowChrome.BringToFront(hwnd);
+
+    private static IntPtr GetForegroundWindow() => WindowChrome.ForegroundWindow;
+
+    private static void mouse_event(uint flags, uint dx, uint dy, uint data, UIntPtr extra) =>
+        WindowChrome.SendMouse(flags, dx, dy, data, extra);
+
+    /// <summary>屏幕坐标点（老代码按这个名字构造）。</summary>
+    private struct Point32
+    {
+        public int X;
+        public int Y;
+    }
+
+    private const uint MonitorDefaultToNearest = 2;
+    private const uint SwpNoSize = 0x0001;
+    private const uint SwpNoZOrder = 0x0004;
+    private const uint SwpNoActivate = 0x0010;
+
+    private static IntPtr MonitorFromPoint(Point32 point, uint flags) =>
+        WindowChrome.MonitorHandleAtPoint(point.X, point.Y);
+
+    private static int GetDpiForMonitor(IntPtr monitor, int dpiType, out uint dpiX, out uint dpiY) =>
+        WindowChrome.DpiOfMonitor(monitor, out dpiX, out dpiY);
+
+    private static bool SetWindowPos(IntPtr hwnd, IntPtr insertAfter, int x, int y, int cx, int cy, uint flags) =>
+        WindowChrome.MoveWindow(hwnd, x, y, flags);
+
+    private static IntPtr PopupHandle(System.Windows.Controls.Primitives.Popup popup) =>
+        WindowChrome.PopupHandle(popup);
+
+    private void OnWindowLocationChanged(object? sender, EventArgs e) => TrackOpenPopups();
+
+    // ---- 更新弹框：自检要直接摆进度 ----
+
+    private bool SyncDialogOpen => Sync.IsOpen;
+
+    private void ShowSyncDialog(SyncKind kind, bool withSteam = true) => Sync.ShowDialog(kind, withSteam);
+
+    private void CloseSyncDialog() => Sync.CloseDialog();
+
+    private Task<NameLaneResult> RunNameLaneAsync(bool withSteam, CancellationToken ct) =>
+        Sync.RunNameLaneAsync(withSteam, ct);
+
+    private void OnSyncProgress(SyncProgress p) => Sync.ApplyProgress(p);
+
+    private const double DetailScaleFrom = 0.96;
+
+    private void ShowNameStageRunning(int total) => Sync.ShowNameStageRunning(total);
+
+    private void ShowNameStageProgress(int done, int total, string english, string chinese) =>
+        Sync.ShowNameStageProgress(done, total, english, chinese);
+
+    private void OnFavoriteChanged(TrainerItem item, bool favorite) => Library.ApplyFavorite(item, favorite);
+#endif
+
 #if DEBUG
     // ==================== 开发期自检（--capture，仅 Debug 编译） ====================
 
@@ -195,11 +334,11 @@ public partial class MainWindow
         var bytesBefore = Directory.GetFiles(AppPaths.FilesDir, "*", SearchOption.AllDirectories)
             .Sum(p => new FileInfo(p).Length);
 
-        ClearCacheButton.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
+        PressButton(ClearCacheButton);
         await Task.Delay(600);
         SaveShot(Path.Combine(dir, "confirm.png"));
 
-        ConfirmOkButton.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
+        PressButton(ConfirmOkButton);
 
         // 按钮恢复可用 = 清除流程（含多轮扫尾 + 解除静音）真正跑完，最多等 12 秒
         for (var i = 0; i < 120 && !ClearCacheButton.IsEnabled; i++) await Task.Delay(100);
@@ -447,7 +586,7 @@ public partial class MainWindow
 
         NavList.SelectedIndex = 3;               // 设置
         await Task.Delay(700);
-        ClearCacheButton.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
+        PressButton(ClearCacheButton);
         await Task.Delay(700);
         SaveShot(Path.Combine(dir, "01-confirm.png"));
 
@@ -472,7 +611,7 @@ public partial class MainWindow
         SaveShot(Path.Combine(dir, "03-after-mask-click.png"));
 
         // 重开一次，确认连点遮罩两下也不会把确认框卡住
-        ClearCacheButton.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
+        PressButton(ClearCacheButton);
         await Task.Delay(600);
         await ClickAsync(new Point(ActualWidth - 70, 90));       // 这次点右上角
         await Task.Delay(500);
@@ -613,8 +752,7 @@ public partial class MainWindow
         await Task.Delay(400);
 
         // 灵石结缘弹窗：设置页入口 → 打开截图 → Esc 关闭
-        SupportButton.RaiseEvent(
-            new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
+        PressButton(SupportButton);
         await Task.Delay(600);
         SaveShot(Path.Combine(dir, "05-support.png"));
         File.AppendAllText(log, $"结缘弹窗可见={SupportLayer.Visibility == Visibility.Visible}\n");
@@ -667,8 +805,7 @@ public partial class MainWindow
             $"同步按钮={EmptySyncButton.Visibility} 文案=「{EmptyDesc.Text}」\n");
         SaveShot(Path.Combine(dir, "01-empty.png"));
 
-        EmptySyncButton.RaiseEvent(
-            new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
+        PressButton(EmptySyncButton);
         await Task.Delay(1800);
 
         File.AppendAllText(log,
@@ -718,8 +855,7 @@ public partial class MainWindow
 
         AppDomain.CurrentDomain.FirstChanceException += OnFirstChance;
 
-        SyncAllButton.RaiseEvent(
-            new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
+        PressButton(SyncAllButton);
         await Task.Delay(1500);
         File.AppendAllText(log, $"点按钮后弹框可见={SyncDialogOpen}\n");
 
@@ -786,8 +922,7 @@ public partial class MainWindow
 
         AppDomain.CurrentDomain.FirstChanceException += OnFirstChance;
 
-        SyncExistingButton.RaiseEvent(
-            new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
+        PressButton(SyncExistingButton);
         await Task.Delay(900);
 
         File.AppendAllText(log,
@@ -861,14 +996,14 @@ public partial class MainWindow
 
         var page1Ids = _items.Select(i => i.Id).ToList();
 
-        PagerNext.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
+        PressButton(PagerNext);
         for (var i = 0; i < 200 && _libraryPager.Loading; i++) await Task.Delay(100);
         await Task.Delay(900);
         Note("02-下一页");
         var page2Ids = _items.Select(i => i.Id).ToList();
         SaveShot(Path.Combine(dir, "02-page2.png"));
 
-        PagerPrev.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
+        PressButton(PagerPrev);
         await Task.Delay(700);
         Note("03-上一页（应走缓存）");
         var backIds = _items.Select(i => i.Id).ToList();
@@ -927,7 +1062,7 @@ public partial class MainWindow
 
         if (_searchPager.TotalPages > 1)
         {
-            PagerNext.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
+            PressButton(PagerNext);
             for (var i = 0; i < 200 && _searchPager.Loading; i++) await Task.Delay(100);
             await Task.Delay(600);
             File.AppendAllText(log,
@@ -958,7 +1093,7 @@ public partial class MainWindow
         var scroll = _listScroll ??= FindScrollViewer(CardList);
 
         void Note(string tag) => File.AppendAllText(log,
-            $"{tag}：卡片 {_cardW}x{_cardH} · 行数 {ViewModel.Rows.Count} · 条数 {_items.Count} · " +
+            $"{tag}：卡片 {_cardW}x{_cardH} · 行数 {Library.Rows.Count} · 条数 {_items.Count} · " +
             $"可视高 {scroll?.ViewportHeight:F0} 内容高 {scroll?.ExtentHeight:F0} " +
             $"可滚高度 {scroll?.ScrollableHeight:F0}\n");
 
@@ -1356,6 +1491,24 @@ public partial class MainWindow
         SaveShot(Path.Combine(dir, "03-update-notes.png"));
         File.AppendAllText(log,
             $"更新内容弹窗：{UpdateTitleText.Text}｜主按钮 {UpdateNowButton.Content}｜" +
+            $"稍后按钮 {(UpdateLaterButton.Visibility == Visibility.Visible ? "可见（错）" : "隐藏（对）")}\n");
+
+        CloseUpdateDialog();
+        await Task.Delay(500);
+
+        // 设置页「查看更新」走的那条路：正文来自本地 Assets\changelog.txt，不联网
+        Overlays.ShowUpdateNotes(
+            $"更新内容 · v{UpdateService.CurrentVersionText}",
+            $"当前版本 v{UpdateService.CurrentVersionText}",
+            ChangelogText.Load());
+        await Task.Delay(900);
+        SaveShot(Path.Combine(dir, "03b-update-local.png"));
+
+        var localBody = UpdateNotesBox.Text;
+        var localFirst = localBody.Split('\n').FirstOrDefault(l => l.Trim().Length > 0);
+        File.AppendAllText(log,
+            $"本地更新内容：{UpdateTitleText.Text}｜{UpdateVersionText.Text}｜" +
+            $"正文 {localBody.Length} 字 / {localBody.Split('\n').Length} 行｜首个非空行「{localFirst}」｜" +
             $"稍后按钮 {(UpdateLaterButton.Visibility == Visibility.Visible ? "可见（错）" : "隐藏（对）")}\n");
 
         CloseUpdateDialog();
@@ -2017,8 +2170,7 @@ public partial class MainWindow
             $"更新前：{before} 条，其中有中文名 {beforeCn} 条\n");
 
         var started = System.Diagnostics.Stopwatch.StartNew();
-        QuickNamesButton.RaiseEvent(
-            new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
+        PressButton(QuickNamesButton);
 
         // 点「开始更新」不应当直接开跑：直接把进度框立起来，勾选项和开始按钮都在这一个框里
         await Task.Delay(250);
@@ -2097,8 +2249,7 @@ public partial class MainWindow
         SaveShot(Path.Combine(dir, "04-quick-names-done.png"));
 
         // 再来一次：这回在同一个框里勾上「同时更新 Steam 中文名」，点开始后应当多出中文名那条进度
-        QuickNamesButton.RaiseEvent(
-            new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
+        PressButton(QuickNamesButton);
         await Task.Delay(250);
         Sync.SteamChecked = true;
         await Task.Delay(120);
@@ -2135,8 +2286,7 @@ public partial class MainWindow
             return;
         }
 
-        button.RaiseEvent(
-            new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
+        PressButton(button);
     }
 
     /// <summary>
@@ -2186,7 +2336,7 @@ public partial class MainWindow
             SaveShotAtScale(Path.Combine(dir, $"blue-{scale * 100:0}.png"), scale);
 
         // 红按钮在确认框里，底色比卡片更暗，是最容易看出黑边的那颗
-        ClearCacheButton.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
+        PressButton(ClearCacheButton);
         await Task.Delay(700);
 
         CaptureWindowScreen(Path.Combine(dir, "red-screen.png"));
@@ -2505,12 +2655,12 @@ public partial class MainWindow
             Height = 860;
             await Task.Delay(650);
 
-            var perRow = ViewModel.Rows.Count > 0 ? ViewModel.Rows[0].Items.Count : 0;
+            var perRow = Library.Rows.Count > 0 ? Library.Rows[0].Items.Count : 0;
             var leftGap = Math.Max(0, (MainArea.ActualWidth - CardArea.ActualWidth) / 2);
             File.AppendAllText(log,
                 $"窗口 {width,5} / 实际 {ActualWidth,5:F0} / 右栏 {MainArea.ActualWidth,5:F0} → " +
                 $"版心 {CardArea.ActualWidth,5:F0}（两侧各留 {leftGap,4:F0}） " +
-                $"卡片 {_cardW}x{_cardH} 首行 {perRow} 条 / 共 {ViewModel.Rows.Count} 行\n");
+                $"卡片 {_cardW}x{_cardH} 首行 {perRow} 条 / 共 {Library.Rows.Count} 行\n");
 
             if (width is 1080 or 1440 or 1920 or 3840) SaveShot(Path.Combine(dir, $"layout-{width}.png"));
         }

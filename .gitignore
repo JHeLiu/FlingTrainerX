@@ -8,11 +8,17 @@ bin
 .workbuddy
 .docs
 
-# 发布脚本的产物 / 临时文件
+# 构建产物：装过 .releases 之前的老版本产物也一并忽略
+.releases/
 .pro/[0-9]*.*.*
+
+# 发布脚本的临时文件
 .pro/.stage
 .pro/tools
 .pro/version.txt
+.pro/installer-config.nsh
+.pro/installer-logo.bmp
+.pro/installer-bg.bmp
+.pro/_proto
+.pro/.gitee-token
 .ai-temp-pair
-/.pro/installer-template/tmp
-/.pro/out

@@ -12,7 +12,7 @@ namespace FlingTrainerX.ViewModels;
 /// 两者互斥，同一个位置只显示一个。
 /// </para>
 /// </summary>
-public sealed partial class ProgressLane : ObservableObject
+public sealed partial class MainWindowSyncLaneVM : ObservableObject
 {
     /// <summary>整条进度线是否显示（比如只更新游戏名时，「游戏数据」那条整段收起）。</summary>
     [ObservableProperty]
