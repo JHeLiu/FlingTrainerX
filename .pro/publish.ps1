@@ -24,7 +24,7 @@ $TargetFramework = 'net10.0-windows'
 $RuntimeId      = 'win-x64'
 $AppIcon        = '..\FlingTrainerX\Assets\app.ico'               # 安装包图标 / 安装界面 Logo 来源
 $ReleaseDir     = '..\.releases'                                  # 构建产物根目录（相对 .pro），下面按版本号分目录
-$NsisExe        = 'D:\DevelopApps\NSIS\makensis.exe'              # makensis 路径，留空则从 PATH 找
+$NsisExe        = ''                                              # makensis：留空就从 PATH 找（makensis / makensis.exe 都认）；只有想指定某个安装时才填完整路径
 
 # --- 体积相关（想更小就动这两行）---
 # ReadyToRun 预编译：启动快一点，但会把 IL 再编一份原生码塞进 exe，
@@ -259,6 +259,22 @@ if ($null -eq $prev) {
 $version = Ask-Version -Previous $prev
 $version4 = "$version.0"
 
+# --- 配置文件：程序启动时从 <程序目录>\config.json 读版本号 + 自动检查更新开关 ---
+# 源文件就在项目目录里，必须在 dotnet publish 之前写：csproj 会把它复制到输出目录，安装包带着它一起发。
+# 注意变量名别叫 $VersionFile —— 那个是上面 .pro\version.txt（上一版本记录）专用的。
+# autoUpdateCheck 每次都重置成 true：新装 / 升级到这一版时恢复「启动时自动检查更新」，
+# 用户之后在弹窗里点「取消更新」才会被程序自己改成 false。
+$ProjectDir  = Split-Path $ProjectFull -Parent
+$ConfigJson  = Join-Path $ProjectDir 'config.json'
+$configBody  = @"
+{
+  "curVersion": "$version",
+  "autoUpdateCheck": true
+}
+"@
+[System.IO.File]::WriteAllText($ConfigJson, $configBody, (New-Object System.Text.UTF8Encoding($false)))
+Write-Info ("配置文件：{0}" -f $ConfigJson)
+
 $versionDir    = Join-Path $ReleaseRoot $version
 $publishDir    = Join-Path $versionDir 'publish'
 $installerName = '{0}-{1}' -f $SoftwareName, $version
@@ -271,13 +287,27 @@ Write-Host ("  输出目录：{0}" -f $versionDir) -ForegroundColor DarkGray
 if (-not (Test-Path $ProjectFull)) { Fail '找不到项目文件' $ProjectFull }
 if (-not (Test-Path $NsiScript))   { Fail '找不到安装脚本 installer.nsi' $NsiScript }
 
+# makensis：$NsisExe 留空就按命令名从 PATH 解析（NSIS 装好并配了环境变量即可），
+# 填了路径就原样使用。先找 makensis，再兼容带扩展名的 makensis.exe。
 if ([string]::IsNullOrWhiteSpace($NsisExe)) {
-    $cmd = Get-Command 'makensis.exe' -ErrorAction SilentlyContinue
-    if ($cmd) { $NsisExe = $cmd.Source }
+    foreach ($name in @('makensis', 'makensis.exe')) {
+        $found = Get-Command $name -CommandType Application -ErrorAction SilentlyContinue |
+                 Select-Object -First 1
+        if ($found) { $NsisExe = $found.Source; break }
+    }
 }
-if ([string]::IsNullOrWhiteSpace($NsisExe) -or -not (Test-Path $NsisExe)) {
-    Fail '找不到 makensis.exe' '请在脚本顶部 $NsisExe 填入 NSIS 的 makensis 完整路径'
+if ([string]::IsNullOrWhiteSpace($NsisExe)) {
+    $nsisDirs = @(($env:Path -split ';') | Where-Object { $_ -match 'NSIS' })
+    $hint = '把 NSIS 安装目录加进系统 PATH（勾选「为所有用户」后重开终端），或在 publish.ps1 顶部把 $NsisExe 填成完整路径'
+    if ($nsisDirs.Count -gt 0) {
+        $hint = 'PATH 里有 NSIS 目录但没有 makensis.exe：' + ($nsisDirs -join '；')
+    }
+    Fail '找不到 makensis.exe（NSIS 编译器）' $hint
 }
+if (-not (Test-Path -LiteralPath $NsisExe)) {
+    Fail 'makensis.exe 路径无效' ('publish.ps1 顶部 $NsisExe 指向的文件不存在：' + $NsisExe)
+}
+Write-Info ("makensis：{0}" -f $NsisExe)
 
 $dotnet = Get-Command 'dotnet' -ErrorAction SilentlyContinue
 if (-not $dotnet) { Fail '找不到 dotnet 命令' '请确认已安装 .NET SDK 并加入 PATH' }
@@ -314,6 +344,17 @@ $r = Invoke-WithProgress -Label '编译中' -FilePath $dotnetExe -Arguments $pub
 if ($r.ExitCode -ne 0) {
     $tail = ($r.Output -split "`r?`n" | Where-Object { $_.Trim() -ne '' } | Select-Object -Last 6) -join "`n"
     Fail 'dotnet publish 返回错误' ("完整日志：{0}`n{1}" -f $r.Log, $tail)
+}
+
+# --- 只打包 .NET 构建产物 ---
+# 安装包里不该出现任何运行期数据：数据库（dbs\fling.db）、下载与封面（f\）。
+# dotnet publish 本身不会生成这些目录；这里兜一道底，防止有人在发布目录里跑过程序后再打包。
+foreach ($dataDirName in @('dbs', 'f')) {
+    $staleDir = Join-Path $publishDir $dataDirName
+    if (Test-Path -LiteralPath $staleDir) {
+        Remove-Item -LiteralPath $staleDir -Recurse -Force -ErrorAction SilentlyContinue
+        Write-Info ("已排除运行期数据目录：{0}" -f $staleDir)
+    }
 }
 
 $mainExe = Join-Path $publishDir ($SoftwareName + '.exe')

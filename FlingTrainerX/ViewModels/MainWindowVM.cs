@@ -43,8 +43,8 @@ public sealed partial class MainWindowVM : ObservableObject, IStatusSink
         Dialogs = dialogs;
 
         Library = new MainWindowLibraryVM(catalog, Dialogs, this);
-        Sync = new MainWindowSyncVM(this);
-        Settings = new MainWindowSettingsVM(Library, Dialogs, this, Sync, updates, reset);
+        Sync = new MainWindowSyncVM(this, Dialogs);
+        Settings = new MainWindowSettingsVM(Library, Dialogs, Sync, updates, reset);
 
         // 更新开始 / 结束 → 设置页三颗按钮置忙；更新完 → 首页重读本地库
         Sync.BusyChanged = Settings.ShowRunning;
@@ -60,6 +60,15 @@ public sealed partial class MainWindowVM : ObservableObject, IStatusSink
         Library.LaunchCompleted += (_, _) => HideForLaunchRequested?.Invoke(this, EventArgs.Empty);
 
         DownloadManager.Instance.Changed += (_, _) => OnDownloadsChanged();
+
+        // 切页时把这一页自己的状态栏文字贴上来；设置页整条栏收起
+        Library.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName != nameof(MainWindowLibraryVM.Mode)) return;
+
+            SyncStatusBar();
+            OnPropertyChanged(nameof(StatusBarVisible));
+        };
     }
 
     // ==================== 子 ViewModel ====================
@@ -87,13 +96,21 @@ public sealed partial class MainWindowVM : ObservableObject, IStatusSink
 
     // ==================== 外壳状态 ====================
 
-    /// <summary>底部状态栏那句话。</summary>
+    /// <summary>每一页各留一份状态栏文字：切页回来还是自己那句，互不覆盖。</summary>
+    private (string Text, StatusLevel Tone) _libraryStatus = ("数据已就绪", StatusLevel.Idle);
+    private (string Text, StatusLevel Tone) _favoritesStatus = ("收藏夹", StatusLevel.Idle);
+    private (string Text, StatusLevel Tone) _queueStatus = ("暂无下载任务", StatusLevel.Idle);
+
+    /// <summary>底部状态栏那句话（当前页那一份）。</summary>
     [ObservableProperty]
     private string _statusText = "数据已就绪";
 
     /// <summary>状态栏指示灯的颜色档位（XAML 用 DataTrigger 换成画笔）。</summary>
     [ObservableProperty]
     private StatusLevel _statusTone = StatusLevel.Idle;
+
+    /// <summary>设置页没有状态栏（更新 / 同步都有自己的弹窗，底部再来一条就重复了）。</summary>
+    public bool StatusBarVisible => Library.Mode != ViewMode.Settings;
 
     /// <summary>左侧导航当前选中项（0 游戏库 / 1 收藏夹 / 2 下载队列 / 3 设置）。</summary>
     [ObservableProperty]
@@ -117,13 +134,47 @@ public sealed partial class MainWindowVM : ObservableObject, IStatusSink
     /// <summary>侧栏「收藏夹 · N」。</summary>
     public string FavoritesLabel => Library.FavoritesLabel;
 
-    /// <summary>状态栏写一句话；<paramref name="level"/> 为空时保持当前灯色。</summary>
+    /// <summary>
+    /// 写当前页自己的状态栏；<paramref name="level"/> 为空时保持当前灯色。
+    /// 设置页直接丢弃（那一页没有状态栏）。
+    /// </summary>
     /// <param name="text">要说的话。</param>
     /// <param name="level">指示灯档位。</param>
     public void Report(string text, StatusLevel? level = null)
     {
-        StatusText = text;
-        if (level is { } tone) StatusTone = tone;
+        switch (Library.Mode)
+        {
+            case ViewMode.Settings:
+                return;
+
+            case ViewMode.Favorites:
+                _favoritesStatus = (text, level ?? _favoritesStatus.Tone);
+                break;
+
+            case ViewMode.Queue:
+                _queueStatus = (text, level ?? _queueStatus.Tone);
+                break;
+
+            default:
+                _libraryStatus = (text, level ?? _libraryStatus.Tone);
+                break;
+        }
+
+        SyncStatusBar();
+    }
+
+    /// <summary>把当前页那一份状态贴到界面上。</summary>
+    private void SyncStatusBar()
+    {
+        var status = Library.Mode switch
+        {
+            ViewMode.Favorites => _favoritesStatus,
+            ViewMode.Queue => _queueStatus,
+            _ => _libraryStatus
+        };
+
+        StatusText = status.Text;
+        StatusTone = status.Tone;
     }
 
     partial void OnNavIndexChanged(int value)
@@ -208,9 +259,15 @@ public sealed partial class MainWindowVM : ObservableObject, IStatusSink
 
     // ==================== 启动 ====================
 
+    /// <summary>启动后隔多久自动查一次更新（只查一次；设置页手动点的那次不受影响）。</summary>
+    private static readonly TimeSpan AutoCheckDelay = TimeSpan.FromMinutes(1);
+
     /// <summary>
-    /// 首帧之后的静默准备：游戏名库空了就抓一份；启动 4 秒后自动查一次更新
-    /// （只在真发现新版本时弹窗，断网 / 接口抽风一律安静）。
+    /// 首帧之后的静默准备：游戏名库空了就抓一份；启动 1 分钟后自动查一次更新。
+    /// <para>
+    /// 自动检查的规矩：只在真发现新版本时弹窗；查不到（断网、超时、404/403）一律安静；
+    /// 用户以前点过「取消更新」（config.json 里 autoUpdateCheck = false）就整个跳过。
+    /// </para>
     /// </summary>
     /// <param name="ct">关窗口时取消。</param>
     public async Task InitializeAsync(CancellationToken ct)
@@ -218,24 +275,33 @@ public sealed partial class MainWindowVM : ObservableObject, IStatusSink
         // 搜索框的智能提示靠游戏名库；有数据直接跳过
         _ = GameNameSyncService.SeedIfEmptyAsync();
 
-        // 每次启动只自动查一次更新
+        // 用户点过「取消更新」：以后启动都不再自动查（设置页手动点「检查更新」照样能用）
+        if (!AppConfig.AutoUpdateCheck) return;
+
+        // 每次启动只自动查一次更新；手动点「检查更新」走设置页自己的入口，不受这里限制
         if (_updates.MarkAutoChecked()) return;
 
         try
         {
-            // 等 4 秒再查，别和「读本地库 / 拉封面」抢带宽，也别让开机第一眼就看到弹窗
-            await Task.Delay(TimeSpan.FromSeconds(4), ct);
+            // 等 1 分钟再查：启动这一分钟里在读本地库、拉封面、抓游戏名库，
+            // 别去抢带宽；也不至于开机第一眼就弹更新框
+            await Task.Delay(AutoCheckDelay, ct);
         }
         catch (OperationCanceledException)
         {
             return;
         }
 
+        // 这一分钟里用户自己点过「检查更新」：结果他已经看过了，这里不再重复查、也不弹第二遍窗
+        if (_updates.HasChecked) return;
+
         try
         {
             var result = await Settings.CheckAsync(manual: false);
-            if (result is { State: UpdateCheckState.UpdateAvailable, Release: { } release })
-                Dialogs.ShowUpdate(release, prompt: true);
+
+            // 自动检查也走同一套呈现逻辑：只有真发现新版本才弹窗，
+            // 「已是最新」「断网超时」「404/403 拿不到发行版」这类安静过去，不打扰。
+            await Settings.PresentAsync(result, auto: true);
         }
         catch
         {
@@ -253,7 +319,11 @@ public sealed partial class MainWindowVM : ObservableObject, IStatusSink
         var tasks = DownloadManager.Instance.Tasks;
         UpdateQueueBadge(tasks.Count, tasks.Count(t => t.IsActive));
 
-        if (Library.Mode == ViewMode.Queue) Library.Refresh();
+        if (Library.Mode != ViewMode.Queue) return;
+
+        // 队列页的状态栏写自己的汇总，和「游戏库 / 收藏夹」互不串台
+        Report(DownloadManager.Instance.SummaryText);
+        Library.Refresh();
     }
 
     /// <summary>按当前下载任务刷新导航角标与队列占位。</summary>
@@ -304,12 +374,12 @@ public sealed partial class MainWindowVM : ObservableObject, IStatusSink
     [RelayCommand]
     private void OpenDownloadFolder() => DownloadManager.Instance.OpenFolder(null);
 
-    /// <summary>清理已完成 / 已取消的任务，顺手把结果写进状态栏。</summary>
+    /// <summary>清理已完成 / 已取消的任务，顺手把结果写进队列页自己的状态栏。</summary>
     /// <returns>清掉的任务数。</returns>
     public int ClearFinishedTasks()
     {
         var count = DownloadManager.Instance.ClearFinished();
-        StatusText = count == 0 ? "没有可清理的任务" : $"已清理 {count} 个任务";
+        Report(count == 0 ? "没有可清理的任务" : $"已清理 {count} 个任务");
         return count;
     }
 

@@ -254,8 +254,6 @@ public sealed class AppDatabase
     {
         try
         {
-            MigrateLegacy();
-
             var config = new ConnectionConfig
             {
                 DbType = DbType.Sqlite,
@@ -407,23 +405,6 @@ public sealed class AppDatabase
     private static bool HasRoot(string payload, string coverPath, string root) =>
         (!string.IsNullOrEmpty(payload) && payload.Contains(root, StringComparison.OrdinalIgnoreCase)) ||
         (!string.IsNullOrEmpty(coverPath) && coverPath.Contains(root, StringComparison.OrdinalIgnoreCase));
-
-    /// <summary>数据库从 %LOCALAPPDATA% 挪到程序目录，老库还在就直接复制过来，别让用户白丢收藏。</summary>
-    private static void MigrateLegacy()
-    {
-        try
-        {
-            var legacy = Path.Combine(AppPaths.LegacyDir, "fling.db");
-            if (File.Exists(DatabaseFile) || !File.Exists(legacy)) return;
-
-            Directory.CreateDirectory(AppPaths.DbDir);
-            File.Copy(legacy, DatabaseFile);
-        }
-        catch
-        {
-            // 迁移失败就从空库开始，不影响启动
-        }
-    }
 
     private T Run<T>(Func<ISqlSugarClient, T> action, T fallback)
     {
@@ -869,20 +850,4 @@ public sealed class AppDatabase
 
     private static DateTime ParseDate(string text) =>
         DateTime.TryParse(text?.Replace('.', '-'), out var d) ? d : DateTime.MinValue;
-
-    /// <summary>旧版本把收藏存在 state.json 里，第一次升级时迁进来。</summary>
-    public int ImportLegacy(IEnumerable<int> ids, IEnumerable<TrainerItem> library)
-    {
-        var byId = library.ToDictionary(i => i.Id);
-        var added = 0;
-
-        foreach (var id in ids.Distinct())
-        {
-            if (!byId.TryGetValue(id, out var item)) continue;
-            if (Exists(id)) continue;
-            if (Save(item)) added++;
-        }
-
-        return added;
-    }
 }

@@ -18,6 +18,7 @@ public sealed partial class ConfirmDialogVM : ObservableObject
     [ObservableProperty] private string _body = "";
     [ObservableProperty] private string _okText = "确定";
     [ObservableProperty] private bool _isPrimary;
+    [ObservableProperty] private bool _cancelVisible = true;
     [ObservableProperty] private bool _optionVisible;
     [ObservableProperty] private bool _optionChecked;
     [ObservableProperty] private string _optionText = "";
@@ -33,8 +34,10 @@ public sealed partial class ConfirmDialogVM : ObservableObject
     /// <param name="okText">确定按钮文案。</param>
     /// <param name="primary">确定按钮用主色还是警示色。</param>
     /// <param name="option">可选项（文案, 小字）；null = 不要可选项。</param>
+    /// <param name="cancelVisible">false = 只有确定一颗按钮（纯提示框）。</param>
     public Task<(bool Ok, bool Checked)>? Show(
-        string title, string body, string okText, bool primary, (string Text, string Hint)? option)
+        string title, string body, string okText, bool primary, (string Text, string Hint)? option,
+        bool cancelVisible = true)
     {
         if (Answer is not null) return null;
 
@@ -42,6 +45,7 @@ public sealed partial class ConfirmDialogVM : ObservableObject
         Body = body;
         OkText = okText;
         IsPrimary = primary;
+        CancelVisible = cancelVisible;
 
         // 可选项：有就摆出来并清零，没有就整块收起（上一个框勾过的状态不会带过来）
         OptionVisible = option is not null;

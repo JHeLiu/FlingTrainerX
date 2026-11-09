@@ -7,18 +7,12 @@ bin
 *.user
 .workbuddy
 .docs
+# ai临时文件
+.ai-temp
 
 # 构建产物：装过 .releases 之前的老版本产物也一并忽略
 .releases/
-.pro/[0-9]*.*.*
 
-# 发布脚本的临时文件
-.pro/.stage
-.pro/tools
-.pro/version.txt
-.pro/installer-config.nsh
-.pro/installer-logo.bmp
-.pro/installer-bg.bmp
-.pro/_proto
-.pro/.gitee-token
-.ai-temp-pair
+# 发布用的 Gitee 私人令牌：只留在本机，绝不进仓库
+.pro/gitee.token.txt
+

@@ -98,6 +98,9 @@ public sealed partial class MainWindowLibraryVM : ObservableObject
     /// <summary>搜索结果的分页进度。</summary>
     public PageCursor SearchPager { get; } = new();
 
+    /// <summary>收藏夹自己的分页进度（在收藏夹里搜索时也用它）。</summary>
+    public PageCursor FavoritesPager { get; } = new();
+
     /// <summary>收藏夹里有多少款（侧栏角标用）。</summary>
     public int FavoriteCount => _catalog.Favorites.Count;
 
@@ -139,6 +142,10 @@ public sealed partial class MainWindowLibraryVM : ObservableObject
     [ObservableProperty]
     private string _keyword = "";
 
+    /// <summary>收藏夹里的搜索词：只在已收藏的游戏里过滤，不联网。</summary>
+    [ObservableProperty]
+    private string _favoritesKeyword = "";
+
     /// <summary>正在向官网搜索（本地没有，第一页还没回来）。</summary>
     [ObservableProperty]
     private bool _searchInFlight;
@@ -175,11 +182,21 @@ public sealed partial class MainWindowLibraryVM : ObservableObject
     /// <summary>搜索框为空时显示占位提示。</summary>
     public bool SearchHintVisible => SearchText.Length == 0;
 
+    /// <summary>搜索框占位文案：收藏夹里说明白是「在收藏夹里搜」。</summary>
+    public string SearchPlaceholder => Mode == ViewMode.Favorites
+        ? "在收藏夹里搜索游戏名"
+        : "输入游戏名 / 中文名，回车搜索";
+
     /// <summary>是否处于「搜索结果」状态。</summary>
     public bool IsSearching => Keyword.Length > 0;
 
-    /// <summary>当前生效的分页状态：搜索时用搜索那份，否则用游戏库那份。</summary>
-    public PageCursor CurrentPager => IsSearching ? SearchPager : LibraryPager;
+    /// <summary>是否处于「收藏夹搜索结果」状态。</summary>
+    public bool IsFavoritesSearching => Mode == ViewMode.Favorites && FavoritesKeyword.Length > 0;
+
+    /// <summary>当前生效的分页状态：收藏夹一份，搜索一份，游戏库一份。</summary>
+    public PageCursor CurrentPager => Mode == ViewMode.Favorites
+        ? FavoritesPager
+        : IsSearching ? SearchPager : LibraryPager;
 
     // ---- 以下都是给 XAML 绑定的显示属性，由 ApplyDisplayState() 统一算 ----
 
@@ -223,6 +240,8 @@ public sealed partial class MainWindowLibraryVM : ObservableObject
         LibraryPager.Page = 1;
         if (_catalog.Library.Items.Count > 0) LibraryPager.Cache[1] = _catalog.LocalPage(1);
 
+        FavoritesPager.Reset();
+
         Refresh();
     }
 
@@ -242,8 +261,36 @@ public sealed partial class MainWindowLibraryVM : ObservableObject
         if (Mode == mode) return;
 
         Mode = mode;
+
+        // 搜索框里的词属于上一页：换页时清干净，免得到了游戏库还挂着收藏夹的搜索词
+        ClearSearchState();
+        OnPropertyChanged(nameof(SearchPlaceholder));
+        OnPropertyChanged(nameof(IsFavoritesSearching));
+
         Refresh();
         _dialogs.ScrollToTop();
+    }
+
+    /// <summary>把三个搜索状态一起清空（换页、退出搜索都用）。</summary>
+    private void ClearSearchState()
+    {
+        _searchSeq++;
+        Keyword = "";
+        SearchPager.Reset();
+        FavoritesKeyword = "";
+        FavoritesPager.Reset();
+        SearchInFlight = false;
+        SearchFromLocal = false;
+        SearchError = null;
+
+        if (SearchText.Length > 0)
+        {
+            _applyingSuggest = true;   // 借这个闸，别让清空动作又触发一次提示
+            SearchText = "";
+            _applyingSuggest = false;
+        }
+
+        CloseSuggest();
     }
 
     // ==================== 整页重排 ====================
@@ -260,6 +307,9 @@ public sealed partial class MainWindowLibraryVM : ObservableObject
         }
         else if (Mode != ViewMode.Settings)
         {
+            // 收藏夹先按当前搜索词和总数把分页算好，再取这一页
+            if (Mode == ViewMode.Favorites) RefreshFavoritesPager();
+
             // 列表按当前页取数（搜索与游戏库各自一份分页缓存）
             SetItems(SourceItems);
         }
@@ -280,6 +330,8 @@ public sealed partial class MainWindowLibraryVM : ObservableObject
         LibraryPager.Page = 1;
         if (_catalog.Library.Items.Count > 0) LibraryPager.Cache[1] = _catalog.LocalPage(1);
 
+        FavoritesPager.Reset();
+
         IsFirstLoading = false;
         FirstError = null;
 
@@ -288,7 +340,7 @@ public sealed partial class MainWindowLibraryVM : ObservableObject
 
     /// <summary>
     /// 右上角那颗「刷新」：重读一遍本地库。
-    /// <para>首页只读 SQLite，秒回，不碰网络；联网更新在「设置 → 数据更新」里。</para>
+    /// <para>首页只读 SQLite，秒回，不碰网络；联网更新在「设置 → 数据管理」里。</para>
     /// </summary>
     [RelayCommand]
     private void RefreshLocal()
@@ -298,7 +350,7 @@ public sealed partial class MainWindowLibraryVM : ObservableObject
         var count = _catalog.Library.Items.Count;
         _status.Report(count > 0
             ? $"已重新读取本地数据 · {count} 款"
-            : "本地还没有数据，去「设置 → 数据更新」更新一次");
+            : "本地还没有数据，去「设置 → 数据管理」更新一次");
     }
 
     /// <summary>整体重建（换页 / 搜索 / 切换视图）。</summary>
@@ -368,6 +420,16 @@ public sealed partial class MainWindowLibraryVM : ObservableObject
         var pager = CurrentPager;
         target = Math.Clamp(target, 1, Math.Max(1, pager.TotalPages));
         if (pager.Loading) return;
+
+        // 收藏夹也是纯本地：页码一改，Refresh 会按新页切片
+        if (Mode == ViewMode.Favorites)
+        {
+            pager.Page = target;
+            pager.PendingPage = 0;
+            pager.Failed = false;
+            ShowPageChanged();
+            return;
+        }
 
         // 首页只读本地：游戏库的分页就是本地数组切片，不发请求、无需加载态
         if (!IsSearching)
@@ -449,8 +511,8 @@ public sealed partial class MainWindowLibraryVM : ObservableObject
     {
         OnPropertyChanged(nameof(SearchHintVisible));
 
-        // 整段删空：退出搜索结果，回到原来的游戏库
-        if (!_applyingSuggest && IsSearching && value.Trim().Length == 0) ExitSearch();
+        // 整段删空：退出搜索结果，回到原来的视图（游戏库 / 收藏夹）
+        if (!_applyingSuggest && (IsSearching || IsFavoritesSearching) && value.Trim().Length == 0) ExitSearch();
 
         // 从提示里选了一条、正在回填：别再弹一次提示
         if (_applyingSuggest) return;
@@ -479,6 +541,13 @@ public sealed partial class MainWindowLibraryVM : ObservableObject
         if (typed.Length == 0)
         {
             ExitSearch();
+            return;
+        }
+
+        // 收藏夹里搜索：只筛已收藏的那些，不发任何网络请求
+        if (Mode == ViewMode.Favorites)
+        {
+            ApplyFavoritesSearch(typed);
             return;
         }
 
@@ -607,19 +676,23 @@ public sealed partial class MainWindowLibraryVM : ObservableObject
         _status.Report($"搜索{label} · 本地 {items.Count} 款");
     }
 
-    /// <summary>退出搜索：清掉结果，列表回到游戏库（页码还停在原来那一页）。</summary>
+    /// <summary>退出搜索：清掉结果，列表回到原来的视图（页码还停在原来那一页）。</summary>
     /// <param name="clearText">要不要顺手把搜索框清空。</param>
     public void ExitSearch(bool clearText = false)
     {
-        var was = IsSearching;
+        var was = IsSearching || IsFavoritesSearching;
 
         // 先把状态清干净，再去改输入框内容——否则 TextChanged 会再进来一次
         _searchSeq++;
         Keyword = "";
         SearchPager.Reset();
+        FavoritesKeyword = "";
+        FavoritesPager.Reset();
         SearchInFlight = false;
         SearchFromLocal = false;
         SearchError = null;
+
+        OnPropertyChanged(nameof(IsFavoritesSearching));
 
         if (clearText && SearchText.Length > 0)
         {
@@ -636,6 +709,68 @@ public sealed partial class MainWindowLibraryVM : ObservableObject
         UpdateStats();
     }
 
+    // ==================== 收藏夹搜索 ====================
+
+    /// <summary>
+    /// 收藏夹里的搜索：只在已经收藏的游戏里筛名字（英文标题 / 中文名），
+    /// 结果照常分页；不发网络请求，也不碰游戏库的搜索状态。
+    /// </summary>
+    /// <param name="typed">搜索框里的词。</param>
+    private void ApplyFavoritesSearch(string typed)
+    {
+        FavoritesKeyword = typed;
+        FavoritesPager.Reset();
+        FavoritesPager.Page = 1;
+
+        Refresh();
+        _dialogs.ScrollToTop();
+        OnPropertyChanged(nameof(IsFavoritesSearching));
+
+        _status.Report(FavoritesPager.TotalCount > 0
+            ? $"收藏夹搜索“{typed}” · {FavoritesPager.TotalCount} 款"
+            : $"收藏夹里没有与“{typed}”相关的游戏");
+    }
+
+    /// <summary>收藏夹按关键词过滤后的完整列表（分页之前）。</summary>
+    private List<TrainerItem> FilteredFavorites()
+    {
+        var all = _catalog.Favorites;
+        var key = FavoritesKeyword.Trim();
+        if (key.Length == 0) return all;
+
+        // 中文名可能还没写到卡片对象上，顺带查一次库，按中文也能搜到
+        var chinese = AppDatabase.Instance.IsAvailable
+            ? AppDatabase.Instance.LoadChineseNames(all.Select(f => f.Url))
+            : new Dictionary<string, string>();
+
+        return all.Where(f =>
+        {
+            if (f.Title.Contains(key, StringComparison.OrdinalIgnoreCase)) return true;
+            if (f.NameCn.Length > 0 && f.NameCn.Contains(key, StringComparison.OrdinalIgnoreCase)) return true;
+
+            return chinese.TryGetValue(GameNameRow.KeyOf(f.Url), out var cn)
+                   && cn.Length > 0
+                   && cn.Contains(key, StringComparison.OrdinalIgnoreCase);
+        }).ToList();
+    }
+
+    /// <summary>按当前搜索词重算收藏夹的总数与页数，并把页码夹回合法范围。</summary>
+    private void RefreshFavoritesPager()
+    {
+        var count = FilteredFavorites().Count;
+        FavoritesPager.TotalCount = count;
+        FavoritesPager.TotalPages = Math.Max(1, (int)Math.Ceiling(count / (double)TrainerWeb.PageSize));
+        FavoritesPager.Page = Math.Clamp(FavoritesPager.Page, 1, FavoritesPager.TotalPages);
+        FavoritesPager.Failed = false;
+    }
+
+    /// <summary>收藏夹第 <paramref name="page"/> 页（每页和游戏库一样 15 条）。</summary>
+    private List<TrainerItem> FavoritesPageItems(int page) =>
+        FilteredFavorites()
+            .Skip((Math.Max(1, page) - 1) * TrainerWeb.PageSize)
+            .Take(TrainerWeb.PageSize)
+            .ToList();
+
     // ==================== 搜索智能提示 ====================
 
     private void QueueSuggest()
@@ -651,6 +786,43 @@ public sealed partial class MainWindowLibraryVM : ObservableObject
         _suggestTimer.Start();
     }
 
+    /// <summary>
+    /// 收藏夹里的搜索提示：从已收藏的游戏里按名字匹配（英文标题 / 中文名），最多 8 条。
+    /// 返回的对象只用于提示列表显示和回填搜索框，不写库。
+    /// </summary>
+    private List<GameNameRow> FavoritesSuggestions(string keyword)
+    {
+        var all = _catalog.Favorites;
+
+        // 中文名可能还挂在库里没写到卡片对象上，顺手查一次
+        var chinese = AppDatabase.Instance.IsAvailable
+            ? AppDatabase.Instance.LoadChineseNames(all.Select(f => f.Url))
+            : new Dictionary<string, string>();
+
+        var rows = new List<GameNameRow>();
+
+        foreach (var f in all)
+        {
+            chinese.TryGetValue(GameNameRow.KeyOf(f.Url), out var cn);
+            var nameCn = f.NameCn.Length > 0 ? f.NameCn : cn ?? "";
+
+            if (!f.Title.Contains(keyword, StringComparison.OrdinalIgnoreCase)
+                && !(nameCn.Length > 0 && nameCn.Contains(keyword, StringComparison.OrdinalIgnoreCase)))
+                continue;
+
+            rows.Add(new GameNameRow
+            {
+                TrainerId = GameNameRow.KeyOf(f.Url),
+                NameEn = f.Title,
+                NameCn = nameCn
+            });
+
+            if (rows.Count >= 8) break;
+        }
+
+        return rows;
+    }
+
     private async Task LoadSuggestionsAsync()
     {
         _suggestTimer.Stop();
@@ -659,6 +831,25 @@ public sealed partial class MainWindowLibraryVM : ObservableObject
         if (keyword.Length == 0)
         {
             CloseSuggest();
+            return;
+        }
+
+        // 收藏夹里：提示只从已收藏的那些游戏里出，别把整个游戏名库倒出来
+        // （这条不依赖 SQLite，放在可用性检查之前）
+        if (Mode == ViewMode.Favorites)
+        {
+            var favorites = FavoritesSuggestions(keyword);
+            if (favorites.Count == 0)
+            {
+                CloseSuggest();
+                return;
+            }
+
+            Suggestions.Clear();
+            foreach (var row in favorites) Suggestions.Add(row);
+
+            SuggestIndex = -1;
+            SuggestOpen = true;
             return;
         }
 
@@ -779,7 +970,7 @@ public sealed partial class MainWindowLibraryVM : ObservableObject
     {
         get
         {
-            if (Mode == ViewMode.Favorites) return _catalog.Favorites;
+            if (Mode == ViewMode.Favorites) return FavoritesPageItems(FavoritesPager.Page);
 
             var pager = CurrentPager;
             if (pager.Cache.TryGetValue(pager.Page, out var page))
@@ -833,6 +1024,14 @@ public sealed partial class MainWindowLibraryVM : ObservableObject
         StatsChanged?.Invoke(this, EventArgs.Empty);
 
         if (Mode is ViewMode.Queue or ViewMode.Settings) return;
+
+        if (Mode == ViewMode.Favorites)
+        {
+            _status.Report(IsFavoritesSearching
+                ? $"收藏夹搜索“{FavoritesKeyword}” · {FavoritesPager.TotalCount} 款"
+                : $"收藏夹 · {_catalog.Favorites.Count} 款");
+            return;
+        }
 
         if (IsSearching)
         {
@@ -895,7 +1094,11 @@ public sealed partial class MainWindowLibraryVM : ObservableObject
 
             case ViewMode.Favorites:
                 SectionTitle = "收藏夹";
-                SectionSubtitle = "";
+                SectionSubtitle = IsFavoritesSearching
+                    ? $"“{FavoritesKeyword}” · {FavoritesPager.TotalCount} 款"
+                    : FavoritesPager.TotalCount > 0
+                        ? $"共 {FavoritesPager.TotalCount} 款"
+                        : "";
                 break;
 
             case ViewMode.Queue:
@@ -946,7 +1149,7 @@ public sealed partial class MainWindowLibraryVM : ObservableObject
                 EmptyGlyph = "\uE783";
                 EmptyTitle = "读取失败";
                 EmptyDesc = $"读取本地数据库失败：{FirstError}\n\n" +
-                            "可以到「设置 → 数据更新」里重新更新一次。";
+                            "可以到「设置 → 数据管理」里重新更新一次。";
             }
 
             return;
@@ -954,9 +1157,11 @@ public sealed partial class MainWindowLibraryVM : ObservableObject
 
         if (Mode == ViewMode.Favorites)
         {
-            EmptyGlyph = "\uE734";
-            EmptyTitle = "收藏夹还是空的";
-            EmptyDesc = "打开任意游戏详情，点击「加入收藏夹」";
+            EmptyGlyph = IsFavoritesSearching ? "\uE721" : "\uE734";
+            EmptyTitle = IsFavoritesSearching ? "收藏夹里没有搜到" : "收藏夹还是空的";
+            EmptyDesc = IsFavoritesSearching
+                ? $"没有找到与“{FavoritesKeyword}”相关的收藏，换个关键词试试。"
+                : "打开任意游戏详情，点击「加入收藏夹」";
         }
         else if (IsSearching)
         {
@@ -982,7 +1187,9 @@ public sealed partial class MainWindowLibraryVM : ObservableObject
     {
         var pager = CurrentPager;
 
-        PagerVisible = Mode == ViewMode.Library && (pager.Cache.Count > 0 || pager.Loading || pager.Failed);
+        // 游戏库和收藏夹都有自己的分页；搜索 / 队列 / 设置不显示
+        PagerVisible = Mode is ViewMode.Library or ViewMode.Favorites
+                       && (pager.TotalCount > 0 || pager.Cache.Count > 0 || pager.Loading || pager.Failed);
         if (!PagerVisible) return;
 
         PagerTotal = pager.TotalCount > 0 ? $"共 {pager.TotalCount} 款" : "";

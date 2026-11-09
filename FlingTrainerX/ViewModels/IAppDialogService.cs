@@ -53,6 +53,12 @@ public interface IAppDialogService
     Task<(bool Ok, bool Checked)> ConfirmWithOptionAsync(
         string title, string body, string okText, string optionText, string optionHint);
 
+    /// <summary>只有一句提示、一个「知道了」按钮的弹窗，等用户看完关掉才返回。</summary>
+    /// <param name="title">标题。</param>
+    /// <param name="body">正文。</param>
+    /// <param name="okText">按钮文案。</param>
+    Task NotifyAsync(string title, string body, string okText = "知道了");
+
     /// <summary>打开「关于 / 免责声明」。</summary>
     void ShowAbout();
 

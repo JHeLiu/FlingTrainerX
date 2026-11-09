@@ -16,25 +16,19 @@ public sealed partial class MainWindowSettingsVM : ObservableObject
 {
     private readonly MainWindowLibraryVM _library;
     private readonly IAppDialogService _dialogs;
-    private readonly IStatusSink _status;
     private readonly MainWindowSyncVM _sync;
     private readonly UpdateCoordinator _updates;
     private readonly CacheResetService _reset;
 
-    /// <summary>清完缓存后要长时间显示的提示（重载列表时会把它覆盖，加载完再贴回去）。</summary>
-    private string _pendingClearSummary = "";
-
     public MainWindowSettingsVM(
         MainWindowLibraryVM library,
         IAppDialogService dialogs,
-        IStatusSink status,
         MainWindowSyncVM sync,
         UpdateCoordinator updates,
         CacheResetService reset)
     {
         _library = library;
         _dialogs = dialogs;
-        _status = status;
         _sync = sync;
         _updates = updates;
         _reset = reset;
@@ -45,11 +39,11 @@ public sealed partial class MainWindowSettingsVM : ObservableObject
     {
         public const int Data = 0;
         public const int General = 1;
-        public const int Donate = 2;
-        public const int About = 3;
+        public const int About = 2;
+        public const int Donate = 3;
     }
 
-    /// <summary>当前选中的分组（0 数据更新 / 1 通用 / 2 打赏赞助 / 3 关于）。</summary>
+    /// <summary>当前选中的分组（0 数据管理 / 1 免责声明 / 2 关于 / 3 打赏赞助）。</summary>
     [ObservableProperty]
     private int _groupIndex = Groups.Data;
 
@@ -78,13 +72,9 @@ public sealed partial class MainWindowSettingsVM : ObservableObject
 
     // ==================== 关于 · 版本与更新 ====================
 
-    /// <summary>「当前版本 v1.0.2」这一行。检查结果只走状态栏，不再往这行堆。</summary>
+    /// <summary>「当前版本 v1.0.2」这一行。</summary>
     [ObservableProperty]
     private string _versionLine = "";
-
-    /// <summary>「更新内容」下面那句说明，取 Assets\changelog.txt 的首段。</summary>
-    [ObservableProperty]
-    private string _notesLine = "";
 
     /// <summary>检查更新那颗按钮能不能点（正在检查 / 正在安装时点不动）。</summary>
     [ObservableProperty]
@@ -115,14 +105,13 @@ public sealed partial class MainWindowSettingsVM : ObservableObject
         QuickNamesText = running == SyncKind.Names ? "更新中…" : "开始更新";
     }
 
-    /// <summary>还没检查过：只写当前版本，更新内容读本地文本文件。</summary>
+    /// <summary>还没检查过：只写当前版本（更新内容那一行是固定文案，不用刷）。</summary>
     public void ShowIdle(string currentVersion)
     {
         VersionLine = $"当前版本 v{currentVersion}";
-        NotesLine = ChangelogText.LoadSummary();
     }
 
-    /// <summary>正在查：按钮先锁住；版本那一行不动，检查结果最后只落在状态栏。</summary>
+    /// <summary>正在查：按钮先锁住；版本那一行不动。</summary>
     public void ShowChecking(string currentVersion)
     {
         VersionLine = $"当前版本 v{currentVersion}";
@@ -130,15 +119,14 @@ public sealed partial class MainWindowSettingsVM : ObservableObject
     }
 
     /// <summary>
-    /// 检查结果不再写进「软件更新」那一行 —— 这里只保证版本号和更新内容是最新的。
-    /// 有新版本 / 已是最新 / 检查失败的提示仍然走状态栏和弹窗。
+    /// 检查结果不写进「软件更新」那一行 —— 这里只保证版本号是最新的。
+    /// 有新版本 / 已是最新 / 检查失败的提示走弹窗，不占用底部状态栏。
     /// </summary>
     /// <param name="currentVersion">当前版本号（不带 v），比如 <c>1.0.2</c>。</param>
     /// <param name="result">检查结果（保留参数，调用方不必分两种写法）。</param>
     public void ShowResult(string currentVersion, UpdateCheckResult result)
     {
         VersionLine = $"当前版本 v{currentVersion}";
-        NotesLine = ChangelogText.LoadSummary();
     }
 
     // ==================== 数据更新 ====================
@@ -173,20 +161,19 @@ public sealed partial class MainWindowSettingsVM : ObservableObject
 
         try
         {
-            var summary = await _reset.ClearAsync(() => _library.SearchInFlight || _library.IsBusyLoading);
-            _status.Report(summary);
-            _pendingClearSummary = summary;
+            await _reset.ClearAsync(() => _library.SearchInFlight || _library.IsBusyLoading);
+
+            // 不弹「清完了」：列表当场变空就是最好的反馈，弹窗还得再点一下
+            ResetAfterClear();
         }
         catch (Exception ex)
         {
-            _status.Report($"清除失败：{ex.Message}");
+            await _dialogs.NotifyAsync("清除失败", ex.Message);
         }
         finally
         {
             ClearCacheEnabled = true;
         }
-
-        ResetAfterClear();
     }
 
     /// <summary>
@@ -201,13 +188,6 @@ public sealed partial class MainWindowSettingsVM : ObservableObject
             if (_library.IsSearching) _library.ExitSearch(clearText: true);
 
             _library.ReloadFromLocal();
-
-            // 重读会把状态栏刷成条数信息，把这次清掉多少再贴回去，别让提示一闪就没
-            if (!string.IsNullOrEmpty(_pendingClearSummary))
-            {
-                _status.Report(_pendingClearSummary);
-                _pendingClearSummary = "";
-            }
         }
         finally
         {
@@ -217,13 +197,45 @@ public sealed partial class MainWindowSettingsVM : ObservableObject
 
     // ==================== 在线更新 ====================
 
-    /// <summary>设置页「检查更新」。</summary>
+    /// <summary>设置页「检查更新」：有新版本就弹更新框，否则弹一句「已经是最新」。</summary>
     [RelayCommand]
     private async Task CheckUpdateAsync()
     {
         var result = await CheckAsync(manual: true);
-        if (result is { State: UpdateCheckState.UpdateAvailable, Release: { } release })
-            _dialogs.ShowUpdate(release, prompt: true);
+        await PresentAsync(result, auto: false);
+    }
+
+    /// <summary>
+    /// 把一次检查结果呈现出来。手动点的每一次都有反馈；启动时自动查的那次**只在发现新版本时弹窗**，
+    /// 其余（已是最新、断网超时、404/403 拿不到发行版）一律安静。
+    /// </summary>
+    /// <param name="result">检查结果。</param>
+    /// <param name="auto">是不是启动后的自动检查。</param>
+    public async Task PresentAsync(UpdateCheckResult result, bool auto)
+    {
+        switch (result.State)
+        {
+            case UpdateCheckState.UpdateAvailable when result.Release is { } release:
+                _dialogs.ShowUpdate(release, prompt: true);
+                break;
+
+            case UpdateCheckState.UpToDate when !auto:
+                await _dialogs.NotifyAsync(
+                    "已是最新版本",
+                    $"当前版本 v{UpdateService.CurrentVersionText}，无需更新。");
+                break;
+
+            // 404 / 401 / 403 / 410：仓库或发行版读不到，在线更新这条路直接断了。
+            // 不把状态码摆给用户看，只给一句能照做的：去网盘下。
+            // 自动检查碰到这种情况**不弹**，静默跳过。
+            case UpdateCheckState.Failed when !auto && result.RepoUnreachable:
+                await _dialogs.NotifyAsync("在线更新不可用", $"{UpdateCheckResult.UnavailableText}。");
+                break;
+
+            case UpdateCheckState.Failed when !auto:
+                await _dialogs.NotifyAsync("检查更新失败", result.Message);
+                break;
+        }
     }
 
     /// <summary>
@@ -241,13 +253,12 @@ public sealed partial class MainWindowSettingsVM : ObservableObject
 
     /// <summary>
     /// 查一次更新：更新设置页那一行文案，并把结果交回去给调用方决定弹不弹窗。
-    /// 失败不抛异常，原因写在状态栏和设置页说明里。
+    /// 失败不抛异常，原因由调用方用弹窗说明（不走底部状态栏）。
     /// </summary>
-    /// <param name="manual">是不是用户手动点的（手动点才在状态栏回话）。</param>
+    /// <param name="manual">是不是用户手动点的（保留参数：两条路径都不写状态栏了）。</param>
     public async Task<UpdateCheckResult> CheckAsync(bool manual)
     {
         ShowChecking(UpdateService.CurrentVersionText);
-        if (manual) _status.Report("正在检查更新…");
 
         UpdateCheckResult result;
         try
@@ -260,18 +271,6 @@ public sealed partial class MainWindowSettingsVM : ObservableObject
         }
 
         RefreshUpdateRow(result);
-
-        if (!manual) return result;
-
-        _status.Report(
-            result.State switch
-            {
-                UpdateCheckState.UpdateAvailable => result.Message,
-                UpdateCheckState.UpToDate => $"已经是最新版本 v{UpdateService.CurrentVersionText}",
-                _ => result.Message
-            },
-            result.State == UpdateCheckState.UpdateAvailable ? StatusLevel.Success : null);
-
         return result;
     }
 
@@ -293,7 +292,9 @@ public sealed partial class MainWindowSettingsVM : ObservableObject
         // 发行版里没挂更新包：没法自动装，直接把发行版页面打开让用户自己下
         if (string.IsNullOrWhiteSpace(release.DownloadUrl))
         {
-            _status.Report("这个版本没有可下载的更新包，已打开发行版页面");
+            await _dialogs.NotifyAsync(
+                "这个版本没有可下载的更新包",
+                "已经打开 Gitee 发行版页面，可以手动下载。");
             _dialogs.OpenExternal(release.PageUrl);
             return;
         }
@@ -306,22 +307,26 @@ public sealed partial class MainWindowSettingsVM : ObservableObject
             // 下载浮层在 AppOverlays 里开，进度条由 UpdateDownloadVM 驱动
             path = await _updates.RunAsync(release, _dialogs.DownloadUpdateAsync);
         }
+        catch (UpdateUnavailableException)
+        {
+            // 更新包地址 404 / 被拒：不给用户看状态码，直接指去网盘
+            UpdateButtonEnabled = true;
+            await _dialogs.NotifyAsync("在线更新不可用", $"{UpdateCheckResult.UnavailableText}。");
+            return;
+        }
         catch (Exception ex)
         {
             UpdateButtonEnabled = true;
-            _status.Report($"下载失败：{ex.Message}");
+            await _dialogs.NotifyAsync("下载更新失败", ex.Message);
             return;
         }
 
         if (path is null)
         {
-            // 用户在下载浮层里点了取消
+            // 用户在下载浮层里点了取消：不用再弹一句，他自己知道
             UpdateButtonEnabled = true;
-            _status.Report("已取消更新");
             return;
         }
-
-        _status.Report("下载完成，正在打开安装程序…");
 
         try
         {
@@ -330,7 +335,7 @@ public sealed partial class MainWindowSettingsVM : ObservableObject
         catch (Exception ex)
         {
             UpdateButtonEnabled = true;
-            _status.Report($"打开安装程序失败：{ex.Message}");
+            await _dialogs.NotifyAsync("打开安装程序失败", $"{ex.Message}\n\n安装包已下载到：\n{Path.GetDirectoryName(path) ?? UpdateService.DownloadDir}");
             _dialogs.OpenExternal(Path.GetDirectoryName(path) ?? UpdateService.DownloadDir);
             return;
         }
@@ -341,6 +346,15 @@ public sealed partial class MainWindowSettingsVM : ObservableObject
 
     /// <summary>正在下载 / 安装更新（这期间 Esc 关不掉更新弹窗）。</summary>
     public bool IsUpdateInstalling => _updates.IsUpdating;
+
+    // ==================== 网盘下载 ====================
+
+    /// <summary>夸克网盘分享地址：Gitee 附件下不动或额度用满时的备用下载通道。</summary>
+    private const string CloudDriveUrl = "https://pan.quark.cn/s/ed32311b1952";
+
+    /// <summary>「点击进入」：用系统默认浏览器打开夸克网盘分享页，程序内不参与下载。</summary>
+    [RelayCommand]
+    private void OpenCloudDrive() => _dialogs.OpenExternal(CloudDriveUrl);
 
     /// <summary>「关于」弹窗。</summary>
     [RelayCommand]

@@ -98,6 +98,23 @@
                 </DataTrigger>
             </Style.Triggers>
         </Style>
+
+        <!--
+            右侧「启动程序」：能启动时换成蓝色主按钮（模板跟 PrimaryBtn 共用一份），
+            一眼就能看到"现在该点哪个"；还不能启动时退回灰底幽灵按钮并压暗，维持原样。
+            不能直接换 Style —— 触发器里只能改属性，没法把 Style 换成另一个 Style，所以改 Template 引用。
+        -->
+        <Style
+            x:Key="LaunchButtonStyle"
+            TargetType="Button"
+            BasedOn="{StaticResource GhostBtn}">
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding LaunchEnabled}" Value="True">
+                    <Setter Property="Template" Value="{StaticResource PrimaryBtnTemplate}" />
+                    <Setter Property="Foreground" Value="White" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
     </UserControl.Resources>
 
     <Border
@@ -186,7 +203,6 @@
                             SelectionBrush="#B37FB4FF"
                             Text="{Binding Item.DisplayTitle, Mode=OneWay}"
                             TextWrapping="NoWrap"
-                            ToolTip="可以拖选 / Ctrl+C 复制游戏名"
                             VerticalScrollBarVisibility="Disabled" />
                         <WrapPanel Margin="0,10,0,0">
                             <Border Background="#CC12243A" Style="{StaticResource Chip}">
@@ -812,32 +828,17 @@
 
                 <!--  右侧操作栏：只有按钮，不需要滚动条（内容固定，矮窗口下也就不滚了）  -->
                 <StackPanel Grid.Column="1" VerticalAlignment="Top">
-                    <Button
-                        Height="38"
-                        Margin="0,0,0,8"
-                        Command="{Binding DownloadLatestCommand}"
-                        Style="{StaticResource PrimaryBtn}">
-                        <StackPanel Orientation="Horizontal">
-                            <TextBlock
-                                VerticalAlignment="Center"
-                                FontFamily="{StaticResource F.Icon}"
-                                FontSize="15"
-                                Text="&#xE896;" />
-                            <TextBlock
-                                Margin="7,0,0,0"
-                                VerticalAlignment="Center"
-                                Text="下载最新文件" />
-                        </StackPanel>
-                    </Button>
-
+                    <!--
+                        第一位放「启动程序」：打这款修改器是最终目的，下载只是过程。
+                        能启动时它是蓝色主按钮，不能启动时是压暗的灰按钮 —— 主次一眼分得清。
+                    -->
                     <Button
                         x:Name="LaunchButton"
-                        Height="36"
+                        Height="38"
                         Margin="0,0,0,8"
                         Command="{Binding LaunchCommand}"
-                        Foreground="#FFF1F6FC"
                         IsEnabled="{Binding LaunchEnabled}"
-                        Style="{StaticResource GhostBtn}"
+                        Style="{StaticResource LaunchButtonStyle}"
                         ToolTip="{Binding LaunchToolTip}">
                         <StackPanel Orientation="Horizontal">
                             <TextBlock
@@ -852,31 +853,24 @@
                         </StackPanel>
                     </Button>
 
+                    <!--  下载走灰色按钮：不再是主题色（蓝色只留给「能启动」这一件事）  -->
                     <Button
-                        Height="36"
+                        Height="38"
                         Margin="0,0,0,8"
-                        Command="{Binding OpenSiteCommand}"
-                        Foreground="#FFF1F6FC"
+                        Command="{Binding DownloadLatestCommand}"
                         Style="{StaticResource GhostBtn}">
                         <StackPanel Orientation="Horizontal">
                             <TextBlock
                                 VerticalAlignment="Center"
-                                FontSize="14"
-                                Text="↗" />
+                                FontFamily="{StaticResource F.Icon}"
+                                FontSize="15"
+                                Text="&#xE896;" />
                             <TextBlock
                                 Margin="7,0,0,0"
                                 VerticalAlignment="Center"
-                                Text="打开官网详情页" />
+                                Text="下载最新文件" />
                         </StackPanel>
                     </Button>
-
-                    <Button
-                        Height="36"
-                        Margin="0,0,0,8"
-                        Command="{Binding CopyLinkCommand}"
-                        Content="复制页面链接"
-                        Foreground="#FFF1F6FC"
-                        Style="{StaticResource GhostBtn}" />
 
                     <Button
                         x:Name="FavButton"

@@ -2,11 +2,19 @@
 ============================================================================
  风灵月影宗藏宝阁 · 发布到 Gitee Releases（全自动）
 
- 双击 release.bat 就行，中途不用按任何键。它会做完这四件事：
+ 双击 release.bat 就行，中途基本不用按键（只有第一次要粘一次令牌，
+ 之后自动从 gitee.token.txt 读）。它会做完这四件事：
    1. 读 .pro\version.txt 的版本号，在 .releases\<版本号>\ 下找安装包
    2. 读 FlingTrainerX\Assets\changelog.txt 当发行版描述
    3. 建发行版（tag = v<版本号>）；已有同名发行版就把描述更新成最新的
-   4. 把安装包作为附件传上去（带真实上传进度），同名旧附件会先删掉
+   4. 把安装包作为附件传上去（带真实上传进度），附件名沿用 exe 的文件名（中文原样保留，
+      不能用 .NET 的 MultipartFormDataContent，它会把中文名转成 =?utf-8?B?..?= 编码字）；
+      发行版里的旧附件会先删掉，避免重跑时堆一串
+
+ 令牌：脚本同级目录的 gitee.token.txt（已被 .gitignore 忽略）。
+   文件在就直接读；没有就当场要你粘贴一次，粘完自动写进这个文件，以后都不用再输。
+   换令牌 = 改这个文件；删掉它 = 下次发布重新问一遍。
+   文件里只认第一个非空行，前后引号 / 空格 / BOM 都会自动去掉，放心用记事本编辑。
 
  接口（Gitee OpenAPI v5，见 https://gitee.com/api/v5/swagger）：
    创建发行版  POST   /repos/{owner}/{repo}/releases                JSON
@@ -23,7 +31,7 @@
 # ------------------------- 需要改就改这里 -------------------------
 $GiteeOwner     = 'misslius'                        # 仓库拥有者
 $GiteeRepo      = 'FlingTrainerX'                   # 仓库名
-$GiteeToken     = ''                                # 私人令牌；留空则依次尝试环境变量 GITEE_TOKEN、.pro\.gitee-token
+$TokenFileName  = 'gitee.token.txt'                 # 私人令牌文件（脚本同级目录，已被 .gitignore 忽略；没有会当场问一次再写回来）
 $SoftwareName   = '风灵月影宗藏宝阁'                 # 与 publish.ps1 保持一致
 $ReleaseDir     = '..\.releases'                    # 构建产物根目录（与 publish.ps1 保持一致）
 $PackagePattern = '*-*.exe'                         # 在版本目录里找哪个文件当附件
@@ -38,7 +46,7 @@ try { [Console]::OutputEncoding = [System.Text.Encoding]::UTF8 } catch { }
 # ============================== 基础路径 ==============================
 $Root        = $PSScriptRoot
 $VersionFile = Join-Path $Root 'version.txt'
-$TokenFile   = Join-Path $Root '.gitee-token'
+$TokenFile   = Join-Path $Root $TokenFileName
 $ReleaseRoot = [System.IO.Path]::GetFullPath((Join-Path $Root $ReleaseDir))
 $ChangelogPath = [System.IO.Path]::GetFullPath((Join-Path $Root $ChangelogFile))
 $ApiBase     = "https://gitee.com/api/v5/repos/$GiteeOwner/$GiteeRepo"
@@ -85,18 +93,117 @@ function Exit-Gracefully {
     exit 0
 }
 
+# ============================== 令牌 ==============================
+
+<#
+  令牌文件里只认「第一个非空行」：用记事本随手编辑、留空行、粘成带引号的都认。
+  BOM 也在这里一并去掉，否则那一串字符前面会多一个看不见的 U+FEFF，请求就 401。
+#>
+function Read-TokenFile {
+    if (-not (Test-Path $TokenFile)) { return '' }
+
+    try {
+        $text = [System.IO.File]::ReadAllText($TokenFile)
+    } catch {
+        Write-Warn ("读不了 {0}：{1}" -f $TokenFileName, $_.Exception.Message)
+        return ''
+    }
+
+    foreach ($line in ($text -split "`r?`n")) {
+        $candidate = $line.Trim().Trim([char]0xFEFF).Trim()
+        if ($candidate -eq '') { continue }
+
+        # 允许写成 token="xxx" / 带引号的形式
+        $candidate = $candidate.Trim('"').Trim("'").Trim()
+        if ($candidate -ne '') { return $candidate }
+    }
+
+    return ''
+}
+
+<# 只露头尾，日志里不至于把令牌整串打出来 #>
+function Hide-Token {
+    param([string]$Token)
+    if ($Token.Length -le 10) { return ('*' * $Token.Length) }
+    return ('{0}…{1}' -f $Token.Substring(0, 4), $Token.Substring($Token.Length - 4))
+}
+
+<# 把 Read-Host -AsSecureString 拿到的密文还原成明文 #>
+function ConvertFrom-SecureText {
+    param([System.Security.SecureString]$Secure)
+
+    $bstr = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($Secure)
+    try { return [System.Runtime.InteropServices.Marshal]::PtrToStringBSTR($bstr) }
+    finally { [System.Runtime.InteropServices.Marshal]::ZeroFreeBSTR($bstr) }
+}
+
+<#
+  取令牌：先读 gitee.token.txt；没有（或内容是空的）就当场问一次，
+  拿到后写回文件，下次发布直接读。
+#>
+function Get-GiteeToken {
+    $saved = Read-TokenFile
+    if ($saved -ne '') {
+        Write-Info ("令牌 {0}（取自 {1}）" -f (Hide-Token $saved), $TokenFileName)
+        return $saved
+    }
+
+    if (Test-Path $TokenFile) {
+        Write-Warn ("{0} 里没有内容，当作没有令牌处理" -f $TokenFileName)
+    }
+
+    Write-Host ''
+    Write-Host '  首次发布需要 Gitee 私人令牌，只需要输这一次' -ForegroundColor Yellow
+    Write-Host '    获取：https://gitee.com/profile/personal_access_tokens' -ForegroundColor DarkGray
+    Write-Host '    新建时勾选 projects 权限，复制生成的那串字符' -ForegroundColor DarkGray
+    Write-Host ''
+
+    $token = ''
+    while ([string]::IsNullOrWhiteSpace($token)) {
+        try {
+            # 不回显，免得令牌留在屏幕上被截到
+            $secure = Read-Host '  粘贴令牌（输入不回显，回车确认）' -AsSecureString
+            $token = ConvertFrom-SecureText $secure
+        } catch {
+            # 少数宿主不支持 SecureString 输入，退回明文读
+            $token = Read-Host '  粘贴令牌（回车确认）'
+        }
+
+        if ([string]::IsNullOrWhiteSpace($token)) { Write-Warn '没读到内容，再试一次（Ctrl+C 可退出）' }
+    }
+
+    $token = $token.Trim().Trim('"').Trim("'").Trim()
+
+    try {
+        [System.IO.File]::WriteAllText($TokenFile, $token, (New-Object System.Text.UTF8Encoding($false)))
+        Write-Ok ("令牌已保存到 {0}（{1}），以后发布会直接用它" -f $TokenFile, (Hide-Token $token))
+    } catch {
+        Write-Warn ("令牌没能写进 {0}（{1}）；这次仍可继续，只是下次还得再输一遍" -f $TokenFile, $_.Exception.Message)
+    }
+
+    return $token
+}
+
 # ============================== 上传（带真实进度） ==============================
 # 为什么整段放在 C# 里：
-#   · MultipartFormDataContent 会一次性把整个文件塞进去，70MB 要卡好几分钟毫无反馈；
+#   · 一次性把整个文件塞进去，70MB 要卡好几分钟毫无反馈；
 #   · 而拿 PowerShell 脚本块当进度回调又会炸——回调跑在 IO 线程，那儿没有 Runspace，
 #     报「此线程中没有可用于运行脚本的运行空间」。
 #   所以「边读边发 + 画进度条」全放 C# 做，PowerShell 只调一行。
+#
+# 为什么不用 MultipartFormDataContent：
+#   .NET 会把非 ASCII 文件名转成 RFC2047 编码字（filename="=?utf-8?B?6aOO...?="），
+#   而 Gitee 不还原它，直接把这一长串当成真实文件名存下来。结果附件名变成
+#   =?utf-8?B?6aOO54G15pyI5b2x5a6X6JeP5a6d6ZiBLTEuMC4xLmV4ZQ==?=
+#   ——后缀 .exe 被吃掉，客户端 PickAsset 认不出安装包，退而去下源码 zip。
+#   这里手写 multipart 头和尾，文件名按 UTF-8 原样写，Gitee 就能存成中文名。
 if (-not ('GiteeUpload.Uploader' -as [type])) {
     Add-Type -TypeDefinition @'
 using System;
 using System.IO;
 using System.Net;
 using System.Net.Http;
+using System.Text;
 using System.Threading.Tasks;
 
 namespace GiteeUpload
@@ -109,17 +216,24 @@ namespace GiteeUpload
             long total = new FileInfo(filePath).Length;
             string fileName = Path.GetFileName(filePath);
             DateTime start = DateTime.Now;
+            string boundary = "----FlingTrainerX" + Guid.NewGuid().ToString("N");
+
+            // 文件名直接以 UTF-8 写进头部，不做任何编码转换
+            byte[] head = Encoding.UTF8.GetBytes(
+                "--" + boundary + "\r\n" +
+                "Content-Disposition: form-data; name=\"file\"; filename=\"" + fileName + "\"\r\n" +
+                "Content-Type: application/octet-stream\r\n\r\n");
+            byte[] tail = Encoding.UTF8.GetBytes("\r\n--" + boundary + "--\r\n");
 
             using (var stream = File.OpenRead(filePath))
-            using (var content = new ProgressContent(stream, total, start))
-            using (var form = new MultipartFormDataContent())
+            using (var content = new ProgressContent(stream, head, tail, total, start))
             using (var client = new HttpClient())
             {
-                form.Add(content, "file", fileName);
+                content.Headers.TryAddWithoutValidation("Content-Type", "multipart/form-data; boundary=" + boundary);
                 client.Timeout = TimeSpan.FromMinutes(30);
                 client.DefaultRequestHeaders.Add("User-Agent", "FlingTrainerX-release");
 
-                var response = client.PostAsync(url, form).GetAwaiter().GetResult();
+                var response = client.PostAsync(url, content).GetAwaiter().GetResult();
                 var text = response.Content.ReadAsStringAsync().GetAwaiter().GetResult();
                 Console.WriteLine();
 
@@ -136,20 +250,26 @@ namespace GiteeUpload
     internal sealed class ProgressContent : HttpContent
     {
         private readonly Stream _source;
-        private readonly long _total;
+        private readonly byte[] _head;
+        private readonly byte[] _tail;
+        private readonly long _fileLength;
         private readonly DateTime _start;
         private int _lastPct = -1;
 
-        public ProgressContent(Stream source, long total, DateTime start)
+        public ProgressContent(Stream source, byte[] head, byte[] tail, long fileLength, DateTime start)
         {
             _source = source;
-            _total = total;
+            _head = head;
+            _tail = tail;
+            _fileLength = fileLength;
             _start = start;
-            Headers.ContentLength = total;
+            Headers.ContentLength = head.Length + fileLength + tail.Length;
         }
 
         protected override async Task SerializeToStreamAsync(Stream target, TransportContext context)
         {
+            await target.WriteAsync(_head, 0, _head.Length).ConfigureAwait(false);
+
             var buffer = new byte[81920];
             long sent = 0;
             int read;
@@ -157,9 +277,11 @@ namespace GiteeUpload
             {
                 await target.WriteAsync(buffer, 0, read).ConfigureAwait(false);
                 sent += read;
-                int pct = _total > 0 ? (int)(sent * 100 / _total) : 0;
+                int pct = _fileLength > 0 ? (int)(sent * 100 / _fileLength) : 0;
                 if (pct != _lastPct) { _lastPct = pct; Draw(pct, sent); }
             }
+
+            await target.WriteAsync(_tail, 0, _tail.Length).ConfigureAwait(false);
         }
 
         private void Draw(int pct, long sent)
@@ -169,13 +291,13 @@ namespace GiteeUpload
             string bar = new string('#', done) + new string('-', width - done);
             string line = string.Format(
                 "        {0} {1,3}%  uploading     {2:mm\\:ss}   {3,6:N1} / {4,6:N1} MB",
-                bar, pct, DateTime.Now - _start, sent / 1048576.0, _total / 1048576.0);
+                bar, pct, DateTime.Now - _start, sent / 1048576.0, _fileLength / 1048576.0);
             Console.Write("\r" + line.PadRight(96));
         }
 
         protected override bool TryComputeLength(out long length)
         {
-            length = _total;
+            length = _head.Length + _fileLength + _tail.Length;
             return true;
         }
     }
@@ -185,6 +307,10 @@ namespace GiteeUpload
 
 # ============================== 主流程 ==============================
 Write-Banner
+
+# --- 0. 令牌 ---
+# 放在最前面：缺令牌就直接问，别等读完版本、传了一半才发现认证过不去
+$GiteeToken = Get-GiteeToken
 
 # --- 1. 版本号 + 安装包 ---
 Write-Step '读取版本与安装包'
@@ -237,22 +363,10 @@ if ([string]::IsNullOrWhiteSpace($notes)) {
 }
 
 # --- 3. 令牌 ---
-if ([string]::IsNullOrWhiteSpace($GiteeToken)) { $GiteeToken = [Environment]::GetEnvironmentVariable('GITEE_TOKEN') }
-if ([string]::IsNullOrWhiteSpace($GiteeToken) -and (Test-Path $TokenFile)) {
-    $GiteeToken = ([System.IO.File]::ReadAllText($TokenFile)).Trim()
-}
+# 开头在 Get-GiteeToken 里已经取好了（读 gitee.token.txt，没有就当场问一次并写回去），
+# 这里只做最后一道保险：真的空着就别发请求
 if ([string]::IsNullOrWhiteSpace($GiteeToken)) {
-    Fail '没有 Gitee 私人令牌' @'
-  去 https://gitee.com/profile/personal_access_tokens 新建一个，
-  勾选 projects 权限，然后把令牌填到下面任意一处：
-    1) 本脚本顶部的 $GiteeToken
-    2) 环境变量 GITEE_TOKEN
-    3) .pro\.gitee-token 文件（一行令牌，已被 .gitignore 忽略）
-
-  注意：仓库设成公开也不能省掉令牌。公开只免掉「读」
-  （程序检查更新、用户下载安装包都不用令牌），而发布要建发行版、
-  传附件，属于写操作，任何仓库都要求令牌。
-'@
+    Fail '没有 Gitee 私人令牌' ("把令牌写进 {0}，或删掉这个文件让脚本重新问一次`n获取地址：https://gitee.com/profile/personal_access_tokens（要勾 projects 权限）" -f $TokenFile)
 }
 
 $tag        = $TagPrefix + $version
@@ -265,8 +379,16 @@ Write-Step '创建或更新发行版'
 
 $existing = $null
 try {
-    $existing = Invoke-RestMethod -Method Get -Uri ("{0}/releases/tags/{1}?access_token={2}" -f $ApiBase, $tag, $tokenParam) `
-                                  -Headers $headers -TimeoutSec 30
+    $found = Invoke-RestMethod -Method Get -Uri ("{0}/releases/tags/{1}?access_token={2}" -f $ApiBase, $tag, $tokenParam) `
+                               -Headers $headers -TimeoutSec 30
+
+    # Gitee 在「这个 tag 下还没有发行版」时返回的是 HTTP 200 + 字面量 null，
+    # 而 Windows PowerShell 5.1 会把它反序列化成字符串 "null"（是真的），
+    # 直接 if ($found) 会走进「已有发行版」分支，接着拿不到 id，
+    # 就拼出 /releases/ （末尾没有 id）→ PATCH 报 405、DELETE 报 404。
+    # 所以这里只认「带纯数字 id 的对象」。
+    $foundId = if ($null -ne $found) { $found.id } else { $null }
+    if ("$foundId" -match '^\d+$') { $existing = $found }
 } catch {
     $code = $null
     if ($_.Exception.Response) { $code = [int]$_.Exception.Response.StatusCode }
@@ -346,18 +468,23 @@ if ($existing) {
 # --- 4. 上传附件 ---
 Write-Step ("上传安装包（{0:N1} MB）" -f ($package.Length / 1MB))
 
-# 同名旧附件先删掉，否则重复发布会堆一串同名文件
+# 旧附件先全删掉，再传新的：
+#   · 早期版本上传时文件名被 .NET 转成了 =?utf-8?B?...?=，和 package.Name 永远不相等，
+#     按名字挑根本删不掉，会在页面上留一堆带问号的垃圾附件；
+#   · attach_files 只列真实上传的文件（Gitee 自动生成的源码 zip/tar.gz 不在里面），
+#     所以「全删」不会误伤。
+#   · 每一步失败都不致命，最后以新附件是否传成功为准。
 try {
     $old = Invoke-RestMethod -Method Get -Uri ("{0}/releases/{1}/attach_files?access_token={2}&per_page=100" -f $ApiBase, $releaseId, $tokenParam) `
                              -Headers $headers -TimeoutSec 30
     foreach ($asset in @($old)) {
-        if ($null -eq $asset -or $asset.name -ne $package.Name) { continue }
+        if ($null -eq $asset -or "$($asset.id)" -notmatch '^\d+$') { continue }
         Invoke-RestMethod -Method Delete -Uri ("{0}/releases/{1}/attach_files/{2}?access_token={3}" -f $ApiBase, $releaseId, $asset.id, $tokenParam) `
                           -Headers $headers -TimeoutSec 30 | Out-Null
-        Write-Info ("已移除同名旧附件 {0}" -f $asset.name)
+        Write-Info ("已移除旧附件 {0}" -f $asset.name)
     }
 } catch {
-    Write-Warn ("查/删旧附件时出错，继续上传：{0}" -f $_.Exception.Message)
+    Write-Warn ("清理旧附件时出错，继续上传：{0}" -f $_.Exception.Message)
 }
 
 $uploadUri = "{0}/releases/{1}/attach_files?access_token={2}" -f $ApiBase, $releaseId, $tokenParam

@@ -18,6 +18,12 @@ public sealed class UpdateCoordinator
     /// <summary>本次运行已经自动查过一次更新（启动检查只跑一次）。</summary>
     public bool AutoChecked { get; private set; }
 
+    /// <summary>
+    /// 本次运行是否已经查过一次（自动或手动都算）。
+    /// 启动那次检查等 1 分钟才跑，若这期间用户自己点过「检查更新」，就不再重复查、也不再弹第二遍窗。
+    /// </summary>
+    public bool HasChecked { get; private set; }
+
     /// <summary>正在下载 / 安装：这期间不再响应检查按钮，也不让 Esc 关弹窗。</summary>
     public bool IsUpdating { get; private set; }
 
@@ -46,6 +52,8 @@ public sealed class UpdateCoordinator
         IsChecking = true;
         try
         {
+            HasChecked = true;
+
             // 20 秒还没结果就当超时，免得按钮一直转
             using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
             timeout.CancelAfter(TimeSpan.FromSeconds(20));

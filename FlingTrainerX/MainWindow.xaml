@@ -56,7 +56,6 @@
                         <RowDefinition Height="62" />
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="*" />
-                        <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
 
                     <!--  Logo  -->
@@ -150,60 +149,6 @@
                             </StackPanel>
                         </ListBoxItem>
                     </ListBox>
-
-                    <!--  底部信息  -->
-                    <Border
-                        Grid.Row="3"
-                        Margin="14,0,14,16"
-                        Padding="12,10"
-                        Background="#FF192A3C"
-                        BorderBrush="#FF2A3F57"
-                        BorderThickness="1"
-                        CornerRadius="10">
-                        <StackPanel>
-                            <TextBlock
-                                FontSize="{StaticResource Fs.Caption}"
-                                Foreground="{StaticResource B.TextMute}"
-                                Text="数据源" />
-                            <!--  整块可点：点一下用默认浏览器打开官网（图标表示「会在外部打开」）  -->
-                            <Border
-                                x:Name="DataSourceLink"
-                                Margin="0,3,0,0"
-                                Padding="0,2"
-                                Background="Transparent"
-                                Cursor="Hand"
-                                ToolTip="在浏览器中打开 https://flingtrainer.com">
-                                <Border.InputBindings>
-                                    <MouseBinding Command="{Binding OpenSiteCommand}" Gesture="LeftClick" />
-                                </Border.InputBindings>
-                                <Border.Style>
-                                    <Style TargetType="Border">
-                                        <Setter Property="TextBlock.Foreground" Value="#FF7FB4FF" />
-                                        <Style.Triggers>
-                                            <Trigger Property="IsMouseOver" Value="True">
-                                                <Setter Property="TextBlock.Foreground" Value="#FFC6E0FF" />
-                                            </Trigger>
-                                        </Style.Triggers>
-                                    </Style>
-                                </Border.Style>
-                                <StackPanel Orientation="Horizontal">
-                                    <TextBlock FontSize="{StaticResource Fs.Small}" Text="flingtrainer.com" />
-                                    <TextBlock
-                                        Margin="4,0,0,1"
-                                        VerticalAlignment="Center"
-                                        FontSize="{StaticResource Fs.Caption}"
-                                        Opacity="0.75"
-                                        Text="↗" />
-                                </StackPanel>
-                            </Border>
-                            <TextBlock
-                                x:Name="SidebarSyncText"
-                                Margin="0,6,0,0"
-                                FontSize="{StaticResource Fs.Caption}"
-                                Foreground="{StaticResource B.TextMute}"
-                                Text="{Binding SyncTimeText}" />
-                        </StackPanel>
-                    </Border>
                 </Grid>
             </Border>
 
@@ -212,8 +157,8 @@
                 <Grid.RowDefinitions>
                     <RowDefinition Height="60" />
                     <RowDefinition Height="*" />
-                    <!--  状态栏：48 高，右侧分页按钮才装得下 30 高的方块  -->
-                    <RowDefinition Height="48" />
+                    <!--  状态栏：48 高，右侧分页按钮才装得下 30 高的方块；设置页整条收起（见 StatusBarVisible）  -->
+                    <RowDefinition Height="Auto" />
                 </Grid.RowDefinitions>
 
                 <!--  顶栏  -->
@@ -290,7 +235,7 @@
                                 FontSize="{StaticResource Fs.Body}"
                                 Foreground="{StaticResource B.TextMute}"
                                 IsHitTestVisible="False"
-                                Text="输入游戏名 / 中文名，回车搜索"
+                                Text="{Binding Library.SearchPlaceholder}"
                                 Visibility="{Binding Library.SearchHintVisible, Converter={StaticResource BoolToVis}}" />
                             <TextBlock
                                 Grid.Column="2"
@@ -392,8 +337,7 @@
                             <Button
                                 x:Name="RefreshButton"
                                 Command="{Binding Library.RefreshLocalCommand}"
-                                Style="{StaticResource IconBtn}"
-                                ToolTip="重新读取本地数据 · 鼠标悬停可更新">
+                                Style="{StaticResource IconBtn}">
                                 <TextBlock
                                     x:Name="RefreshGlyph"
                                     FontFamily="{StaticResource F.Icon}"
@@ -659,7 +603,6 @@
                                                                     Padding="7,3"
                                                                     Background="#4D08121E"
                                                                     CornerRadius="6"
-                                                                    ToolTip="这款游戏可用的修改项数"
                                                                     Visibility="{Binding OptionCountTag, Converter={StaticResource TextToVis}}">
                                                                     <TextBlock
                                                                         VerticalAlignment="Center"
@@ -672,8 +615,7 @@
                                                                     Margin="4,0,0,0"
                                                                     Padding="7,3"
                                                                     Background="#4D08121E"
-                                                                    CornerRadius="6"
-                                                                    ToolTip="{Binding UpdatedTip}">
+                                                                    CornerRadius="6">
                                                                     <TextBlock
                                                                         VerticalAlignment="Center"
                                                                         FontSize="{StaticResource Fs.Caption}"
@@ -776,10 +718,10 @@
                                 SelectedIndex="{Binding GroupIndex, Mode=TwoWay}"
                                 SelectionChanged="SettingsMenu_SelectionChanged"
                                 Style="{StaticResource SetNavList}">
-                                <ListBoxItem Content="数据更新" />
-                                <ListBoxItem Content="通用" />
+                                <ListBoxItem Content="数据管理" />
+                                <ListBoxItem Content="免责声明" />
+                                <ListBoxItem Content="软件更新" />
                                 <ListBoxItem Content="打赏赞助" />
-                                <ListBoxItem Content="关于" />
                             </ListBox>
 
                             <!--
@@ -807,7 +749,7 @@
                                             FontSize="{StaticResource Fs.Small}"
                                             FontWeight="SemiBold"
                                             Foreground="#FF7E93A9"
-                                            Text="数据更新" />
+                                            Text="数据管理" />
 
                                         <!--  首页只读本地 SQLite，所以「拿新数据」全部集中到这一组  -->
                                         <!--
@@ -844,7 +786,7 @@
                                                             FontSize="{StaticResource Fs.Small}"
                                                             Foreground="#FF8FA3BA"
                                                             LineHeight="20"
-                                                            Text="快速更新游戏名方便快速查询"
+                                                            Text="更新游戏名，可以智能提示游戏名"
                                                             TextWrapping="Wrap" />
                                                     </StackPanel>
 
@@ -859,8 +801,7 @@
                                                         Content="{Binding QuickNamesText}"
                                                         FontSize="{StaticResource Fs.Body}"
                                                         IsEnabled="{Binding UpdateButtonsEnabled}"
-                                                        Style="{StaticResource GhostBtn}"
-                                                        ToolTip="只更新搜索提示用的游戏名库，不下载详情、不更新 Steam 中文名" />
+                                                        Style="{StaticResource GhostBtn}" />
                                                 </Grid>
 
                                                 <Border Height="1" Background="#FF3A5570" />
@@ -885,7 +826,7 @@
                                                             FontSize="{StaticResource Fs.Small}"
                                                             Foreground="#FF8FA3BA"
                                                             LineHeight="20"
-                                                            Text="从官网更新最新信息；官网没改动的会自动跳过。"
+                                                            Text="帮你官网下载最新游戏信息"
                                                             TextWrapping="Wrap" />
                                                     </StackPanel>
 
@@ -900,8 +841,7 @@
                                                         Content="{Binding UpdateAllText}"
                                                         FontSize="{StaticResource Fs.Body}"
                                                         IsEnabled="{Binding UpdateButtonsEnabled}"
-                                                        Style="{StaticResource GhostBtn}"
-                                                        ToolTip="官网列表与 Steam 中文名同时开跑，互不等待" />
+                                                        Style="{StaticResource GhostBtn}" />
                                                 </Grid>
 
                                                 <Border Height="1" Background="#FF3A5570" />
@@ -941,119 +881,20 @@
                                                         Content="{Binding UpdateExistingText}"
                                                         FontSize="{StaticResource Fs.Body}"
                                                         IsEnabled="{Binding UpdateButtonsEnabled}"
-                                                        Style="{StaticResource GhostBtn}"
-                                                        ToolTip="本地详情与 Steam 中文名同时开跑，互不等待" />
+                                                        Style="{StaticResource GhostBtn}" />
                                                 </Grid>
 
                                             </StackPanel>
                                         </Border>
 
-                                    </StackPanel>
-
-                                    <!--  ======== 通用：清缓存 + 免责声明 ========  -->
-                                    <StackPanel x:Name="SettingsGroupGeneral" Visibility="{Binding ShowGeneral, Converter={StaticResource BoolToVis}}">
+                                        <!--  数据清理：「数据管理」下的第二个小分类，和上面的「数据更新」并列  -->
                                         <TextBlock
-                                            x:Name="SettingsHeaderGeneral"
-                                            Margin="6,2,0,9"
+                                            x:Name="SettingsHeaderClean"
+                                            Margin="6,22,0,9"
                                             FontSize="{StaticResource Fs.Small}"
                                             FontWeight="SemiBold"
                                             Foreground="#FF7E93A9"
-                                            Text="通用" />
-
-                                        <Border
-                                            Padding="20,4"
-                                            Background="#FF2B4058"
-                                            BorderBrush="#FF466280"
-                                            BorderThickness="1"
-                                            CornerRadius="12">
-                                            <StackPanel>
-                                                <Grid Margin="0,16">
-                                                    <Grid.ColumnDefinitions>
-                                                        <ColumnDefinition Width="*" />
-                                                        <ColumnDefinition Width="Auto" />
-                                                    </Grid.ColumnDefinitions>
-
-                                                    <StackPanel VerticalAlignment="Center">
-                                                        <TextBlock
-                                                            FontSize="{StaticResource Fs.Subtitle}"
-                                                            FontWeight="SemiBold"
-                                                            Foreground="#FFF0F6FD"
-                                                            Text="清除缓存" />
-                                                        <TextBlock
-                                                            MaxWidth="560"
-                                                            Margin="0,4,0,0"
-                                                            HorizontalAlignment="Left"
-                                                            FontSize="{StaticResource Fs.Small}"
-                                                            Foreground="#FF8FA3BA"
-                                                            LineHeight="20"
-                                                            Text="删除本地缓存的卡片数据、图片和已下载文件；收藏不受影响。"
-                                                            TextWrapping="Wrap" />
-                                                    </StackPanel>
-
-                                                    <Button
-                                                        x:Name="ClearCacheButton"
-                                                        Grid.Column="1"
-                                                        Height="34"
-                                                        Margin="24,0,0,0"
-                                                        Padding="16,0"
-                                                        VerticalAlignment="Center"
-                                                        Command="{Binding ClearCacheCommand}"
-                                                        Content="清除缓存"
-                                                        FontSize="{StaticResource Fs.Body}"
-                                                        IsEnabled="{Binding ClearCacheEnabled}"
-                                                        Style="{StaticResource GhostBtn}" />
-                                                </Grid>
-
-                                                <Border Height="1" Background="#FF3A5570" />
-
-                                                <Grid Margin="0,16">
-                                                    <Grid.ColumnDefinitions>
-                                                        <ColumnDefinition Width="*" />
-                                                        <ColumnDefinition Width="Auto" />
-                                                    </Grid.ColumnDefinitions>
-
-                                                    <StackPanel VerticalAlignment="Center">
-                                                        <TextBlock
-                                                            FontSize="{StaticResource Fs.Subtitle}"
-                                                            FontWeight="SemiBold"
-                                                            Foreground="#FFF0F6FD"
-                                                            Text="免责声明" />
-                                                        <TextBlock
-                                                            MaxWidth="560"
-                                                            Margin="0,4,0,0"
-                                                            HorizontalAlignment="Left"
-                                                            FontSize="{StaticResource Fs.Small}"
-                                                            Foreground="#FF8FA3BA"
-                                                            LineHeight="20"
-                                                            Text="软件性质与使用须知，使用前请务必阅读。"
-                                                            TextWrapping="Wrap" />
-                                                    </StackPanel>
-
-                                                    <Button
-                                                        Grid.Column="1"
-                                                        Height="34"
-                                                        Margin="24,0,0,0"
-                                                        Padding="16,0"
-                                                        VerticalAlignment="Center"
-                                                        Command="{Binding OpenAboutCommand}"
-                                                        Content="查看声明"
-                                                        FontSize="{StaticResource Fs.Body}"
-                                                        Style="{StaticResource GhostBtn}" />
-                                                </Grid>
-                                            </StackPanel>
-                                        </Border>
-
-                                    </StackPanel>
-
-                                    <!--  打赏赞助：随喜投喂入口，弹窗里放收款码  -->
-                                    <StackPanel x:Name="SettingsGroupDonate" Visibility="{Binding ShowDonate, Converter={StaticResource BoolToVis}}">
-                                        <TextBlock
-                                            x:Name="SettingsHeaderDonate"
-                                            Margin="6,2,0,9"
-                                            FontSize="{StaticResource Fs.Small}"
-                                            FontWeight="SemiBold"
-                                            Foreground="#FF7E93A9"
-                                            Text="打赏赞助" />
+                                            Text="数据清理" />
 
                                         <Border
                                             Padding="20,4"
@@ -1072,7 +913,7 @@
                                                         FontSize="{StaticResource Fs.Subtitle}"
                                                         FontWeight="SemiBold"
                                                         Foreground="#FFF0F6FD"
-                                                        Text="随喜投喂灵石" />
+                                                        Text="清除缓存" />
                                                     <TextBlock
                                                         MaxWidth="560"
                                                         Margin="0,4,0,0"
@@ -1080,19 +921,74 @@
                                                         FontSize="{StaticResource Fs.Small}"
                                                         Foreground="#FF8FA3BA"
                                                         LineHeight="20"
-                                                        Text="散修炼器，本就不易。若觉此物趁手，可随喜几枚灵石，聊作炼器之资。"
+                                                        Text="删除本地数据、图片和已下载文件；收藏不受影响。"
                                                         TextWrapping="Wrap" />
                                                 </StackPanel>
 
                                                 <Button
-                                                    x:Name="SupportButton"
+                                                    x:Name="ClearCacheButton"
                                                     Grid.Column="1"
                                                     Height="34"
                                                     Margin="24,0,0,0"
                                                     Padding="16,0"
                                                     VerticalAlignment="Center"
-                                                    Command="{Binding OpenSupportCommand}"
-                                                    Content="随喜投喂灵石"
+                                                    Command="{Binding ClearCacheCommand}"
+                                                    Content="清除缓存"
+                                                    FontSize="{StaticResource Fs.Body}"
+                                                    IsEnabled="{Binding ClearCacheEnabled}"
+                                                    Style="{StaticResource GhostBtn}" />
+                                            </Grid>
+                                        </Border>
+
+                                    </StackPanel>
+
+                                    <!--  ======== 免责声明：正文读 Assets\disclaimer.txt ========  -->
+                                    <StackPanel x:Name="SettingsGroupGeneral" Visibility="{Binding ShowGeneral, Converter={StaticResource BoolToVis}}">
+                                        <TextBlock
+                                            x:Name="SettingsHeaderGeneral"
+                                            Margin="6,2,0,9"
+                                            FontSize="{StaticResource Fs.Small}"
+                                            FontWeight="SemiBold"
+                                            Foreground="#FF7E93A9"
+                                            Text="免责声明" />
+
+                                        <Border
+                                            Padding="20,4"
+                                            Background="#FF2B4058"
+                                            BorderBrush="#FF466280"
+                                            BorderThickness="1"
+                                            CornerRadius="12">
+                                            <Grid Margin="0,16">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+
+                                                <StackPanel VerticalAlignment="Center">
+                                                    <TextBlock
+                                                        FontSize="{StaticResource Fs.Subtitle}"
+                                                        FontWeight="SemiBold"
+                                                        Foreground="#FFF0F6FD"
+                                                        Text="免责声明全文" />
+                                                    <TextBlock
+                                                        MaxWidth="560"
+                                                        Margin="0,4,0,0"
+                                                        HorizontalAlignment="Left"
+                                                        FontSize="{StaticResource Fs.Small}"
+                                                        Foreground="#FF8FA3BA"
+                                                        LineHeight="20"
+                                                        Text="软件性质与使用须知，使用前请务必阅读。"
+                                                        TextWrapping="Wrap" />
+                                                </StackPanel>
+
+                                                <Button
+                                                    Grid.Column="1"
+                                                    Height="34"
+                                                    Margin="24,0,0,0"
+                                                    Padding="16,0"
+                                                    VerticalAlignment="Center"
+                                                    Command="{Binding OpenAboutCommand}"
+                                                    Content="查看声明"
                                                     FontSize="{StaticResource Fs.Body}"
                                                     Style="{StaticResource GhostBtn}" />
                                             </Grid>
@@ -1108,7 +1004,7 @@
                                             FontSize="{StaticResource Fs.Small}"
                                             FontWeight="SemiBold"
                                             Foreground="#FF7E93A9"
-                                            Text="关于" />
+                                            Text="软件更新" />
 
                                         <Border
                                             Padding="20,4"
@@ -1179,7 +1075,7 @@
                                                             FontSize="{StaticResource Fs.Small}"
                                                             Foreground="#FF8FA3BA"
                                                             LineHeight="20"
-                                                            Text="{Binding NotesLine}"
+                                                            Text="查看当前版本更新的内容"
                                                             TextWrapping="Wrap" />
                                                     </StackPanel>
 
@@ -1193,10 +1089,102 @@
                                                         Command="{Binding ViewUpdateNotesCommand}"
                                                         Content="查看更新"
                                                         FontSize="{StaticResource Fs.Body}"
-                                                        Style="{StaticResource GhostBtn}"
-                                                        ToolTip="查看本地 Assets\changelog.txt 里的更新内容" />
+                                                        Style="{StaticResource GhostBtn}" />
+                                                </Grid>
+
+                                                <Border Height="1" Background="#FF3A5570" />
+
+                                                <!--  网盘下载：夸克网盘分享页，交给系统浏览器打开，程序内不下载  -->
+                                                <Grid x:Name="CloudDriveRow" Margin="0,16">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="*" />
+                                                        <ColumnDefinition Width="Auto" />
+                                                    </Grid.ColumnDefinitions>
+
+                                                    <StackPanel VerticalAlignment="Center">
+                                                        <TextBlock
+                                                            FontSize="{StaticResource Fs.Subtitle}"
+                                                            FontWeight="SemiBold"
+                                                            Foreground="#FFF0F6FD"
+                                                            Text="网盘下载" />
+                                                        <TextBlock
+                                                            MaxWidth="560"
+                                                            Margin="0,4,0,0"
+                                                            HorizontalAlignment="Left"
+                                                            FontSize="{StaticResource Fs.Small}"
+                                                            Foreground="#FF8FA3BA"
+                                                            LineHeight="20"
+                                                            Text="（推荐）如果无法自动更新，推荐该项下载"
+                                                            TextWrapping="Wrap" />
+                                                    </StackPanel>
+
+                                                    <Button
+                                                        x:Name="CloudDriveButton"
+                                                        Grid.Column="1"
+                                                        Height="34"
+                                                        Margin="24,0,0,0"
+                                                        Padding="16,0"
+                                                        VerticalAlignment="Center"
+                                                        Command="{Binding OpenCloudDriveCommand}"
+                                                        Content="前往下载"
+                                                        FontSize="{StaticResource Fs.Body}"
+                                                        Style="{StaticResource GhostBtn}" />
                                                 </Grid>
                                             </StackPanel>
+                                        </Border>
+                                    </StackPanel>
+
+                                    <!--  打赏赞助：随喜投喂入口，弹窗里放收款码  -->
+                                    <StackPanel x:Name="SettingsGroupDonate" Visibility="{Binding ShowDonate, Converter={StaticResource BoolToVis}}">
+                                        <TextBlock
+                                            x:Name="SettingsHeaderDonate"
+                                            Margin="6,2,0,9"
+                                            FontSize="{StaticResource Fs.Small}"
+                                            FontWeight="SemiBold"
+                                            Foreground="#FF7E93A9"
+                                            Text="打赏赞助" />
+
+                                        <Border
+                                            Padding="20,4"
+                                            Background="#FF2B4058"
+                                            BorderBrush="#FF466280"
+                                            BorderThickness="1"
+                                            CornerRadius="12">
+                                            <Grid Margin="0,16">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+
+                                                <StackPanel VerticalAlignment="Center">
+                                                    <TextBlock
+                                                        FontSize="{StaticResource Fs.Subtitle}"
+                                                        FontWeight="SemiBold"
+                                                        Foreground="#FFF0F6FD"
+                                                        Text="随喜投喂灵石" />
+                                                    <TextBlock
+                                                        MaxWidth="560"
+                                                        Margin="0,4,0,0"
+                                                        HorizontalAlignment="Left"
+                                                        FontSize="{StaticResource Fs.Small}"
+                                                        Foreground="#FF8FA3BA"
+                                                        LineHeight="20"
+                                                        Text="散修炼器，本就不易。若觉此物趁手，可随喜几枚灵石，聊作炼器之资。"
+                                                        TextWrapping="Wrap" />
+                                                </StackPanel>
+
+                                                <Button
+                                                    x:Name="SupportButton"
+                                                    Grid.Column="1"
+                                                    Height="34"
+                                                    Margin="24,0,0,0"
+                                                    Padding="16,0"
+                                                    VerticalAlignment="Center"
+                                                    Command="{Binding OpenSupportCommand}"
+                                                    Content="随喜投喂灵石"
+                                                    FontSize="{StaticResource Fs.Body}"
+                                                    Style="{StaticResource GhostBtn}" />
+                                            </Grid>
                                         </Border>
                                     </StackPanel>
                                 </StackPanel>
@@ -1410,10 +1398,13 @@
 
                 <!--  底部状态栏：左侧状态，右侧分页（上一页 / 下一页，不显示总页数）  -->
                 <Border
+                    x:Name="StatusBar"
                     Grid.Row="2"
+                    MinHeight="48"
                     Background="#FF16263A"
                     BorderBrush="#FF2A3F57"
-                    BorderThickness="0,1,0,0">
+                    BorderThickness="0,1,0,0"
+                    Visibility="{Binding StatusBarVisible, Converter={StaticResource BoolToVis}}">
                     <Grid Margin="26,0,18,0">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto" />
@@ -1477,8 +1468,7 @@
                                 <ComboBox
                                     x:Name="TitleLangCombo"
                                     SelectedIndex="{Binding Library.TitleLanguageIndex, Mode=TwoWay}"
-                                    Style="{StaticResource LangCombo}"
-                                    ToolTip="卡片标题显示英文还是中文；没有中文名时显示官网英文名">
+                                    Style="{StaticResource LangCombo}">
                                     <ComboBoxItem Content="英文" />
                                     <ComboBoxItem Content="中文" />
                                 </ComboBox>
@@ -1606,14 +1596,16 @@
             <Grid
                 x:Name="ConfirmLayer"
                 Grid.ColumnSpan="2"
-                Visibility="{Binding Confirm.IsOpen, Converter={StaticResource BoolToVis}}">
+                Visibility="Collapsed">
                 <!--  整层铺满的半透明遮罩，命中测试全归它；卡片在它上面，点卡片就轮不到这里  -->
                 <Rectangle
                     x:Name="ConfirmBackdrop"
                     Fill="#66080D15"
-                    MouseLeftButtonDown="ConfirmBackdrop_MouseLeftButtonDown" />
+                    MouseLeftButtonDown="ConfirmBackdrop_MouseLeftButtonDown"
+                    Opacity="0" />
 
                 <Border
+                    x:Name="ConfirmCard"
                     Width="440"
                     Padding="24,22"
                     HorizontalAlignment="Center"
@@ -1621,7 +1613,15 @@
                     Background="#FF1D3249"
                     BorderBrush="{StaticResource B.Border}"
                     BorderThickness="1"
-                    CornerRadius="14">
+                    CornerRadius="14"
+                    Opacity="0"
+                    RenderTransformOrigin="0.5,0.5">
+                    <Border.RenderTransform>
+                        <TransformGroup>
+                            <ScaleTransform x:Name="ConfirmScale" ScaleX="0.93" ScaleY="0.93" />
+                            <TranslateTransform x:Name="ConfirmShift" Y="10" />
+                        </TransformGroup>
+                    </Border.RenderTransform>
                     <Border.Effect>
                         <DropShadowEffect
                             BlurRadius="28"
@@ -1686,12 +1686,14 @@
                             HorizontalAlignment="Right"
                             Orientation="Horizontal">
                             <Button
+                                x:Name="ConfirmCancelButton"
                                 Height="32"
                                 Padding="18,0"
                                 Command="{Binding Confirm.CancelCommand}"
                                 Content="取消"
                                 FontSize="{StaticResource Fs.Body}"
-                                Style="{StaticResource GhostBtn}" />
+                                Style="{StaticResource GhostBtn}"
+                                Visibility="{Binding Confirm.CancelVisible, Converter={StaticResource BoolToVis}}" />
                             <Button
                                 x:Name="ConfirmOkButton"
                                 Height="32"
@@ -1769,7 +1771,7 @@
                             Background="{StaticResource B.BorderSoft}" />
 
                         <!--
-                            声明正文：整段照抄 Assets\免责声明.txt，
+                            声明正文：整段照抄 Assets\disclaimer.txt，
                             文本里的换行、空行、缩进原样保留，界面这边只给一套统一的字号行高。
                             
                             这里用只读 TextBox 而不是 TextBlock：TextBlock 选不中，想抄一段条款只能截图。
@@ -1846,8 +1848,7 @@
                                 HorizontalAlignment="Left"
                                 VerticalAlignment="Center"
                                 Background="Transparent"
-                                Cursor="Hand"
-                                ToolTip="在浏览器中打开 https://flingtrainer.com">
+                                Cursor="Hand">
                                 <Border.InputBindings>
                                     <MouseBinding Command="{Binding OpenSiteCommand}" Gesture="LeftClick" />
                                 </Border.InputBindings>
@@ -2533,8 +2534,8 @@
                                     x:Name="UpdateLaterButton"
                                     Height="32"
                                     Padding="18,0"
-                                    Command="{Binding UpdateDialog.LaterCommand}"
-                                    Content="稍后再说"
+                                    Command="{Binding UpdateDialog.DeclineCommand}"
+                                    Content="取消更新"
                                     FontSize="{StaticResource Fs.Body}"
                                     Style="{StaticResource GhostBtn}"
                                     Visibility="{Binding UpdateDialog.Prompt, Converter={StaticResource BoolToVis}}" />

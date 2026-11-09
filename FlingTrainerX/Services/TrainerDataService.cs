@@ -1,5 +1,3 @@
-using System.IO;
-using System.Text.Json;
 using FlingTrainerX.Models;
 
 namespace FlingTrainerX.Services;
@@ -7,17 +5,8 @@ namespace FlingTrainerX.Services;
 /// <summary>数据同步 / 收藏状态。</summary>
 public static class TrainerDataService
 {
-    private static readonly string DataDir = AppPaths.LegacyDir;
-    private static readonly string StateFile = Path.Combine(DataDir, "state.json");
-
     /// <summary>当前内存中的库，供详情页补全下载数据后使用。</summary>
     public static TrainerLibrary? CurrentLibrary { get; set; }
-
-    private static readonly JsonSerializerOptions JsonOpts = new()
-    {
-        PropertyNameCaseInsensitive = true,
-        WriteIndented = true
-    };
 
     /// <summary>从官网拉取最新列表，并复用本地的封面 / 中文名 / 下载表。返回 null 表示失败。</summary>
     /// <remarks>
@@ -145,21 +134,12 @@ public static class TrainerDataService
 
     // ---------- 收藏夹（SQLite / SqlSugar 单例） ----------
 
-    private sealed class LegacyState
-    {
-        public List<int> Favorites { get; set; } = new();
-    }
-
-    private static bool _legacyChecked;
-
     /// <summary>
     /// 读取收藏列表：先按 ID 关联当前库（拿到最新版本/下载数据），
     /// 库里没有的（翻页没加载到）就用数据库里的 JSON 快照还原。
     /// </summary>
     public static List<TrainerItem> LoadFavorites(TrainerLibrary library)
     {
-        ImportLegacyOnce(library);
-
         var byId = library.Items.ToDictionary(i => i.Id);
         var result = new List<TrainerItem>();
         var seen = new HashSet<int>();
@@ -195,27 +175,4 @@ public static class TrainerDataService
     public static bool ClearFavorites() => AppDatabase.Instance.Clear() >= 0;
 
     public static int FavoriteCount() => AppDatabase.Instance.Count();
-
-    /// <summary>老版本把收藏写在 state.json，检测到就一次性迁进 SQLite。</summary>
-    private static void ImportLegacyOnce(TrainerLibrary library)
-    {
-        if (_legacyChecked) return;
-        _legacyChecked = true;
-
-        try
-        {
-            if (!File.Exists(StateFile)) return;
-            if (AppDatabase.Instance.Count() > 0) return;
-
-            var st = JsonSerializer.Deserialize<LegacyState>(File.ReadAllText(StateFile), JsonOpts);
-            if (st?.Favorites is { Count: > 0 })
-                AppDatabase.Instance.ImportLegacy(st.Favorites, library.Items);
-
-            File.Delete(StateFile);
-        }
-        catch
-        {
-            // 迁移失败不影响新库
-        }
-    }
 }

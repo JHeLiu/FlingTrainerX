@@ -507,6 +507,37 @@ public partial class MainWindow
         await Task.Delay(300);
         SaveShot(Path.Combine(dir, "01-detail-open.png"));
 
+        // ---- 右侧按钮：能启动时要换成蓝色主按钮，不能启动时是灰底幽灵按钮 ----
+        var launchState = "跳过了（没进详情页）";
+        if (DetailHost.Content is TrainerDetailView dvOpen &&
+            dvOpen.DataContext is TrainerDetailVM vmOpen &&
+            dvOpen.FindName("LaunchButton") is Button launchBtn)
+        {
+            var wasEnabled = vmOpen.LaunchEnabled;
+
+            var disabledFill = ButtonFill();
+            vmOpen.LaunchEnabled = true;
+            await Task.Delay(150);
+            launchBtn.UpdateLayout();
+            var enabledFill = ButtonFill();
+            SaveShot(Path.Combine(dir, "01b-launch-primary.png"));
+
+            vmOpen.LaunchEnabled = wasEnabled;
+            await Task.Delay(100);
+
+            launchState =
+                $"不能启动时底色 {disabledFill}｜能启动时底色 {enabledFill}" +
+                $"（{(enabledFill == "#FF3B82F6" ? "主题色（对）" : "不是主题色（错）")}，" +
+                $"{(disabledFill != enabledFill ? "两种状态有区分（对）" : "两种状态一样（错）")}）";
+
+            string ButtonFill()
+            {
+                // 模板里那块填充叫 b；摸它的 Background 才知道 DataTrigger 有没有真的把模板换掉
+                var fill = launchBtn.Template?.FindName("b", launchBtn) as Border;
+                return fill?.Background is SolidColorBrush brush ? brush.Color.ToString() : "(未知)";
+            }
+        }
+
         // ---- 遮层：本地已有数据进来不该有遮层；点刷新 → 出现 → 抓完自动收 ----
         var overlayOnLocal = item.HasDownloads &&
                              DetailHost.Content is TrainerDetailView dv0 && dv0.OverlayVisible;
@@ -561,6 +592,7 @@ public partial class MainWindow
 
         File.WriteAllText(log,
             $"卡片中心命中：{hitName}（{(cardOwnsCenter ? "是卡片内容（对）" : "是遮罩（错）")}）\n" +
+            $"启动按钮：{launchState}\n" +
             $"本地数据进详情：{(overlayOnLocal ? "出现了遮层（错）" : "没有遮层（对）")}\n" +
             $"点刷新：{overlayRefresh}\n" +
             $"开场动画落定：{openedAt}ms（>0 即 Completed 已触发并清掉了位图缓存）\n" +
@@ -603,11 +635,16 @@ public partial class MainWindow
         SaveShot(Path.Combine(dir, "02-after-card-click.png"));
 
         // 再点遮罩，弹框应当关闭
+        var maskScreen = PointToScreen(maskPoint);
         File.AppendAllText(log,
-            $"真点会落在：{DescribeHit(InputHitTest(maskPoint))}｜窗口激活={IsActive}\n");
+            $"真点会落在：{DescribeHit(InputHitTest(maskPoint))}｜窗口激活={IsActive}｜" +
+            $"前台是本窗口={(GetForegroundWindow() == new WindowInteropHelper(this).Handle ? "是" : "否")}｜" +
+            $"屏幕点 {maskScreen.X:F0},{maskScreen.Y:F0}｜VM.IsOpen={VM.Confirm.IsOpen}\n");
         await ClickAsync(maskPoint);
         await Task.Delay(600);
-        File.AppendAllText(log, $"点遮罩后：{(ConfirmLayer.Visibility == Visibility.Visible ? "仍打开（错）" : "已关闭（对）")}\n");
+        File.AppendAllText(log,
+            $"点遮罩后：{(ConfirmLayer.Visibility == Visibility.Visible ? "仍打开（错）" : "已关闭（对）")}" +
+            $"｜VM.IsOpen={VM.Confirm.IsOpen}\n");
         SaveShot(Path.Combine(dir, "03-after-mask-click.png"));
 
         // 重开一次，确认连点遮罩两下也不会把确认框卡住
@@ -616,6 +653,19 @@ public partial class MainWindow
         await ClickAsync(new Point(ActualWidth - 70, 90));       // 这次点右上角
         await Task.Delay(500);
         File.AppendAllText(log, $"第二次开框后点右上遮罩：{(ConfirmLayer.Visibility == Visibility.Visible ? "仍打开（错）" : "已关闭（对）")}\n");
+
+        // 对照组：真点「取消」按钮。这一下能关掉，说明鼠标事件本身是通的，
+        // 上面遮罩没关就只可能是遮罩的命中/处理器问题，而不是自检点空了
+        if (ConfirmLayer.Visibility == Visibility.Visible)
+        {
+            var cancelPoint = Center(ConfirmCancelButton);
+            File.AppendAllText(log, $"取消按钮取样点 {cancelPoint} → {HitName(cancelPoint)}\n");
+            await ClickAsync(cancelPoint);
+            await Task.Delay(600);
+            File.AppendAllText(log,
+                $"点「取消」后：{(ConfirmLayer.Visibility == Visibility.Visible ? "仍打开（错）" : "已关闭（对）")}" +
+                $"｜VM.IsOpen={VM.Confirm.IsOpen}\n");
+        }
 
         string HitName(Point p)
         {
@@ -664,7 +714,7 @@ public partial class MainWindow
             $"同步全部按钮={(SyncAllButton.IsEnabled ? "可点" : "不可点")}\n");
 
         // 左侧菜单：点哪一项只显示那一组，其余必须收起
-        var groups = new[] { SettingsGroupData, SettingsGroupGeneral, SettingsGroupDonate, SettingsGroupAbout };
+        var groups = new[] { SettingsGroupData, SettingsGroupGeneral, SettingsGroupAbout, SettingsGroupDonate };
         for (var i = 0; i < 4; i++)
         {
             SettingsMenu.SelectedIndex = i;
@@ -957,6 +1007,67 @@ public partial class MainWindow
             $"非取消类异常：{(thrown.Count == 0 ? "无（对）" : string.Join(" | ", thrown.Distinct().Take(6)))}\n");
 
         SaveShot(Path.Combine(dir, "02-existing-after.png"));
+    }
+
+    /// <summary>
+    /// 自检：收藏夹自己的搜索与分页。验证三件事——收藏夹页有分页栏、
+    /// 搜索只在收藏夹里过滤（副标题 / 状态栏 / 卡片数都跟着变）、提示只出自收藏夹。
+    /// </summary>
+    public async Task RunFavoriteCheckAsync(string dir)
+    {
+        Directory.CreateDirectory(dir);
+        var log = Path.Combine(dir, "favorites.txt");
+        File.WriteAllText(log, "");
+
+        for (var i = 0; i < 300 && (_firstLoading || _library.Items.Count == 0); i++) await Task.Delay(100);
+        await Task.Delay(1200);
+
+        NavList.SelectedIndex = 1;               // 收藏夹
+        await Task.Delay(900);
+
+        void Note(string step) => File.AppendAllText(log,
+            $"{step}：副标题=「{SectionSubtitle.Text}」 状态=「{StatusText.Text}」 " +
+            $"页码=「{PagerPageText.Text}」 总数=「{PagerTotalText.Text}」 卡片={_items.Count} " +
+            $"分页栏={(PagerBar.Visibility == Visibility.Visible ? "显示" : "隐藏")} " +
+            $"状态栏={(StatusBar.Visibility == Visibility.Visible ? "显示" : "隐藏")}\n");
+
+        Note("01-收藏夹");
+        SaveShot(Path.Combine(dir, "01-favorites.png"));
+
+        var total = _favorites.Count;
+
+        // 拿第一款收藏的英文名第一个词当关键词，命中面宽一点
+        var keyword = total > 0
+            ? (_favorites[0].Title.Replace(" Trainer", "").Trim().Split(' ').FirstOrDefault() ?? "")
+            : "";
+
+        if (keyword.Length == 0)
+        {
+            File.AppendAllText(log, "    收藏夹是空的，跳过搜索部分\n");
+            return;
+        }
+
+        Library.SearchText = keyword;
+        await Library.SubmitSearchAsync();
+        await Task.Delay(700);
+
+        Note($"02-收藏夹搜索「{keyword}」");
+        File.AppendAllText(log,
+            $"    命中 {_items.Count} 款 / 收藏共 {total} 款｜关键词=「{Library.FavoritesKeyword}」\n");
+        SaveShot(Path.Combine(dir, "02-favorites-search.png"));
+
+        // 提示列表：只应出自收藏夹
+        Library.SearchText = keyword;
+        await Task.Delay(600);
+        File.AppendAllText(log,
+            $"    提示条数={Library.Suggestions.Count}｜前三条=" +
+            $"{string.Join(" / ", Library.Suggestions.Take(3).Select(s => s.CleanEn))}\n");
+
+        // 清空搜索：回到完整收藏夹
+        Library.ExitSearch(clearText: true);
+        await Task.Delay(600);
+        Note("03-退出搜索");
+        SaveShot(Path.Combine(dir, "03-favorites-back.png"));
     }
 
     /// <summary>在窗口坐标系里真的发一次左键单击（光标也移过去，和用户点没区别）。</summary>
@@ -1376,7 +1487,7 @@ public partial class MainWindow
     }
 
     /// <summary>
-    /// 自检：关于 / 声明弹窗的排版。正文全部来自 Assets\免责声明.txt，
+    /// 自检：关于 / 声明弹窗的排版。正文全部来自 Assets\disclaimer.txt，
     /// 查一遍文件有没有读到、段落数、字号与颜色，再拍首屏和滚到底两张。
     /// </summary>
     public async Task RunAboutCheckAsync(string dir)
@@ -1434,6 +1545,11 @@ public partial class MainWindow
         NavList.SelectedIndex = 3;               // 设置
         await Task.Delay(800);
 
+        // 设置页左侧菜单切到「关于」：默认停在「数据管理」，不切的话这一组整块折叠，
+        // 截图和 IsVisible 都测不到里面的网盘那一栏
+        SettingsMenu.SelectedIndex = 2;
+        await Task.Delay(400);
+
         // 「关于」这一组在设置页最下面，滚到底才看得见
         FindScrollViewer(SettingsPanel)?.ScrollToEnd();
         await Task.Delay(450);
@@ -1441,10 +1557,14 @@ public partial class MainWindow
 
         File.AppendAllText(log,
             $"当前版本：v{UpdateService.CurrentVersionText}\n" +
+            $"配置来源：{AppConfig.Describe()}，文件 {AppConfig.FilePath}，存在={File.Exists(AppConfig.FilePath)}\n" +
+            $"启动自动检查更新：{(AppConfig.AutoUpdateCheck ? "开（会查）" : "关（跳过）")}\n" +
             $"接口地址：{UpdateService.ApiUrl}\n" +
             $"软件更新行：{UpdateStatusText.Text}\n" +
             $"更新内容行：{UpdateNotesText.Text}\n" +
-            $"按钮：{CheckUpdateButton.Content} / {UpdateNotesButton.Content}\n");
+            $"按钮：{CheckUpdateButton.Content} / {UpdateNotesButton.Content} / {CloudDriveButton.Content}\n" +
+            $"网盘下载栏：行高 {CloudDriveRow.ActualHeight:F0}，按钮可见 {CloudDriveButton.IsVisible}，" +
+            $"按钮宽 {CloudDriveButton.ActualWidth:F0}\n");
 
         var fake = new UpdateRelease
         {
@@ -1474,7 +1594,7 @@ public partial class MainWindow
             $"发现新版本弹窗：{UpdateTitleText.Text}｜{UpdateVersionText.Text}｜" +
             $"卡片 {UpdateCard.ActualWidth:F0}x{UpdateCard.ActualHeight:F0}｜" +
             $"说明 {UpdateNotesBox.Text.Length} 字 / 可视高 {UpdateNotesBox.ActualHeight:F0}｜" +
-            $"按钮 {UpdateNowButton.Content} + {(UpdateLaterButton.Visibility == Visibility.Visible ? "稍后再说" : "（无稍后）")}\n");
+            $"按钮 {UpdateNowButton.Content} + {(UpdateLaterButton.Visibility == Visibility.Visible ? UpdateLaterButton.Content : "（无取消）")}\n");
 
         // 点遮罩应当能关掉。先把窗口抢到前台：自检用真鼠标点，窗口被别的窗口压住就点空了
         ShowMainWindow();
@@ -1485,7 +1605,46 @@ public partial class MainWindow
         File.AppendAllText(log,
             $"点遮罩后：{(UpdateLayer.Visibility == Visibility.Visible ? "仍打开（错）" : "已关闭（对）")}\n");
 
-        // 只读模式：不该出现「稍后再说」，主按钮变成「知道了」
+        // 「取消更新」：要顺手把 autoUpdateCheck=false 写进 config.json，以后启动不再自动查
+        var autoBefore = AppConfig.AutoUpdateCheck;
+        var configBefore = File.Exists(AppConfig.FilePath) ? File.ReadAllText(AppConfig.FilePath) : "";
+        var cancelText = UpdateLaterButton.Content?.ToString() ?? "";
+
+        ShowUpdateDialog(fake, prompt: true);
+        await Task.Delay(800);
+        PressButton(UpdateLaterButton);           // 点「取消更新」
+        await Task.Delay(700);
+
+        var autoAfter = AppConfig.AutoUpdateCheck;
+        var configAfter = File.Exists(AppConfig.FilePath) ? File.ReadAllText(AppConfig.FilePath) : "";
+        var wroteFlag = configAfter.Contains($"\"{AppConfig.AutoUpdateKey}\": false");
+        File.AppendAllText(log,
+            $"取消更新：按钮「{cancelText}」｜开关 {autoBefore} → {autoAfter}（应为 False）｜" +
+            $"config.json 里 {AppConfig.AutoUpdateKey} 写成 false {(wroteFlag ? "（对）" : "（错）")}｜" +
+            $"弹窗{(UpdateLayer.Visibility == Visibility.Visible ? "仍打开（错）" : "已关闭（对）")}\n");
+
+        // 测完还原，别把本机的配置改坏
+        AppConfig.SetAutoUpdateCheck(autoBefore);
+        if (configBefore.Length > 0) File.WriteAllText(AppConfig.FilePath, configBefore);
+
+        // 启动后的自动检查：只有「发现新版本」才弹，拿不到发行版 / 断网一律安静
+        var silentOk = true;
+        foreach (var quiet in new[]
+                 {
+                     UpdateCheckResult.Fail("检查更新超时，请稍后再试"),
+                     UpdateCheckResult.Unavailable(System.Net.HttpStatusCode.NotFound)
+                 })
+        {
+            await VM.Settings.PresentAsync(quiet, auto: true);
+            await Task.Delay(300);
+            if (ConfirmLayer.Visibility == Visibility.Visible || UpdateLayer.Visibility == Visibility.Visible)
+                silentOk = false;
+        }
+
+        File.AppendAllText(log,
+            $"自动检查失败（断网 / 404）：{(silentOk ? "全部静默，没弹框（对）" : "弹了框（错）")}\n");
+
+        // 只读模式：不该出现「取消更新」，主按钮变成「知道了」
         ShowUpdateDialog(fake, prompt: false);
         await Task.Delay(900);
         SaveShot(Path.Combine(dir, "03-update-notes.png"));
@@ -1540,9 +1699,36 @@ public partial class MainWindow
         CloseUpdateDialog();
         await Task.Delay(500);
 
+        // 「已是最新」提示框：和确认框共用一层，但只有一颗「知道了」按钮
+        _ = VM.Dialogs.NotifyAsync("已是最新版本", $"当前版本 v{UpdateService.CurrentVersionText}，无需更新。");
+        await Task.Delay(700);
+        SaveShot(Path.Combine(dir, "05-latest-notify.png"));
+        File.AppendAllText(log,
+            $"最新版提示：标题=「{ConfirmTitle.Text}」｜按钮=「{ConfirmOkButton.Content}」｜" +
+            $"取消按钮={(ConfirmCancelButton.Visibility == Visibility.Visible ? "显示（错）" : "隐藏（对）")}\n");
+
+        PressButton(ConfirmOkButton);
+        await Task.Delay(500);
+        File.AppendAllText(log,
+            $"提示框关闭后：{(ConfirmLayer.Visibility == Visibility.Visible ? "仍打开（错）" : "已关闭（对）")}\n");
+
+        // 再验一次「仓库访问不到」那种失败：文案只提网盘，不许把 404 / 403 摆给用户
+        _ = VM.Settings.PresentAsync(
+            UpdateCheckResult.Unavailable(System.Net.HttpStatusCode.Forbidden), auto: false);
+        await Task.Delay(700);
+        SaveShot(Path.Combine(dir, "05b-unavailable-notify.png"));
+        File.AppendAllText(log,
+            $"无法在线更新提示：标题=「{ConfirmTitle.Text}」｜正文=「{ConfirmBody.Text}」｜" +
+            $"{(ConfirmBody.Text.Contains("网盘") ? "有网盘引导（对）" : "没有网盘引导（错）")}" +
+            $"{(ConfirmBody.Text.Contains("403") || ConfirmBody.Text.Contains("HTTP") ? "｜漏了状态码（错）" : "｜没漏状态码（对）")}\n");
+        PressButton(ConfirmOkButton);
+        await Task.Delay(400);
+
         // 真查一次：没网 / 仓库没公开也只会写一句失败原因，不会抛异常
         var result = await UpdateService.CheckAsync();
-        File.AppendAllText(log, $"真查一次：{result.State}｜{result.Message}\n");
+        File.AppendAllText(log,
+            $"真查一次：{result.State}｜{result.Message}" +
+            (result.RepoUnreachable ? $"｜仓库访问不到（{result.Detail}），界面按「去网盘」处理" : "") + "\n");
         if (result.Release is { } release)
         {
             File.AppendAllText(log,

@@ -77,7 +77,7 @@ public partial class MainWindow : Window
     /// <summary>托盘图标（右键菜单在里面）。</summary>
     private readonly TrayService _tray = new();
 
-    /// <summary>关窗口时把 4 秒延迟、自动检查更新这类后台动作一起取消。</summary>
+    /// <summary>关窗口时把 1 分钟的自动检查更新这类后台动作一起取消。</summary>
     private readonly CancellationTokenSource _lifetime = new();
 
     /// <summary>鼠标在「刷新」按钮和同步菜单之间穿行时的缓冲，手抖扫过去菜单不会立刻消失。</summary>
@@ -201,7 +201,7 @@ public partial class MainWindow : Window
 
         BootTrace.Mark("首屏卡片填充完成");
 
-        // 静默准备：游戏名库空了就抓一份；4 秒后自动查一次更新
+        // 静默准备：游戏名库空了就抓一份；启动 1 分钟后自动查一次更新
         _ = VM.InitializeAsync(_lifetime.Token);
     }
 
@@ -257,6 +257,11 @@ public partial class MainWindow : Window
         DownloadShift = DownloadShift,
 
         ConfirmOkButton = ConfirmOkButton,
+        ConfirmLayer = ConfirmLayer,
+        ConfirmBackdrop = ConfirmBackdrop,
+        ConfirmCard = ConfirmCard,
+        ConfirmScale = ConfirmScale,
+        ConfirmShift = ConfirmShift,
 
         DetailLayer = DetailLayer,
         DetailBackdrop = DetailBackdrop,

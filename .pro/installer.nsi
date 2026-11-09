@@ -41,6 +41,12 @@ CRCCheck on
 !ifndef APP_NAME
   !define APP_NAME "风灵月影宗藏宝阁"
 !endif
+; 安装目录名（$LOCALAPPDATA\Programs\ 下面那一层）：故意用英文。
+; 中文目录在命令行、某些杀软白名单、以及用户手动敲路径时都容易出问题，
+; 而窗口标题 / 快捷方式 / 注册表显示名仍然走 APP_NAME，界面上还是中文。
+!ifndef APP_DIR
+  !define APP_DIR "FlingTrainerX"
+!endif
 !ifndef APP_VERSION
   !define APP_VERSION "1.0.0"
 !endif
@@ -83,8 +89,9 @@ Name "${APP_NAME} ${APP_VERSION}"
 Caption "${APP_NAME} ${APP_VERSION} 安装程序"
 OutFile "${OUTPUT_DIR}\${OUTPUT_FILE}.exe"
 
-InstallDir "$LOCALAPPDATA\Programs\${APP_NAME}"
-; 上次装在哪儿就默认填哪儿（升级 / 自动更新会直接覆盖原目录）
+; 新装的默认位置：英文目录名
+InstallDir "$LOCALAPPDATA\Programs\${APP_DIR}"
+; 上次装在哪儿就默认填哪儿（升级 / 自动更新会直接覆盖原目录，不会把数据挪走）
 InstallDirRegKey HKCU "${APP_REG_KEY}" "InstallPath"
 
 RequestExecutionLevel user
@@ -252,7 +259,7 @@ Function un.onInit
     ReadRegStr $INSTDIR HKCU "${APP_REG_KEY}" "InstallPath"
   ${EndIf}
   ${If} $INSTDIR == ""
-    StrCpy $INSTDIR "$LOCALAPPDATA\Programs\${APP_NAME}"
+    StrCpy $INSTDIR "$LOCALAPPDATA\Programs\${APP_DIR}"
   ${EndIf}
 FunctionEnd
 

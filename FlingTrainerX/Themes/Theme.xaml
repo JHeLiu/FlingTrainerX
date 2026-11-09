@@ -333,6 +333,47 @@
         </Setter>
     </Style>
 
+    <!--
+        主按钮的模板单独抽成一份资源：详情页的「启动程序」在「能启动」时要换成这套蓝色外观，
+        DataTrigger 里只能改 Template / 属性，没法把 Style 换成另一个 Style，所以模板得能被引用。
+    -->
+    <ControlTemplate x:Key="PrimaryBtnTemplate" TargetType="Button">
+        <Grid>
+            <!--
+                圆角怎么画才在 100% 和 150% 缩放下都干净：
+                实心块和深色卡片底直接相接时，圆角那一圈抗锯齿会在 1x 上摊成 2~3 个像素的暗色过渡，
+                看着就像四角描了一圈黑线（150% 下同样的过渡只占 1 个设备像素，所以显不出来）。
+                这里在填充外面垫一层同色、更淡的圆角块：填充的抗锯齿只跟自己的颜色混，
+                最外圈变成一圈很淡的同色光，角上不再是"深色压深色"。
+            -->
+            <Border
+                Margin="-1"
+                Background="#4A3B82F6"
+                CornerRadius="11"
+                IsHitTestVisible="False" />
+            <Border
+                x:Name="b"
+                Background="{StaticResource B.Accent}"
+                CornerRadius="10" />
+            <ContentPresenter
+                Margin="{TemplateBinding Padding}"
+                HorizontalAlignment="Center"
+                VerticalAlignment="Center" />
+        </Grid>
+        <ControlTemplate.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+                <Setter TargetName="b" Property="Background" Value="#FF4B8DFF" />
+            </Trigger>
+            <Trigger Property="IsPressed" Value="True">
+                <Setter TargetName="b" Property="Background" Value="#FF2C6FD8" />
+            </Trigger>
+            <Trigger Property="IsEnabled" Value="False">
+                <Setter Property="Opacity" Value="0.45" />
+                <Setter Property="Cursor" Value="Arrow" />
+            </Trigger>
+        </ControlTemplate.Triggers>
+    </ControlTemplate>
+
     <Style x:Key="PrimaryBtn" TargetType="Button">
         <Setter Property="Height" Value="38" />
         <Setter Property="Padding" Value="18,0" />
@@ -341,46 +382,7 @@
         <Setter Property="Foreground" Value="White" />
         <Setter Property="FontFamily" Value="{StaticResource F.Ui}" />
         <Setter Property="FontSize" Value="{StaticResource Fs.Body}" />
-        <Setter Property="Template">
-            <Setter.Value>
-                <ControlTemplate TargetType="Button">
-                    <Grid>
-                        <!--
-                            圆角怎么画才在 100% 和 150% 缩放下都干净：
-                            实心块和深色卡片底直接相接时，圆角那一圈抗锯齿会在 1x 上摊成 2~3 个像素的暗色过渡，
-                            看着就像四角描了一圈黑线（150% 下同样的过渡只占 1 个设备像素，所以显不出来）。
-                            这里在填充外面垫一层同色、更淡的圆角块：填充的抗锯齿只跟自己的颜色混，
-                            最外圈变成一圈很淡的同色光，角上不再是"深色压深色"。
-                        -->
-                        <Border
-                            Margin="-1"
-                            Background="#4A3B82F6"
-                            CornerRadius="11"
-                            IsHitTestVisible="False" />
-                        <Border
-                            x:Name="b"
-                            Background="{StaticResource B.Accent}"
-                            CornerRadius="10" />
-                        <ContentPresenter
-                            Margin="{TemplateBinding Padding}"
-                            HorizontalAlignment="Center"
-                            VerticalAlignment="Center" />
-                    </Grid>
-                    <ControlTemplate.Triggers>
-                        <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="b" Property="Background" Value="#FF4B8DFF" />
-                        </Trigger>
-                        <Trigger Property="IsPressed" Value="True">
-                            <Setter TargetName="b" Property="Background" Value="#FF2C6FD8" />
-                        </Trigger>
-                        <Trigger Property="IsEnabled" Value="False">
-                            <Setter Property="Opacity" Value="0.45" />
-                            <Setter Property="Cursor" Value="Arrow" />
-                        </Trigger>
-                    </ControlTemplate.Triggers>
-                </ControlTemplate>
-            </Setter.Value>
-        </Setter>
+        <Setter Property="Template" Value="{StaticResource PrimaryBtnTemplate}" />
     </Style>
 
     <Style x:Key="GhostBtn" TargetType="Button">

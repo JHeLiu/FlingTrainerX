@@ -15,6 +15,7 @@ namespace FlingTrainerX.ViewModels;
 public sealed partial class MainWindowSyncVM : ObservableObject
 {
     private readonly IStatusSink _status;
+    private readonly IAppDialogService _dialogs;
 
     /// <summary>「快速更新游戏名」的准备阶段：等用户在里面勾好、点「开始更新」。</summary>
     private TaskCompletionSource<(bool Ok, bool WithSteam)>? _syncStart;
@@ -22,7 +23,11 @@ public sealed partial class MainWindowSyncVM : ObservableObject
     /// <summary>名录已经写完了、正在换中文名：取消时才知道该把「已取消」写在哪一条上。</summary>
     private bool _nameStageCn;
 
-    public MainWindowSyncVM(IStatusSink status) => _status = status;
+    public MainWindowSyncVM(IStatusSink status, IAppDialogService dialogs)
+    {
+        _status = status;
+        _dialogs = dialogs;
+    }
 
     /// <summary>① 游戏数据：官网列表 / 本地详情页。</summary>
     public MainWindowSyncLaneVM Data { get; } = new();
@@ -130,14 +135,14 @@ public sealed partial class MainWindowSyncVM : ObservableObject
     {
         if (IsRunning || _syncStart is not null)
         {
-            _status.Report("正在更新，等这一轮跑完再开始下一轮", StatusLevel.Attention);
+            await _dialogs.NotifyAsync("正在更新", "等这一轮跑完再开始下一轮。");
             return;
         }
 
         // 本地一条都没有时，「更新已有游戏数据」无事可做，先说明白再返回
         if (kind == SyncKind.Existing && AppDatabase.Instance.CacheCount() == 0)
         {
-            _status.Report("本地还没有数据，先点「更新全部游戏数据」", StatusLevel.Attention);
+            await _dialogs.NotifyAsync("本地还没有数据", "先点「更新全部游戏数据」，把官网数据抓下来一次。");
             return;
         }
 
@@ -249,7 +254,7 @@ public sealed partial class MainWindowSyncVM : ObservableObject
     {
         if (IsRunning || _syncStart is not null)
         {
-            _status.Report("正在更新，等这一轮跑完再开始下一轮", StatusLevel.Attention);
+            await _dialogs.NotifyAsync("正在更新", "等这一轮跑完再开始下一轮。");
             return;
         }
 

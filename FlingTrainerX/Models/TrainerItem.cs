@@ -215,28 +215,6 @@ public sealed class TrainerItem : INotifyPropertyChanged
         }
     }
 
-    /// <summary>
-    /// 角标的悬停提示：写全日期，免得只看 "10.31" 分不清是哪一年。
-    /// 官网只给到日（没有时分），所以正常就是 "最后更新:2026.10.31"；
-    /// 万一以后带上时分，这里也不会把它吞掉。没有值时不挂提示（返回 null）。
-    /// </summary>
-    [JsonIgnore]
-    public string? UpdatedTip
-    {
-        get
-        {
-            var text = UpdatedText;
-            if (string.IsNullOrWhiteSpace(text)) return null;
-
-            var t = text.Replace('.', '-').Replace('/', '-');
-            if (!DateTime.TryParse(t, out var d)) return $"最后更新:{text}";
-
-            return d.TimeOfDay == TimeSpan.Zero
-                ? $"最后更新:{d:yyyy.MM.dd}"
-                : $"最后更新:{d:yyyy.MM.dd HH:mm}";
-        }
-    }
-
     [JsonIgnore] public bool IsRecent =>
         DateTime.TryParse(UpdatedText.Replace('.', '-'), out var d) && (DateTime.Now - d).TotalDays <= 7;
 

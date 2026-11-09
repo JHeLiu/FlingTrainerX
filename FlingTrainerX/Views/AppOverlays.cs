@@ -1,4 +1,4 @@
-using System.Windows;
+﻿using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Shapes;
 using System.Windows.Media;
@@ -23,7 +23,7 @@ public sealed class OverlayElements
     public required ScaleTransform AboutScale { get; init; }
     public required TranslateTransform AboutShift { get; init; }
 
-    /// <summary>声明正文：每次打开都从 Assets\免责声明.txt 重新灌一遍，改了文本不用重启。</summary>
+    /// <summary>声明正文：每次打开都从 Assets\disclaimer.txt 重新灌一遍，改了文本不用重启。</summary>
     public required TextBox AboutBody { get; init; }
 
     public required Grid SupportLayer { get; init; }
@@ -48,8 +48,15 @@ public sealed class OverlayElements
     public required ScaleTransform DownloadScale { get; init; }
     public required TranslateTransform DownloadShift { get; init; }
 
-    /// <summary>确认框的「确定」：主色 / 警示色两套样式和初始焦点只有视图能给，VM 只给 bool。</summary>
+    /// <summary>确认框 / 提示框的「确定」：主色 / 警示色两套样式和初始焦点只有视图能给，VM 只给 bool。</summary>
     public required Button ConfirmOkButton { get; init; }
+
+    /// <summary>确认框整层（遮罩 + 卡片），显隐和动画都由 <see cref="AppOverlays"/> 管。</summary>
+    public required Grid ConfirmLayer { get; init; }
+    public required Rectangle ConfirmBackdrop { get; init; }
+    public required Border ConfirmCard { get; init; }
+    public required ScaleTransform ConfirmScale { get; init; }
+    public required TranslateTransform ConfirmShift { get; init; }
 
     public required Grid DetailLayer { get; init; }
     public required Rectangle DetailBackdrop { get; init; }
@@ -89,6 +96,7 @@ public sealed class AppOverlays : IAppDialogService
     private int _supportAnimToken;
     private int _updateAnimToken;
     private int _detailAnimToken;
+    private int _confirmAnimToken;
 
     /// <summary>流光只在第一次打开「灵石结缘」时挂一次。</summary>
     private bool _supportPostersReady;
@@ -117,7 +125,7 @@ public sealed class AppOverlays : IAppDialogService
         _download = updateDownload;
         _findListScroll = findListScroll;
 
-        // 「稍后再说 / 立即更新」两个按钮在 XAML 里绑的是 UpdateDialogVM 的命令，
+        // 「取消更新 / 立即更新」两个按钮在 XAML 里绑的是 UpdateDialogVM 的命令，
         // 收场动画和下载得在这里做，所以把信号接回来。
         _update.CloseRequested += OnUpdateCloseRequested;
 
@@ -132,14 +140,25 @@ public sealed class AppOverlays : IAppDialogService
         else CloseUpdate();
     }
 
-    /// <summary>确认框开起来的那一刻：换主色 / 警示色样式，并把焦点交给「确定」。</summary>
+    /// <summary>
+    /// 确认框开合的时刻：开的时候换样式、交焦点、播进场动画，
+    /// 关的时候播收场动画再收层（和「关于」「更新」这些弹窗同一套观感）。
+    /// </summary>
     private void OnConfirmChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
-        if (e.PropertyName != nameof(ConfirmDialogVM.IsOpen) || !_confirm.IsOpen) return;
+        if (e.PropertyName != nameof(ConfirmDialogVM.IsOpen)) return;
 
-        _ui.ConfirmOkButton.Style =
-            (Style)_owner.FindResource(_confirm.IsPrimary ? "PrimaryBtn" : "DangerBtn");
-        _ui.ConfirmOkButton.Focus();
+        if (_confirm.IsOpen)
+        {
+            _ui.ConfirmOkButton.Style =
+                (Style)_owner.FindResource(_confirm.IsPrimary ? "PrimaryBtn" : "DangerBtn");
+            _ui.ConfirmOkButton.Focus();
+
+            ShowConfirmLayer();
+            return;
+        }
+
+        HideConfirmLayer();
     }
 
     // ==================== 确认框 ====================
@@ -149,6 +168,15 @@ public sealed class AppOverlays : IAppDialogService
     {
         var answer = await ConfirmWithOptionAsync(title, body, okText, primary, null);
         return answer.Ok;
+    }
+
+    /// <summary>只带「知道了」的提示框：没有取消按钮，用户关掉之后才返回。</summary>
+    public async Task NotifyAsync(string title, string body, string okText = "知道了")
+    {
+        var task = _confirm.Show(title, body, okText, true, null, cancelVisible: false);
+        if (task is null) return;
+
+        await task;
     }
 
     /// <summary>带一个可选项的确认框；<paramref name="option"/> 为 null 时不显示可选项。</summary>
@@ -170,12 +198,81 @@ public sealed class AppOverlays : IAppDialogService
     /// <param name="ok">true = 确定。</param>
     public void CloseConfirm(bool ok) => _confirm.Close(ok);
 
+    /// <summary>确认框进场：淡入 + 从 0.93 轻微放大（带回弹），和「关于 / 更新」弹窗同一套参数。</summary>
+    private void ShowConfirmLayer()
+    {
+        ++_confirmAnimToken;
+        _ui.ConfirmLayer.Visibility = Visibility.Visible;
+
+        var fade = new CubicEase { EasingMode = EasingMode.EaseOut };
+        var spring = new BackEase { Amplitude = 0.5, EasingMode = EasingMode.EaseOut };
+
+        _ui.ConfirmBackdrop.BeginAnimation(
+            UIElement.OpacityProperty,
+            new DoubleAnimation(0, 1, new Duration(BackdropTime)) { EasingFunction = fade });
+
+        _ui.ConfirmCard.BeginAnimation(
+            UIElement.OpacityProperty,
+            new DoubleAnimation(0, 1, new Duration(TimeSpan.FromMilliseconds(170))) { EasingFunction = fade });
+
+        _ui.ConfirmScale.BeginAnimation(
+            ScaleTransform.ScaleXProperty,
+            new DoubleAnimation(0.93, 1, new Duration(OpenTime)) { EasingFunction = spring });
+        _ui.ConfirmScale.BeginAnimation(
+            ScaleTransform.ScaleYProperty,
+            new DoubleAnimation(0.93, 1, new Duration(OpenTime)) { EasingFunction = spring });
+
+        _ui.ConfirmShift.BeginAnimation(
+            TranslateTransform.YProperty,
+            new DoubleAnimation(10, 0, new Duration(OpenTime)) { EasingFunction = fade });
+    }
+
+    /// <summary>确认框收场：缩一点再淡出，播完才收层；期间又开了新框就不收。</summary>
+    private void HideConfirmLayer()
+    {
+        if (_ui.ConfirmLayer.Visibility != Visibility.Visible) return;
+
+        var token = ++_confirmAnimToken;
+        var fade = new CubicEase { EasingMode = EasingMode.EaseIn };
+        var duration = new Duration(CloseTime);
+
+        var cardFade = new DoubleAnimation(1, 0, duration) { EasingFunction = fade };
+
+        // Completed 必须在 BeginAnimation 之前挂
+        cardFade.Completed += (_, _) =>
+        {
+            if (token != _confirmAnimToken) return;
+
+            _ui.ConfirmLayer.Visibility = Visibility.Collapsed;
+
+            _ui.ConfirmCard.BeginAnimation(UIElement.OpacityProperty, null);
+            _ui.ConfirmBackdrop.BeginAnimation(UIElement.OpacityProperty, null);
+            _ui.ConfirmScale.BeginAnimation(ScaleTransform.ScaleXProperty, null);
+            _ui.ConfirmScale.BeginAnimation(ScaleTransform.ScaleYProperty, null);
+            _ui.ConfirmShift.BeginAnimation(TranslateTransform.YProperty, null);
+        };
+
+        _ui.ConfirmCard.BeginAnimation(UIElement.OpacityProperty, cardFade);
+        _ui.ConfirmScale.BeginAnimation(
+            ScaleTransform.ScaleXProperty,
+            new DoubleAnimation(1, 0.97, duration) { EasingFunction = fade });
+        _ui.ConfirmScale.BeginAnimation(
+            ScaleTransform.ScaleYProperty,
+            new DoubleAnimation(1, 0.97, duration) { EasingFunction = fade });
+        _ui.ConfirmShift.BeginAnimation(
+            TranslateTransform.YProperty,
+            new DoubleAnimation(0, 6, duration) { EasingFunction = fade });
+        _ui.ConfirmBackdrop.BeginAnimation(
+            UIElement.OpacityProperty,
+            new DoubleAnimation(1, 0, duration) { EasingFunction = fade });
+    }
+
     // ==================== 关于 ====================
 
     /// <summary>打开「关于 / 免责声明」。</summary>
     public void ShowAbout()
     {
-        // 正文来自程序目录下的 Assets\免责声明.txt。
+        // 正文来自程序目录下的 Assets\disclaimer.txt。
         // 之前这里漏了这一步，盒子一直是空的 —— 打开「关于」只看到标题没有声明，就是这个原因。
         // 每次打开都重读：文件小，读一次可以忽略；好处是改完文本不用重启程序。
         _ui.AboutBody.Text = DisclaimerText.Load();
@@ -403,7 +500,7 @@ public sealed class AppOverlays : IAppDialogService
             new DoubleAnimation(10, 0, new Duration(OpenTime)) { EasingFunction = fade });
     }
 
-    /// <summary>收起更新弹窗（点遮罩、Esc、「稍后再说」「知道了」都走这里）。</summary>
+    /// <summary>收起更新弹窗（点遮罩、Esc、「取消更新」「知道了」都走这里）。</summary>
     public void CloseUpdate()
     {
         if (_ui.UpdateLayer.Visibility != Visibility.Visible) return;

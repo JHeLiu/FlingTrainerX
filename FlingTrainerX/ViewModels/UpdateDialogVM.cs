@@ -6,7 +6,7 @@ namespace FlingTrainerX.ViewModels;
 /// <summary>
 /// 「发现新版本 / 更新说明」弹窗（UpdateLayer）的视图模型。
 /// <para>
-/// 两种形态：<see cref="Prompt"/> = 发现新版本（带「稍后再说」和更新包大小），
+/// 两种形态：<see cref="Prompt"/> = 发现新版本（带「取消更新」和更新包大小），
 /// false = 只是查看更新内容（只有「知道了」）。文字全部由这里给，XAML 单向绑定。
 /// </para>
 /// </summary>
@@ -30,7 +30,7 @@ public sealed partial class UpdateDialogVM : ObservableObject
     partial void OnPromptChanged(bool value) => OnPropertyChanged(nameof(NowText));
 
     /// <summary>
-    /// 用户按了按钮：<c>true</c> = 「立即更新」，<c>false</c> = 「稍后再说 / 知道了」。
+    /// 用户按了按钮：<c>true</c> = 「立即更新」，<c>false</c> = 「取消更新 / 知道了」。
     /// <para>收场动画和下载安装都需要窗口，所以这里只发信号，由 <c>Views/AppOverlays</c> 接。</para>
     /// </summary>
     public event EventHandler<bool>? CloseRequested;
@@ -74,9 +74,21 @@ public sealed partial class UpdateDialogVM : ObservableObject
         IsOpen = false;
     }
 
-    /// <summary>「稍后再说」/「知道了」：只关掉，不动。</summary>
+    /// <summary>
+    /// 「取消更新」/「知道了」：先关掉。
+    /// <para>
+    /// 发现新版本这条路上，取消意味着「以后别再拿更新烦我」——顺手把
+    /// <c>config.json</c> 里的 <c>autoUpdateCheck</c> 写成 false，下次启动就不再自动检查。
+    /// 只是查看更新内容（<see cref="Prompt"/> = false）时不动这个开关。
+    /// </para>
+    /// </summary>
     [RelayCommand]
-    private void Later() => CloseRequested?.Invoke(this, false);
+    private void Decline()
+    {
+        if (Prompt) AppConfig.SetAutoUpdateCheck(false);
+
+        CloseRequested?.Invoke(this, false);
+    }
 
     /// <summary>「立即更新」：关掉并交给更新器。</summary>
     [RelayCommand]

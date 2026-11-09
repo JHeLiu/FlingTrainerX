@@ -110,6 +110,10 @@ namespace FlingTrainerX
             base.OnStartup(e);
             BootTrace.Mark("OnStartup 进入");
 
+            // 配置：启动最前面读一次 config.json（版本号 + 是否自动检查更新），之后全进程用静态字段里的值
+            AppConfig.Initialize();
+            BootTrace.Mark($"配置就绪 {AppConfig.Describe()}");
+
             // 官网偶尔有页面在响应头 / meta 里声明 iso-2022-cn 这类冷门编码。
             // .NET 默认只认 UTF-8 / UTF-16 等少数几种，遇到没注册的编码会直接抛
             // ArgumentException，那一款游戏的抓取就白跑了。启动时把代码页编码全注册上。
@@ -300,6 +304,18 @@ namespace FlingTrainerX
                 Dispatcher.BeginInvoke(DispatcherPriority.ApplicationIdle, new Action(async () =>
                 {
                     await pageWindow.RunPageCheckAsync(pageDir);
+                    Shutdown();
+                }));
+            }
+
+            // 收藏夹搜索 / 分页自检（仅 Debug）：<程序>.exe --favorite-check <目录>
+            var favoriteIndex = Array.IndexOf(e.Args, "--favorite-check");
+            if (favoriteIndex >= 0 && favoriteIndex + 1 < e.Args.Length && MainWindow is MainWindow favoriteWindow)
+            {
+                var favoriteDir = e.Args[favoriteIndex + 1];
+                Dispatcher.BeginInvoke(DispatcherPriority.ApplicationIdle, new Action(async () =>
+                {
+                    await favoriteWindow.RunFavoriteCheckAsync(favoriteDir);
                     Shutdown();
                 }));
             }

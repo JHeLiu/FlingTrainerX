@@ -27,10 +27,6 @@ public static class AppPaths
 
     public static string DatabaseFile => Path.Combine(DbDir, "fling.db");
 
-    /// <summary>老版本把数据放在 %LOCALAPPDATA%\FlingTrainerX，升级后按需迁一次。</summary>
-    public static string LegacyDir => Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "FlingTrainerX");
-
     /// <summary>
     /// 程序目录下 Assets\ 里某个随包发布的静态文件的路径。
     /// <para>

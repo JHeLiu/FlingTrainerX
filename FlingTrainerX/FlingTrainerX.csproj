@@ -18,9 +18,9 @@
     <Description>风灵月影宗藏宝阁 · FLiNG 修改器库</Description>
     <Company>风灵月影宗</Company>
     <!--
-        在线更新靠这个版本号判断新旧（读的是程序集版本，见 UpdateService.CurrentVersion）。
-        打包脚本 .pro\publish.ps1 会用 -p:Version=<version.txt> 覆盖它，
-        这里写的是「开发机直接编译」时的版本，跟 .pro\version.txt 保持一致即可。
+        版本号真正的来源是项目里的 config.json（启动时由 AppConfig 读进静态字段），
+        打包脚本 publish.ps1 会在编译前把它改成本次版本号。
+        这里的 <Version> 只是兜底：配置文件缺失时程序会退回程序集版本。
     -->
     <Version>1.0.2</Version>
     <!-- exe / 任务栏 / 桌面快捷方式统一用这个多尺寸图标 -->
@@ -38,12 +38,21 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- 免责声明正文：放成独立文本文件，随程序一起发布，改文案不用重新编译 -->
-    <None Update="Assets\免责声明.txt" CopyToOutputDirectory="PreserveNewest" />
+    <!--
+      程序配置：项目里的 config.json 是唯一来源（见 Services\AppConfig.cs，启动时读进静态字段）。
+      里面记着「当前版本号」和「启动要不要自动检查更新」，编译时原样复制到输出目录根部，
+      exe 旁边就是 config.json，随安装包一起发。发版脚本会在编译前把新版本号写进这个文件。
+    -->
+    <None Update="config.json" CopyToOutputDirectory="PreserveNewest" />
+    <!-- 免责声明正文：放成独立文本文件，随程序一起发布，改文案不用重新编译（文件名用英文，避开中文路径问题） -->
+    <None Update="Assets\disclaimer.txt" CopyToOutputDirectory="PreserveNewest" />
     <!-- 更新内容正文：同上，发版前改这个文件就行 -->
     <None Update="Assets\changelog.txt" CopyToOutputDirectory="PreserveNewest" />
-    <!-- 在线更新的仓库地址：换仓库 / 私有库填 token 都改这个文件，不用重新编译 -->
-    <None Update="Assets\update.json" CopyToOutputDirectory="PreserveNewest" />
+    <!--
+      不再随包发布 Assets\update.json：仓库地址已经写死在 UpdateService 里
+      （DefaultOwner / DefaultRepo），多一个可编辑的配置文件只会让 token 更容易外泄。
+      真要临时换仓库或给私有库填 token，在 exe 旁边手放一个同名文件即可，读取逻辑还留着。
+    -->
   </ItemGroup>
 
   <ItemGroup>
