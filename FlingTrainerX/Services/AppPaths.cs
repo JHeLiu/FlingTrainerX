@@ -31,6 +31,38 @@ public static class AppPaths
     public static string LegacyDir => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "FlingTrainerX");
 
+    /// <summary>
+    /// 程序目录下 Assets\ 里某个随包发布的静态文件的路径。
+    /// <para>
+    /// 单文件发布时 <see cref="BaseDir"/>（AppContext.BaseDirectory）就是 exe 所在目录，
+    /// 正常情况第一个候选就命中。万一哪天用了会解压到临时目录的发布方式，
+    /// 再退到 <see cref="Environment.ProcessPath"/> 所在的目录找一遍；都没有就返回第一个候选，
+    /// 由调用方给出「文件缺失」的提示。
+    /// </para>
+    /// </summary>
+    public static string AssetFile(string fileName)
+    {
+        var first = Path.Combine(BaseDir, "Assets", fileName);
+
+        try
+        {
+            if (File.Exists(first)) return first;
+
+            var exeDir = Path.GetDirectoryName(Environment.ProcessPath ?? "");
+            if (!string.IsNullOrEmpty(exeDir))
+            {
+                var second = Path.Combine(exeDir, "Assets", fileName);
+                if (File.Exists(second)) return second;
+            }
+        }
+        catch
+        {
+            // 拿不到进程路径就走第一个候选
+        }
+
+        return first;
+    }
+
     // ==================== 路径存库：一律存相对路径 ====================
 
     /// <summary>

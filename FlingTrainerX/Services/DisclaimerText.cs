@@ -18,7 +18,7 @@ public static class DisclaimerText
     public const string FileName = "免责声明.txt";
 
     /// <summary>正文的完整路径：&lt;程序目录&gt;\Assets\免责声明.txt。</summary>
-    public static string FilePath => Path.Combine(AppPaths.BaseDir, "Assets", FileName);
+    public static string FilePath => AppPaths.AssetFile(FileName);
 
     /// <summary>
     /// 读整篇正文。换行统一成 \n（WPF 的 TextBlock 两种都认，统一一下省得行高算错），

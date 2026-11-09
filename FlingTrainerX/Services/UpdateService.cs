@@ -4,7 +4,6 @@ using System.Net;
 using System.Reflection;
 using System.Text.Json;
 using System.Text.RegularExpressions;
-using AutoUpdaterDotNET;
 using FlingTrainerX.Models;
 
 namespace FlingTrainerX.Services;
@@ -59,14 +58,13 @@ public sealed class UpdateCheckResult
 }
 
 /// <summary>
-/// 在线更新：从 Gitee 的「发行版（releases）」里查最新版本，确认更新后交给
-/// AutoUpdater.NET（<c>Autoupdater.NET.Official</c>）下载并覆盖安装。
+/// 在线更新：从 Gitee 的「发行版（releases）」里查最新版本，下载更新包，再交给安装程序。
 ///
-/// 分两步走是有原因的：
-/// 1. 检查这一步自己走 Gitee 的 JSON 接口，能拿到版本号、发行说明、附件直链，
-///    界面才好把「更新了什么」一起显示出来（库自带的 appcast XML 是另一套格式，Gitee 不提供）；
-/// 2. 下载 + 解压 + 覆盖 + 重启这段折腾事交给 AutoUpdater.NET：它内置 ZipExtractor，
-///    会等本进程退出后再替换文件，替换完自动把新版本拉起来，比自己写批处理可靠得多。
+/// 两步走：
+/// 1. 检查走 Gitee 的 JSON 接口，能拿到版本号、发行说明、附件直链，
+///    界面才好把「更新了什么」一起显示出来（Gitee 不提供 appcast XML）；
+/// 2. 下载自己实现（<see cref="DownloadAsync"/>）：要的是程序内那条真实进度条，
+///    而不是第三方库的 WinForms 下载窗。下完由界面拉起安装程序，安装界面接管后续。
 /// </summary>
 public static class UpdateService
 {
@@ -142,51 +140,81 @@ public static class UpdateService
     }
 
     /// <summary>
-    /// 下载并安装。zip 走「等程序退出 → 解压覆盖 → 自动重启」，exe 安装包走「静默安装」。
-    /// 会弹 AutoUpdater.NET 的下载窗口（中文界面），本方法返回时文件已经落地。
+    /// 把更新包下载到临时目录，边下边上报进度。
+    /// <para>
+    /// 不用 AutoUpdater.NET 的原因：它的下载窗口是 WinForms 的，跟这套深色界面不搭，
+    /// 而且下载完会自己去覆盖安装；这里要的是「程序内进度条 + 下完交给安装程序」。
+    /// </para>
     /// </summary>
-    /// <param name="release">要装的版本。</param>
-    /// <param name="owner">下载窗口的父窗口，让它居中并锁住主界面。</param>
-    /// <returns>true 表示已经启动安装流程，调用方应立刻退出程序让出文件。</returns>
-    public static bool Apply(UpdateRelease release, System.Windows.Window owner)
+    /// <param name="release">要下的发行版。</param>
+    /// <param name="progress">进度回调（由界面用 <c>Progress&lt;T&gt;</c> 包一层，自动回到 UI 线程）。</param>
+    /// <param name="ct">取消标记。</param>
+    /// <returns>下载好的文件完整路径。</returns>
+    public static async Task<string> DownloadAsync(
+        UpdateRelease release,
+        IProgress<DownloadProgress> progress,
+        CancellationToken ct = default)
     {
-        if (string.IsNullOrWhiteSpace(release.DownloadUrl)) return false;
+        if (string.IsNullOrWhiteSpace(release.DownloadUrl))
+            throw new InvalidOperationException("这个版本没有可下载的更新包");
 
-        AutoUpdater.AppTitle = AppTitle;
-        AutoUpdater.HttpUserAgent = UserAgentProvider.UserAgent;
-        AutoUpdater.TopMost = false;
+        Directory.CreateDirectory(DownloadDir);
 
-        // 库内部拼相对地址时会用到 BaseUri（= 由 AppCastURL 构造），
-        // 我们不走 appcast，但必须让它不为空，否则读 DownloadURL 时会抛异常
-        AutoUpdater.AppCastURL = ApiUrl;
-        AutoUpdater.InstalledVersion = CurrentVersion;
+        var fileName = string.IsNullOrWhiteSpace(release.AssetName)
+            ? $"setup-{release.Version}.exe"
+            : release.AssetName;
 
-        // 只覆盖程序文件，绝不删目录：dbs\ 和 f\ 是用户的数据，清掉等于把人家的库端了
-        AutoUpdater.ClearAppDirectory = false;
-        AutoUpdater.RunUpdateAsAdmin = false;
-        AutoUpdater.DownloadPath = DownloadDir;
+        // 文件名里可能有路径分隔符，只保留最后一段，别让它跑出临时目录
+        fileName = Path.GetFileName(fileName);
+        var target = Path.Combine(DownloadDir, fileName);
 
-        try
+        // 上次没下完的半截文件会让安装包损坏，直接覆盖
+        if (File.Exists(target)) File.Delete(target);
+
+        using var client = UserAgentProvider.CreateHttpClient(timeout: TimeSpan.FromMinutes(30));
+        using var response = await client
+            .GetAsync(release.DownloadUrl, HttpCompletionOption.ResponseHeadersRead, ct)
+            .ConfigureAwait(false);
+
+        if (!response.IsSuccessStatusCode)
+            throw new InvalidOperationException($"下载失败：HTTP {(int)response.StatusCode}");
+
+        // 服务器不给 Content-Length 时退回发行版里写的大小，再没有就是 0（界面走不确定态）
+        var total = response.Content.Headers.ContentLength ?? release.Size;
+
+        using var source = await response.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
+        using var destination = File.Create(target);
+
+        var buffer = new byte[81920];
+        long received = 0;
+        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+        long nextReportAt = 0;
+
+        progress.Report(new DownloadProgress(0, total, 0));
+
+        while (true)
         {
-            AutoUpdater.SetOwner(owner);
+            var read = await source.ReadAsync(buffer, ct).ConfigureAwait(false);
+            if (read <= 0) break;
+
+            await destination.WriteAsync(buffer.AsMemory(0, read), ct).ConfigureAwait(false);
+            received += read;
+
+            // 每 100ms 报一次就够顺滑了，报太密反而把 UI 线程刷爆
+            if (stopwatch.ElapsedMilliseconds >= nextReportAt)
+            {
+                nextReportAt = stopwatch.ElapsedMilliseconds + 100;
+                var speed = stopwatch.Elapsed.TotalSeconds > 0 ? received / stopwatch.Elapsed.TotalSeconds : 0;
+                progress.Report(new DownloadProgress(received, total, speed));
+            }
         }
-        catch
-        {
-            // 宿主窗口还没建出来时 SetOwner 会失败，无伤大雅，下载窗口只是不跟着居中
-        }
 
-        var args = new UpdateInfoEventArgs
-        {
-            CurrentVersion = release.Version,
-            InstalledVersion = CurrentVersion,
-            DownloadURL = release.DownloadUrl,
-            ChangelogURL = release.PageUrl,
+        progress.Report(new DownloadProgress(received, total, 0));
 
-            // zip 不需要参数；安装包则静默运行，安装器自己会关掉占着文件的程序
-            InstallerArgs = release.IsZip ? null : "/SILENT /CLOSEAPPLICATIONS /RESTARTAPPLICATIONS"
-        };
+        if (total > 0 && received < total)
+            throw new IOException($"下载不完整（{received} / {total} 字节），请重试");
 
-        return AutoUpdater.DownloadUpdate(args);
+        return target;
     }
 
     // ==================== 内部实现 ====================
@@ -283,8 +311,8 @@ public static class UpdateService
     }
 
     /// <summary>
-    /// 从附件里挑一个能装上的：优先「更新包 zip」（解压覆盖，最稳），
-    /// 其次安装包 exe，都没有就返回第一个附件。
+    /// 从附件里挑一个能装的：优先安装包 exe（下完直接运行，安装界面接管），
+    /// 其次 zip（早期版本传过打包好的目录），都没有就退回第一个附件。
     /// </summary>
     private static (string name, string url, long size) PickAsset(JsonElement root)
     {
@@ -304,11 +332,11 @@ public static class UpdateService
             var item = (name, url, size: ReadLong(asset, "size"));
             if (first.url.Length == 0) first = item;
 
-            if (name.EndsWith(".zip", StringComparison.OrdinalIgnoreCase) && zip is null) zip = item;
-            else if (name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) && exe is null) exe = item;
+            if (name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) && exe is null) exe = item;
+            else if (name.EndsWith(".zip", StringComparison.OrdinalIgnoreCase) && zip is null) zip = item;
         }
 
-        return zip ?? exe ?? first;
+        return exe ?? zip ?? first;
     }
 
     /// <summary>把 tag 洗成纯版本号（去掉 v 前缀和 -beta 这类后缀），洗不出来返回 null。</summary>
@@ -330,7 +358,9 @@ public static class UpdateService
     /// <summary>HTTP 状态码翻成人话。</summary>
     private static string DescribeHttpFailure(HttpStatusCode code) => code switch
     {
-        HttpStatusCode.NotFound => "没找到 Gitee 仓库或发行版（404），确认仓库地址和是否已发布版本",
+        // 私有仓库对匿名请求也回 404（不是 403），所以这里要把两种情况都说清楚
+        HttpStatusCode.NotFound =>
+            "没找到 Gitee 仓库或发行版（404）：确认地址正确、已发布版本；仓库若是私有的，匿名读不到，需在 update.json 填 token",
         HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden =>
             $"Gitee 拒绝访问（{(int)code}），仓库可能是私有的，可在 Assets\\update.json 里填 access_token",
         _ => $"Gitee 返回 {(int)code}，暂时查不到更新"

@@ -25,12 +25,12 @@ dotnet publish -c Release -f net10.0-windows -r win-x64 --self-contained true -p
 - .pro/<新版本号>/publish/里面是.NET发布的文件内容
 - 重要：每次构建时不要删除 .pro 下已有的历史版本目录，只新增本次版本目录，历史构建文件全部保留
 
-【打包步骤】
-- 使用NSIS打包，已经设置了全局变量，直接用命令就行 
+【打包步骤 - 使用 NSIS】
+- NSIS，已经设置了全局变量，直接用命令就行 
 - 构建完成后调用 NSIS 对 .pro/<新版本号>/ 下的产物进行打包
 - 安装界面要求：有桌面快捷方式、添加到快速启动栏选项这些常规的，可以用户自己选择安装那个位置，要记住用户之前安装的位置，好方便下次安装自动更新
 - 不需要任何免责声明页面
-- 安装包命名规则：<软件名>-安装包-<版本号>.exe
+- 安装包命名规则：<软件名>-<版本号>.exe
 - 软件名从脚本内配置读取（脚本顶部留一个变量方便修改）
 - 安装包也输出到 .pro/<新版本号>/ 目录下
 
@@ -64,8 +64,38 @@ dotnet publish -c Release -f net10.0-windows -r win-x64 --self-contained true -p
 优化项目代码，看看哪些可以进入标准的WPF MVVM模式 就迁移过去，别全部挤到一起，尽量别用WINFROM模式写传统的代码，而是标准的WPF-MVVM写代码，使用 CommunityToolkit.Mvvm 框架为基准写MVVM
 
 
+现在帮我写一个推送到 gitee releases 发行版脚本
+1、在.pro 目录里面写一个  release 脚本，双击 就推送发布到  https://gitee.com/misslius/FlingTrainerX 里面的 releases 发行版里面
+2、程序里面的在线检查更新就是最新版地址。然后下载的的时候要有真是的进度条
+3、更新软件下载线上的后。打开安装程序
 
 
+
+
+检查跟修复
+1、用NSIS打包卸载后要把里面的文件全部都卸载了
+2、用NSIS打包 程序读取不了静态文件的免责声明 txt内容了
+
+设置关于里面修改
+1、软件更新 下面的描述，只显示当前版本信息  后面那些不需要了
+2、在Assets下面新建一个 更新内容.txt 文件名用英文吧
+3、更新内容就读取这里面的文本内容
+4、release脚本推送到gitee里面发航班更新内容获取gitee 对应发新版的描述，获取就储存到本地，下次更新到就跟新到最新的
+
+
+release脚本需求如下
+
+1、自动上传打包好的安装包，去看这里的接口https://gitee.com/api/v5/swagger#/getV5ReposOwnerRepoSubscribers?ex=no，看是怎么上传 Releases 包的、怎么写描述的
+2、描述就读取构建里面的那个 更新内容.txt 里面的内容吧
+
+
+在线更新程序优化
+1、使用 AutoUpdater.NET 库 实行更新
+2、怎么检测更新下载 看 https://gitee.com/api/v5/swagger#/getV5ReposOwnerRepoSubscribers?ex=no 接口说明
+
+
+
+检测一下.NET构建打包。不要打包db文件 跟本地下载的缓存文件那些
 
 
 

@@ -1,4 +1,4 @@
-using System.ComponentModel;
+﻿using System.ComponentModel;
 using System.Windows;
 using System.Windows.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -11,12 +11,12 @@ namespace FlingTrainerX.ViewModels;
 /// 详情页下载表格的一行。原表格数据 + 对应下载任务的实时进度合成一个可绑定对象，
 /// 任务状态变了就整体通知一次，界面不用写转换器。
 /// </summary>
-public sealed class DownloadRowVm : ObservableObject
+public sealed class TrainerDetailRowVM : ObservableObject
 {
     private readonly TrainerDownload _file;
     private DownloadTask? _task;
 
-    public DownloadRowVm(TrainerDownload file)
+    public TrainerDetailRowVM(TrainerDownload file)
     {
         _file = file;
         Attach(DownloadManager.Instance.Find(file.Url));

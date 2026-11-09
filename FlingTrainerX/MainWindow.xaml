@@ -6,6 +6,7 @@
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
+    xmlns:vm="clr-namespace:FlingTrainerX.ViewModels"
     Title="风灵月影宗藏宝阁"
     Width="1280"
     Height="780"
@@ -89,7 +90,7 @@
                         x:Name="NavList"
                         Grid.Row="1"
                         Margin="10,6,10,0"
-                        SelectionChanged="NavList_SelectionChanged"
+                        SelectedIndex="{Binding NavIndex, Mode=TwoWay}"
                         Style="{StaticResource NavList}">
                         <ListBoxItem>
                             <StackPanel Orientation="Horizontal">
@@ -117,7 +118,7 @@
                                     Margin="11,0,0,0"
                                     VerticalAlignment="Center"
                                     FontSize="{StaticResource Fs.Body}"
-                                    Text="收藏夹" />
+                                    Text="{Binding FavoritesLabel}" />
                             </StackPanel>
                         </ListBoxItem>
                         <ListBoxItem>
@@ -128,11 +129,10 @@
                                     FontSize="16"
                                     Text="&#xE896;" />
                                 <TextBlock
-                                    x:Name="NavQueueLabel"
                                     Margin="11,0,0,0"
                                     VerticalAlignment="Center"
                                     FontSize="{StaticResource Fs.Body}"
-                                    Text="下载队列" />
+                                    Text="{Binding QueueLabel}" />
                             </StackPanel>
                         </ListBoxItem>
                         <ListBoxItem>
@@ -172,8 +172,10 @@
                                 Padding="0,2"
                                 Background="Transparent"
                                 Cursor="Hand"
-                                MouseLeftButtonUp="DataSourceLink_Click"
                                 ToolTip="在浏览器中打开 https://flingtrainer.com">
+                                <Border.InputBindings>
+                                    <MouseBinding Command="{Binding OpenSiteCommand}" Gesture="LeftClick" />
+                                </Border.InputBindings>
                                 <Border.Style>
                                     <Style TargetType="Border">
                                         <Setter Property="TextBlock.Foreground" Value="#FF7FB4FF" />
@@ -199,7 +201,7 @@
                                 Margin="0,6,0,0"
                                 FontSize="{StaticResource Fs.Caption}"
                                 Foreground="{StaticResource B.TextMute}"
-                                Text="—" />
+                                Text="{Binding SyncTimeText}" />
                         </StackPanel>
                     </Border>
                 </Grid>
@@ -279,7 +281,7 @@
                                 Margin="7,0,0,0"
                                 PreviewKeyDown="SearchBox_PreviewKeyDown"
                                 Style="{StaticResource SearchBox}"
-                                TextChanged="SearchBox_TextChanged" />
+                                Text="{Binding Library.SearchText, UpdateSourceTrigger=PropertyChanged}" />
                             <TextBlock
                                 x:Name="SearchHint"
                                 Grid.Column="1"
@@ -288,7 +290,8 @@
                                 FontSize="{StaticResource Fs.Body}"
                                 Foreground="{StaticResource B.TextMute}"
                                 IsHitTestVisible="False"
-                                Text="输入游戏名 / 中文名，回车搜索" />
+                                Text="输入游戏名 / 中文名，回车搜索"
+                                Visibility="{Binding Library.SearchHintVisible, Converter={StaticResource BoolToVis}}" />
                             <TextBlock
                                 Grid.Column="2"
                                 Margin="0,0,12,0"
@@ -311,6 +314,8 @@
                     <Popup
                         x:Name="SuggestPopup"
                         AllowsTransparency="True"
+                        IsOpen="{Binding Library.SuggestOpen, Mode=TwoWay}"
+                        Opened="SuggestPopup_Opened"
                         Placement="Bottom"
                         PlacementTarget="{Binding ElementName=SearchShell}"
                         PopupAnimation="Fade"
@@ -337,8 +342,10 @@
                                 Background="Transparent"
                                 BorderThickness="0"
                                 ItemContainerStyle="{StaticResource SuggestItem}"
+                                ItemsSource="{Binding Library.Suggestions}"
                                 PreviewMouseLeftButtonDown="SuggestList_PreviewMouseLeftButtonDown"
-                                ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                                ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                SelectedIndex="{Binding Library.SuggestIndex, Mode=TwoWay}">
                                 <ListBox.ItemTemplate>
                                     <DataTemplate>
                                         <Grid Height="34">
@@ -384,7 +391,7 @@
                             MouseLeave="RefreshHost_MouseLeave">
                             <Button
                                 x:Name="RefreshButton"
-                                Click="Refresh_Click"
+                                Command="{Binding Library.RefreshLocalCommand}"
                                 Style="{StaticResource IconBtn}"
                                 ToolTip="重新读取本地数据 · 鼠标悬停可更新">
                                 <TextBlock
@@ -427,7 +434,7 @@
 
                                         <Button
                                             x:Name="SyncMenuExisting"
-                                            Click="SyncMenuExisting_Click"
+                                            Command="{Binding Settings.SyncExistingCommand}"
                                             Style="{StaticResource MenuRow}">
                                             <Grid>
                                                 <Grid.ColumnDefinitions>
@@ -444,7 +451,7 @@
 
                                         <Button
                                             x:Name="SyncMenuAll"
-                                            Click="SyncMenuAll_Click"
+                                            Command="{Binding Settings.SyncAllCommand}"
                                             Style="{StaticResource MenuRow}">
                                             <Grid>
                                                 <Grid.ColumnDefinitions>
@@ -468,7 +475,7 @@
                             Margin="6,0"
                             Background="#FF2F4967" />
                         <Button
-                            Click="Minimize_Click"
+                            Command="{Binding HideToTrayCommand}"
                             Style="{StaticResource IconBtn}"
                             ToolTip="最小化到托盘">
                             <TextBlock
@@ -477,7 +484,7 @@
                                 Text="&#xE921;" />
                         </Button>
                         <Button
-                            Click="Close_Click"
+                            Command="{Binding CloseCommand}"
                             Style="{StaticResource CloseBtn}"
                             ToolTip="关闭">
                             <TextBlock
@@ -513,45 +520,45 @@
                                     FontSize="{StaticResource Fs.Head}"
                                     FontWeight="SemiBold"
                                     Style="{StaticResource T.Base}"
-                                    Text="{Binding SectionTitle}" />
+                                    Text="{Binding Library.SectionTitle}" />
                                 <StackPanel
                                     x:Name="LibraryTabs"
                                     Grid.Column="1"
                                     Orientation="Horizontal"
-                                    Visibility="{Binding LibraryTabsVisible, Converter={StaticResource BoolToVis}}">
+                                    Visibility="{Binding Library.LibraryTabsVisible, Converter={StaticResource BoolToVis}}">
                                     <Button
                                         x:Name="RecentTabButton"
-                                        Click="LibraryTab_Click"
+                                        Command="{Binding Library.SelectTabByNameCommand}"
+                                        CommandParameter="Recent"
                                         Content="最近更新"
-                                        IsEnabled="{Binding RecentTabEnabled}"
-                                        Style="{StaticResource LibraryTabButton}"
-                                        Tag="Recent" />
+                                        IsEnabled="{Binding Library.RecentTabEnabled}"
+                                        Style="{StaticResource LibraryTabButton}" />
                                     <Button
                                         x:Name="PopularTabButton"
                                         Margin="6,0,0,0"
-                                        Click="LibraryTab_Click"
+                                        Command="{Binding Library.SelectTabByNameCommand}"
+                                        CommandParameter="Popular"
                                         Content="热门游戏"
-                                        IsEnabled="{Binding PopularTabEnabled}"
-                                        Style="{StaticResource LibraryTabButton}"
-                                        Tag="Popular" />
+                                        IsEnabled="{Binding Library.PopularTabEnabled}"
+                                        Style="{StaticResource LibraryTabButton}" />
                                 </StackPanel>
                             </Grid>
                             <TextBlock
                                 x:Name="SectionSubtitle"
                                 Margin="1,4,0,0"
                                 Style="{StaticResource T.Mute}"
-                                Text="{Binding SectionSubtitle}"
-                                Visibility="{Binding SectionSubtitle, Converter={StaticResource TextToVis}}" />
+                                Text="{Binding Library.SectionSubtitle}"
+                                Visibility="{Binding Library.SectionSubtitle, Converter={StaticResource TextToVis}}" />
                         </StackPanel>
 
                         <!--  卡片列表：一行 5 张 × 3 行 = 每页 15 条，默认正好铺满一屏；放不下时才出滚动条  -->
                         <ListBox
                             x:Name="CardList"
                             Grid.Row="1"
-                            ItemsSource="{Binding Rows}"
+                            ItemsSource="{Binding Library.Rows}"
                             Style="{StaticResource CardListBox}"
-                            Tag="{Binding IsFavoritesView}"
-                            Visibility="{Binding CardListVisible, Converter={StaticResource BoolToVis}}">
+                            Tag="{Binding Library.IsFavoritesView}"
+                            Visibility="{Binding Library.CardListVisible, Converter={StaticResource BoolToVis}}">
                             <ListBox.ItemTemplate>
                                 <DataTemplate>
                                     <ItemsControl Margin="0,0,0,8" ItemsSource="{Binding Items}">
@@ -566,11 +573,11 @@
                                         <ItemsControl.ItemTemplate>
                                             <DataTemplate>
                                                 <Button
-                                                    Click="Card_Click"
+                                                    Command="{Binding DataContext.Library.OpenDetailCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                    CommandParameter="{Binding}"
                                                     MouseEnter="Card_MouseEnter"
                                                     MouseLeave="Card_MouseLeave"
-                                                    Style="{StaticResource CardButton}"
-                                                    Tag="{Binding}">
+                                                    Style="{StaticResource CardButton}">
                                                     <Grid>
                                                         <Grid.RowDefinitions>
                                                             <RowDefinition Height="*" />
@@ -610,9 +617,9 @@
                                                                 Margin="8,8,0,0"
                                                                 HorizontalAlignment="Left"
                                                                 VerticalAlignment="Top"
-                                                                Click="RemoveFavorite_Click"
+                                                                Command="{Binding DataContext.Library.RemoveFavoriteCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                                CommandParameter="{Binding}"
                                                                 Style="{StaticResource CardFavRemove}"
-                                                                Tag="{Binding}"
                                                                 Visibility="{Binding Tag, RelativeSource={RelativeSource AncestorType=ListBox}, Converter={StaticResource BoolToVis}}" />
                                                         </Grid>
 
@@ -688,7 +695,7 @@
                         <Grid
                             x:Name="EmptyState"
                             Grid.Row="1"
-                            Visibility="{Binding EmptyVisible, Converter={StaticResource BoolToVis}}">
+                            Visibility="{Binding Library.EmptyVisible, Converter={StaticResource BoolToVis}}">
                             <StackPanel
                                 Margin="0,0,0,40"
                                 HorizontalAlignment="Center"
@@ -706,7 +713,7 @@
                                         FontFamily="{StaticResource F.Icon}"
                                         FontSize="26"
                                         Foreground="#FF3E5670"
-                                        Text="{Binding EmptyGlyph}" />
+                                        Text="{Binding Library.EmptyGlyph}" />
                                 </Border>
                                 <TextBlock
                                     x:Name="EmptyTitle"
@@ -715,16 +722,16 @@
                                     FontSize="{StaticResource Fs.Title}"
                                     FontWeight="SemiBold"
                                     Foreground="#FFD3E0EE"
-                                    Text="{Binding EmptyTitle}" />
+                                    Text="{Binding Library.EmptyTitle}" />
                                 <TextBlock
                                     x:Name="EmptyDesc"
-                                    MaxWidth="{Binding EmptyDescMaxWidth}"
+                                    MaxWidth="{Binding Library.EmptyDescMaxWidth}"
                                     Margin="0,7,0,0"
                                     HorizontalAlignment="Center"
                                     FontSize="{StaticResource Fs.Small}"
                                     Foreground="{StaticResource B.TextMute}"
                                     LineHeight="21"
-                                    Text="{Binding EmptyDesc}"
+                                    Text="{Binding Library.EmptyDesc}"
                                     TextAlignment="Center"
                                     TextWrapping="Wrap" />
 
@@ -738,18 +745,18 @@
                                     Margin="0,18,0,0"
                                     Padding="20,0"
                                     HorizontalAlignment="Center"
-                                    Click="EmptySync_Click"
+                                    Command="{Binding StartFullSyncCommand}"
                                     Content="更新数据"
                                     FontSize="{StaticResource Fs.Body}"
                                     Style="{StaticResource PrimaryBtn}"
-                                    Visibility="{Binding EmptySyncVisible, Converter={StaticResource BoolToVis}}" />
+                                    Visibility="{Binding Library.EmptySyncVisible, Converter={StaticResource BoolToVis}}" />
                             </StackPanel>
                         </Grid>
                         <!--  ==================== 设置 ====================  -->
                         <Grid
                             x:Name="SettingsPanel"
                             Grid.Row="1"
-                            Visibility="{Binding SettingsPanelVisible, Converter={StaticResource BoolToVis}}">
+                            Visibility="{Binding Library.SettingsPanelVisible, Converter={StaticResource BoolToVis}}">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="Auto" />
                                 <ColumnDefinition Width="*" />
@@ -765,6 +772,7 @@
                                 Width="128"
                                 Margin="26,2,0,0"
                                 VerticalAlignment="Top"
+                                DataContext="{Binding Settings}"
                                 SelectedIndex="{Binding GroupIndex, Mode=TwoWay}"
                                 SelectionChanged="SettingsMenu_SelectionChanged"
                                 Style="{StaticResource SetNavList}">
@@ -784,6 +792,7 @@
                                 x:Name="SettingsScroll"
                                 Grid.Column="1"
                                 Margin="18,0,26,0"
+                                DataContext="{Binding Settings}"
                                 HorizontalScrollBarVisibility="Disabled"
                                 VerticalScrollBarVisibility="Auto">
                                 <StackPanel x:Name="SettingsContent">
@@ -791,412 +800,404 @@
                                         版式参考系统「设置」页：分组标题放在卡片外面（小号灰字），
                                         标题 + 副标题在左、操作按钮在右，一行一件事，行间用极淡的线分隔。
                                     -->
-                                    <StackPanel
-                                        x:Name="SettingsGroupData"
-                                        Visibility="{Binding ShowData, Converter={StaticResource BoolToVis}}">
-                                    <TextBlock
-                                        x:Name="SettingsHeaderData"
-                                        Margin="6,2,0,9"
-                                        FontSize="{StaticResource Fs.Small}"
-                                        FontWeight="SemiBold"
-                                        Foreground="#FF7E93A9"
-                                        Text="数据更新" />
+                                    <StackPanel x:Name="SettingsGroupData" Visibility="{Binding ShowData, Converter={StaticResource BoolToVis}}">
+                                        <TextBlock
+                                            x:Name="SettingsHeaderData"
+                                            Margin="6,2,0,9"
+                                            FontSize="{StaticResource Fs.Small}"
+                                            FontWeight="SemiBold"
+                                            Foreground="#FF7E93A9"
+                                            Text="数据更新" />
 
-                                    <!--  首页只读本地 SQLite，所以「拿新数据」全部集中到这一组  -->
-                                    <!--
-                                        设置卡片：底色要比页面底（#FF0E1825）明显亮一档、边框也要看得见，
-                                        否则在 1080p / 100% 缩放的屏幕上整张卡几乎糊在背景里
-                                    -->
-                                    <Border
-                                        Padding="20,4"
-                                        Background="#FF2B4058"
-                                        BorderBrush="#FF466280"
-                                        BorderThickness="1"
-                                        CornerRadius="12">
-                                        <StackPanel>
-                                            <!--
-                                                快速更新游戏名：只解析官网 All Trainers (A-Z) 一页名录写进本地库，
-                                                一个请求跑完，不抓详情、不碰 Steam 中文名 —— 搜索框的提示靠它。
-                                            -->
-                                            <Grid Margin="0,16">
-                                                <Grid.ColumnDefinitions>
-                                                    <ColumnDefinition Width="*" />
-                                                    <ColumnDefinition Width="Auto" />
-                                                </Grid.ColumnDefinitions>
+                                        <!--  首页只读本地 SQLite，所以「拿新数据」全部集中到这一组  -->
+                                        <!--
+                                            设置卡片：底色要比页面底（#FF0E1825）明显亮一档、边框也要看得见，
+                                            否则在 1080p / 100% 缩放的屏幕上整张卡几乎糊在背景里
+                                        -->
+                                        <Border
+                                            Padding="20,4"
+                                            Background="#FF2B4058"
+                                            BorderBrush="#FF466280"
+                                            BorderThickness="1"
+                                            CornerRadius="12">
+                                            <StackPanel>
+                                                <!--
+                                                    快速更新游戏名：只解析官网 All Trainers (A-Z) 一页名录写进本地库，
+                                                    一个请求跑完，不抓详情、不碰 Steam 中文名 —— 搜索框的提示靠它。
+                                                -->
+                                                <Grid Margin="0,16">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="*" />
+                                                        <ColumnDefinition Width="Auto" />
+                                                    </Grid.ColumnDefinitions>
 
-                                                <StackPanel VerticalAlignment="Center">
-                                                    <TextBlock
-                                                        FontSize="{StaticResource Fs.Subtitle}"
-                                                        FontWeight="SemiBold"
-                                                        Foreground="#FFF0F6FD"
-                                                        Text="快速搜索游戏名" />
-                                                    <TextBlock
-                                                        MaxWidth="560"
-                                                        Margin="0,4,0,0"
-                                                        HorizontalAlignment="Left"
-                                                        FontSize="{StaticResource Fs.Small}"
-                                                        Foreground="#FF8FA3BA"
-                                                        LineHeight="20"
-                                                        Text="快速更新游戏名方便快速查询"
-                                                        TextWrapping="Wrap" />
-                                                </StackPanel>
+                                                    <StackPanel VerticalAlignment="Center">
+                                                        <TextBlock
+                                                            FontSize="{StaticResource Fs.Subtitle}"
+                                                            FontWeight="SemiBold"
+                                                            Foreground="#FFF0F6FD"
+                                                            Text="快速搜索游戏名" />
+                                                        <TextBlock
+                                                            MaxWidth="560"
+                                                            Margin="0,4,0,0"
+                                                            HorizontalAlignment="Left"
+                                                            FontSize="{StaticResource Fs.Small}"
+                                                            Foreground="#FF8FA3BA"
+                                                            LineHeight="20"
+                                                            Text="快速更新游戏名方便快速查询"
+                                                            TextWrapping="Wrap" />
+                                                    </StackPanel>
 
-                                                <Button
-                                                    x:Name="QuickNamesButton"
-                                                    Grid.Column="1"
-                                                    Height="34"
-                                                    Margin="24,0,0,0"
-                                                    Padding="16,0"
-                                                    VerticalAlignment="Center"
-                                                    Click="QuickNames_Click"
-                                                    Content="{Binding QuickNamesText}"
-                                                    FontSize="{StaticResource Fs.Body}"
-                                                    IsEnabled="{Binding UpdateButtonsEnabled}"
-                                                    Style="{StaticResource GhostBtn}"
-                                                    ToolTip="只更新搜索提示用的游戏名库，不下载详情、不更新 Steam 中文名" />
-                                            </Grid>
+                                                    <Button
+                                                        x:Name="QuickNamesButton"
+                                                        Grid.Column="1"
+                                                        Height="34"
+                                                        Margin="24,0,0,0"
+                                                        Padding="16,0"
+                                                        VerticalAlignment="Center"
+                                                        Command="{Binding QuickNamesCommand}"
+                                                        Content="{Binding QuickNamesText}"
+                                                        FontSize="{StaticResource Fs.Body}"
+                                                        IsEnabled="{Binding UpdateButtonsEnabled}"
+                                                        Style="{StaticResource GhostBtn}"
+                                                        ToolTip="只更新搜索提示用的游戏名库，不下载详情、不更新 Steam 中文名" />
+                                                </Grid>
 
-                                            <Border Height="1" Background="#FF3A5570" />
+                                                <Border Height="1" Background="#FF3A5570" />
 
-                                            <!--  更新全部数据：按官网分页从头翻到尾  -->
-                                            <Grid Margin="0,16">
-                                                <Grid.ColumnDefinitions>
-                                                    <ColumnDefinition Width="*" />
-                                                    <ColumnDefinition Width="Auto" />
-                                                </Grid.ColumnDefinitions>
+                                                <!--  更新全部数据：按官网分页从头翻到尾  -->
+                                                <Grid Margin="0,16">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="*" />
+                                                        <ColumnDefinition Width="Auto" />
+                                                    </Grid.ColumnDefinitions>
 
-                                                <StackPanel VerticalAlignment="Center">
-                                                    <TextBlock
-                                                        FontSize="{StaticResource Fs.Subtitle}"
-                                                        FontWeight="SemiBold"
-                                                        Foreground="#FFF0F6FD"
-                                                        Text="更新全部游戏数据" />
-                                                    <TextBlock
-                                                        MaxWidth="560"
-                                                        Margin="0,4,0,0"
-                                                        HorizontalAlignment="Left"
-                                                        FontSize="{StaticResource Fs.Small}"
-                                                        Foreground="#FF8FA3BA"
-                                                        LineHeight="20"
-                                                        Text="从官网更新最新信息；官网没改动的会自动跳过。"
-                                                        TextWrapping="Wrap" />
-                                                </StackPanel>
+                                                    <StackPanel VerticalAlignment="Center">
+                                                        <TextBlock
+                                                            FontSize="{StaticResource Fs.Subtitle}"
+                                                            FontWeight="SemiBold"
+                                                            Foreground="#FFF0F6FD"
+                                                            Text="更新全部游戏数据" />
+                                                        <TextBlock
+                                                            MaxWidth="560"
+                                                            Margin="0,4,0,0"
+                                                            HorizontalAlignment="Left"
+                                                            FontSize="{StaticResource Fs.Small}"
+                                                            Foreground="#FF8FA3BA"
+                                                            LineHeight="20"
+                                                            Text="从官网更新最新信息；官网没改动的会自动跳过。"
+                                                            TextWrapping="Wrap" />
+                                                    </StackPanel>
 
-                                                <Button
-                                                    x:Name="SyncAllButton"
-                                                    Grid.Column="1"
-                                                    Height="34"
-                                                    Margin="24,0,0,0"
-                                                    Padding="16,0"
-                                                    VerticalAlignment="Center"
-                                                    Click="SyncAll_Click"
-                                                    Content="{Binding UpdateAllText}"
-                                                    FontSize="{StaticResource Fs.Body}"
-                                                    IsEnabled="{Binding UpdateButtonsEnabled}"
-                                                    Style="{StaticResource GhostBtn}"
-                                                    ToolTip="官网列表与 Steam 中文名同时开跑，互不等待" />
-                                            </Grid>
+                                                    <Button
+                                                        x:Name="SyncAllButton"
+                                                        Grid.Column="1"
+                                                        Height="34"
+                                                        Margin="24,0,0,0"
+                                                        Padding="16,0"
+                                                        VerticalAlignment="Center"
+                                                        Command="{Binding SyncAllCommand}"
+                                                        Content="{Binding UpdateAllText}"
+                                                        FontSize="{StaticResource Fs.Body}"
+                                                        IsEnabled="{Binding UpdateButtonsEnabled}"
+                                                        Style="{StaticResource GhostBtn}"
+                                                        ToolTip="官网列表与 Steam 中文名同时开跑，互不等待" />
+                                                </Grid>
 
-                                            <Border Height="1" Background="#FF3A5570" />
+                                                <Border Height="1" Background="#FF3A5570" />
 
-                                            <!--  更新已有数据：按本地库逐款重抓详情页  -->
-                                            <Grid Margin="0,16">
-                                                <Grid.ColumnDefinitions>
-                                                    <ColumnDefinition Width="*" />
-                                                    <ColumnDefinition Width="Auto" />
-                                                </Grid.ColumnDefinitions>
+                                                <!--  更新已有数据：按本地库逐款重抓详情页  -->
+                                                <Grid Margin="0,16">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="*" />
+                                                        <ColumnDefinition Width="Auto" />
+                                                    </Grid.ColumnDefinitions>
 
-                                                <StackPanel VerticalAlignment="Center">
-                                                    <TextBlock
-                                                        FontSize="{StaticResource Fs.Subtitle}"
-                                                        FontWeight="SemiBold"
-                                                        Foreground="#FFF0F6FD"
-                                                        Text="更新已有游戏数据" />
-                                                    <TextBlock
-                                                        MaxWidth="560"
-                                                        Margin="0,4,0,0"
-                                                        HorizontalAlignment="Left"
-                                                        FontSize="{StaticResource Fs.Small}"
-                                                        Foreground="#FF8FA3BA"
-                                                        LineHeight="20"
-                                                        Text="更新本地已存在的游戏最新信息"
-                                                        TextWrapping="Wrap" />
-                                                </StackPanel>
+                                                    <StackPanel VerticalAlignment="Center">
+                                                        <TextBlock
+                                                            FontSize="{StaticResource Fs.Subtitle}"
+                                                            FontWeight="SemiBold"
+                                                            Foreground="#FFF0F6FD"
+                                                            Text="更新已有游戏数据" />
+                                                        <TextBlock
+                                                            MaxWidth="560"
+                                                            Margin="0,4,0,0"
+                                                            HorizontalAlignment="Left"
+                                                            FontSize="{StaticResource Fs.Small}"
+                                                            Foreground="#FF8FA3BA"
+                                                            LineHeight="20"
+                                                            Text="更新本地已存在的游戏最新信息"
+                                                            TextWrapping="Wrap" />
+                                                    </StackPanel>
 
-                                                <Button
-                                                    x:Name="SyncExistingButton"
-                                                    Grid.Column="1"
-                                                    Height="34"
-                                                    Margin="24,0,0,0"
-                                                    Padding="16,0"
-                                                    VerticalAlignment="Center"
-                                                    Click="SyncExisting_Click"
-                                                    Content="{Binding UpdateExistingText}"
-                                                    FontSize="{StaticResource Fs.Body}"
-                                                    IsEnabled="{Binding UpdateButtonsEnabled}"
-                                                    Style="{StaticResource GhostBtn}"
-                                                    ToolTip="本地详情与 Steam 中文名同时开跑，互不等待" />
-                                            </Grid>
+                                                    <Button
+                                                        x:Name="SyncExistingButton"
+                                                        Grid.Column="1"
+                                                        Height="34"
+                                                        Margin="24,0,0,0"
+                                                        Padding="16,0"
+                                                        VerticalAlignment="Center"
+                                                        Command="{Binding SyncExistingCommand}"
+                                                        Content="{Binding UpdateExistingText}"
+                                                        FontSize="{StaticResource Fs.Body}"
+                                                        IsEnabled="{Binding UpdateButtonsEnabled}"
+                                                        Style="{StaticResource GhostBtn}"
+                                                        ToolTip="本地详情与 Steam 中文名同时开跑，互不等待" />
+                                                </Grid>
 
-                                        </StackPanel>
-                                    </Border>
+                                            </StackPanel>
+                                        </Border>
 
                                     </StackPanel>
 
                                     <!--  ======== 通用：清缓存 + 免责声明 ========  -->
-                                    <StackPanel
-                                        x:Name="SettingsGroupGeneral"
-                                        Visibility="{Binding ShowGeneral, Converter={StaticResource BoolToVis}}">
-                                    <TextBlock
-                                        x:Name="SettingsHeaderGeneral"
-                                        Margin="6,2,0,9"
-                                        FontSize="{StaticResource Fs.Small}"
-                                        FontWeight="SemiBold"
-                                        Foreground="#FF7E93A9"
-                                        Text="通用" />
+                                    <StackPanel x:Name="SettingsGroupGeneral" Visibility="{Binding ShowGeneral, Converter={StaticResource BoolToVis}}">
+                                        <TextBlock
+                                            x:Name="SettingsHeaderGeneral"
+                                            Margin="6,2,0,9"
+                                            FontSize="{StaticResource Fs.Small}"
+                                            FontWeight="SemiBold"
+                                            Foreground="#FF7E93A9"
+                                            Text="通用" />
 
-                                    <Border
-                                        Padding="20,4"
-                                        Background="#FF2B4058"
-                                        BorderBrush="#FF466280"
-                                        BorderThickness="1"
-                                        CornerRadius="12">
-                                        <StackPanel>
-                                            <Grid Margin="0,16">
-                                                <Grid.ColumnDefinitions>
-                                                    <ColumnDefinition Width="*" />
-                                                    <ColumnDefinition Width="Auto" />
-                                                </Grid.ColumnDefinitions>
+                                        <Border
+                                            Padding="20,4"
+                                            Background="#FF2B4058"
+                                            BorderBrush="#FF466280"
+                                            BorderThickness="1"
+                                            CornerRadius="12">
+                                            <StackPanel>
+                                                <Grid Margin="0,16">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="*" />
+                                                        <ColumnDefinition Width="Auto" />
+                                                    </Grid.ColumnDefinitions>
 
-                                                <StackPanel VerticalAlignment="Center">
-                                                    <TextBlock
-                                                        FontSize="{StaticResource Fs.Subtitle}"
-                                                        FontWeight="SemiBold"
-                                                        Foreground="#FFF0F6FD"
-                                                        Text="清除缓存" />
-                                                    <TextBlock
-                                                        MaxWidth="560"
-                                                        Margin="0,4,0,0"
-                                                        HorizontalAlignment="Left"
-                                                        FontSize="{StaticResource Fs.Small}"
-                                                        Foreground="#FF8FA3BA"
-                                                        LineHeight="20"
-                                                        Text="删除本地缓存的卡片数据、图片和已下载文件；收藏不受影响。"
-                                                        TextWrapping="Wrap" />
-                                                </StackPanel>
+                                                    <StackPanel VerticalAlignment="Center">
+                                                        <TextBlock
+                                                            FontSize="{StaticResource Fs.Subtitle}"
+                                                            FontWeight="SemiBold"
+                                                            Foreground="#FFF0F6FD"
+                                                            Text="清除缓存" />
+                                                        <TextBlock
+                                                            MaxWidth="560"
+                                                            Margin="0,4,0,0"
+                                                            HorizontalAlignment="Left"
+                                                            FontSize="{StaticResource Fs.Small}"
+                                                            Foreground="#FF8FA3BA"
+                                                            LineHeight="20"
+                                                            Text="删除本地缓存的卡片数据、图片和已下载文件；收藏不受影响。"
+                                                            TextWrapping="Wrap" />
+                                                    </StackPanel>
 
-                                                <Button
-                                                    x:Name="ClearCacheButton"
-                                                    Grid.Column="1"
-                                                    Height="34"
-                                                    Margin="24,0,0,0"
-                                                    Padding="16,0"
-                                                    VerticalAlignment="Center"
-                                                    Click="ClearCache_Click"
-                                                    Content="清除缓存"
-                                                    FontSize="{StaticResource Fs.Body}"
-                                                    Style="{StaticResource GhostBtn}" />
-                                            </Grid>
+                                                    <Button
+                                                        x:Name="ClearCacheButton"
+                                                        Grid.Column="1"
+                                                        Height="34"
+                                                        Margin="24,0,0,0"
+                                                        Padding="16,0"
+                                                        VerticalAlignment="Center"
+                                                        Command="{Binding ClearCacheCommand}"
+                                                        Content="清除缓存"
+                                                        FontSize="{StaticResource Fs.Body}"
+                                                        IsEnabled="{Binding ClearCacheEnabled}"
+                                                        Style="{StaticResource GhostBtn}" />
+                                                </Grid>
 
-                                            <Border Height="1" Background="#FF3A5570" />
+                                                <Border Height="1" Background="#FF3A5570" />
 
-                                            <Grid Margin="0,16">
-                                                <Grid.ColumnDefinitions>
-                                                    <ColumnDefinition Width="*" />
-                                                    <ColumnDefinition Width="Auto" />
-                                                </Grid.ColumnDefinitions>
+                                                <Grid Margin="0,16">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="*" />
+                                                        <ColumnDefinition Width="Auto" />
+                                                    </Grid.ColumnDefinitions>
 
-                                                <StackPanel VerticalAlignment="Center">
-                                                    <TextBlock
-                                                        FontSize="{StaticResource Fs.Subtitle}"
-                                                        FontWeight="SemiBold"
-                                                        Foreground="#FFF0F6FD"
-                                                        Text="免责声明" />
-                                                    <TextBlock
-                                                        MaxWidth="560"
-                                                        Margin="0,4,0,0"
-                                                        HorizontalAlignment="Left"
-                                                        FontSize="{StaticResource Fs.Small}"
-                                                        Foreground="#FF8FA3BA"
-                                                        LineHeight="20"
-                                                        Text="软件性质与使用须知，使用前请务必阅读。"
-                                                        TextWrapping="Wrap" />
-                                                </StackPanel>
+                                                    <StackPanel VerticalAlignment="Center">
+                                                        <TextBlock
+                                                            FontSize="{StaticResource Fs.Subtitle}"
+                                                            FontWeight="SemiBold"
+                                                            Foreground="#FFF0F6FD"
+                                                            Text="免责声明" />
+                                                        <TextBlock
+                                                            MaxWidth="560"
+                                                            Margin="0,4,0,0"
+                                                            HorizontalAlignment="Left"
+                                                            FontSize="{StaticResource Fs.Small}"
+                                                            Foreground="#FF8FA3BA"
+                                                            LineHeight="20"
+                                                            Text="软件性质与使用须知，使用前请务必阅读。"
+                                                            TextWrapping="Wrap" />
+                                                    </StackPanel>
 
-                                                <Button
-                                                    Grid.Column="1"
-                                                    Height="34"
-                                                    Margin="24,0,0,0"
-                                                    Padding="16,0"
-                                                    VerticalAlignment="Center"
-                                                    Click="About_Click"
-                                                    Content="查看声明"
-                                                    FontSize="{StaticResource Fs.Body}"
-                                                    Style="{StaticResource GhostBtn}" />
-                                            </Grid>
-                                        </StackPanel>
-                                    </Border>
+                                                    <Button
+                                                        Grid.Column="1"
+                                                        Height="34"
+                                                        Margin="24,0,0,0"
+                                                        Padding="16,0"
+                                                        VerticalAlignment="Center"
+                                                        Command="{Binding OpenAboutCommand}"
+                                                        Content="查看声明"
+                                                        FontSize="{StaticResource Fs.Body}"
+                                                        Style="{StaticResource GhostBtn}" />
+                                                </Grid>
+                                            </StackPanel>
+                                        </Border>
 
                                     </StackPanel>
 
                                     <!--  打赏赞助：随喜投喂入口，弹窗里放收款码  -->
-                                    <StackPanel
-                                        x:Name="SettingsGroupDonate"
-                                        Visibility="{Binding ShowDonate, Converter={StaticResource BoolToVis}}">
-                                    <TextBlock
-                                        x:Name="SettingsHeaderDonate"
-                                        Margin="6,2,0,9"
-                                        FontSize="{StaticResource Fs.Small}"
-                                        FontWeight="SemiBold"
-                                        Foreground="#FF7E93A9"
-                                        Text="打赏赞助" />
+                                    <StackPanel x:Name="SettingsGroupDonate" Visibility="{Binding ShowDonate, Converter={StaticResource BoolToVis}}">
+                                        <TextBlock
+                                            x:Name="SettingsHeaderDonate"
+                                            Margin="6,2,0,9"
+                                            FontSize="{StaticResource Fs.Small}"
+                                            FontWeight="SemiBold"
+                                            Foreground="#FF7E93A9"
+                                            Text="打赏赞助" />
 
-                                    <Border
-                                        Padding="20,4"
-                                        Background="#FF2B4058"
-                                        BorderBrush="#FF466280"
-                                        BorderThickness="1"
-                                        CornerRadius="12">
-                                        <Grid Margin="0,16">
-                                            <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="*" />
-                                                <ColumnDefinition Width="Auto" />
-                                            </Grid.ColumnDefinitions>
+                                        <Border
+                                            Padding="20,4"
+                                            Background="#FF2B4058"
+                                            BorderBrush="#FF466280"
+                                            BorderThickness="1"
+                                            CornerRadius="12">
+                                            <Grid Margin="0,16">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
 
-                                            <StackPanel VerticalAlignment="Center">
-                                                <TextBlock
-                                                    FontSize="{StaticResource Fs.Subtitle}"
-                                                    FontWeight="SemiBold"
-                                                    Foreground="#FFF0F6FD"
-                                                    Text="随喜投喂灵石" />
-                                                <TextBlock
-                                                    MaxWidth="560"
-                                                    Margin="0,4,0,0"
-                                                    HorizontalAlignment="Left"
-                                                    FontSize="{StaticResource Fs.Small}"
-                                                    Foreground="#FF8FA3BA"
-                                                    LineHeight="20"
-                                                    Text="散修炼器，本就不易。若觉此物趁手，可随喜几枚灵石，聊作炼器之资。"
-                                                    TextWrapping="Wrap" />
-                                            </StackPanel>
+                                                <StackPanel VerticalAlignment="Center">
+                                                    <TextBlock
+                                                        FontSize="{StaticResource Fs.Subtitle}"
+                                                        FontWeight="SemiBold"
+                                                        Foreground="#FFF0F6FD"
+                                                        Text="随喜投喂灵石" />
+                                                    <TextBlock
+                                                        MaxWidth="560"
+                                                        Margin="0,4,0,0"
+                                                        HorizontalAlignment="Left"
+                                                        FontSize="{StaticResource Fs.Small}"
+                                                        Foreground="#FF8FA3BA"
+                                                        LineHeight="20"
+                                                        Text="散修炼器，本就不易。若觉此物趁手，可随喜几枚灵石，聊作炼器之资。"
+                                                        TextWrapping="Wrap" />
+                                                </StackPanel>
 
-                                            <Button
-                                                x:Name="SupportButton"
-                                                Grid.Column="1"
-                                                Height="34"
-                                                Margin="24,0,0,0"
-                                                Padding="16,0"
-                                                VerticalAlignment="Center"
-                                                Click="Support_Click"
-                                                Content="随喜投喂灵石"
-                                                FontSize="{StaticResource Fs.Body}"
-                                                Style="{StaticResource GhostBtn}" />
-                                        </Grid>
-                                    </Border>
+                                                <Button
+                                                    x:Name="SupportButton"
+                                                    Grid.Column="1"
+                                                    Height="34"
+                                                    Margin="24,0,0,0"
+                                                    Padding="16,0"
+                                                    VerticalAlignment="Center"
+                                                    Command="{Binding OpenSupportCommand}"
+                                                    Content="随喜投喂灵石"
+                                                    FontSize="{StaticResource Fs.Body}"
+                                                    Style="{StaticResource GhostBtn}" />
+                                            </Grid>
+                                        </Border>
 
                                     </StackPanel>
 
                                     <!--  关于：版本 / 在线更新 / 更新内容  -->
-                                    <StackPanel
-                                        x:Name="SettingsGroupAbout"
-                                        Visibility="{Binding ShowAbout, Converter={StaticResource BoolToVis}}">
-                                    <TextBlock
-                                        x:Name="SettingsHeaderAbout"
-                                        Margin="6,2,0,9"
-                                        FontSize="{StaticResource Fs.Small}"
-                                        FontWeight="SemiBold"
-                                        Foreground="#FF7E93A9"
-                                        Text="关于" />
+                                    <StackPanel x:Name="SettingsGroupAbout" Visibility="{Binding ShowAbout, Converter={StaticResource BoolToVis}}">
+                                        <TextBlock
+                                            x:Name="SettingsHeaderAbout"
+                                            Margin="6,2,0,9"
+                                            FontSize="{StaticResource Fs.Small}"
+                                            FontWeight="SemiBold"
+                                            Foreground="#FF7E93A9"
+                                            Text="关于" />
 
-                                    <Border
-                                        Padding="20,4"
-                                        Background="#FF2B4058"
-                                        BorderBrush="#FF466280"
-                                        BorderThickness="1"
-                                        CornerRadius="12">
-                                        <StackPanel>
-                                            <!--  软件更新：查 Gitee 发行版；有新版本就弹「发现新版本」  -->
-                                            <Grid Margin="0,16">
-                                                <Grid.ColumnDefinitions>
-                                                    <ColumnDefinition Width="*" />
-                                                    <ColumnDefinition Width="Auto" />
-                                                </Grid.ColumnDefinitions>
+                                        <Border
+                                            Padding="20,4"
+                                            Background="#FF2B4058"
+                                            BorderBrush="#FF466280"
+                                            BorderThickness="1"
+                                            CornerRadius="12">
+                                            <StackPanel>
+                                                <!--  软件更新：查 Gitee 发行版；有新版本就弹「发现新版本」  -->
+                                                <Grid Margin="0,16">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="*" />
+                                                        <ColumnDefinition Width="Auto" />
+                                                    </Grid.ColumnDefinitions>
 
-                                                <StackPanel VerticalAlignment="Center">
-                                                    <TextBlock
-                                                        FontSize="{StaticResource Fs.Subtitle}"
-                                                        FontWeight="SemiBold"
-                                                        Foreground="#FFF0F6FD"
-                                                        Text="软件更新" />
-                                                    <TextBlock
-                                                        x:Name="UpdateStatusText"
-                                                        MaxWidth="560"
-                                                        Margin="0,4,0,0"
-                                                        HorizontalAlignment="Left"
-                                                        FontSize="{StaticResource Fs.Small}"
-                                                        Foreground="#FF8FA3BA"
-                                                        LineHeight="20"
-                                                        Text="{Binding VersionLine}"
-                                                        TextWrapping="Wrap" />
-                                                </StackPanel>
+                                                    <StackPanel VerticalAlignment="Center">
+                                                        <TextBlock
+                                                            FontSize="{StaticResource Fs.Subtitle}"
+                                                            FontWeight="SemiBold"
+                                                            Foreground="#FFF0F6FD"
+                                                            Text="软件更新" />
+                                                        <TextBlock
+                                                            x:Name="UpdateStatusText"
+                                                            MaxWidth="560"
+                                                            Margin="0,4,0,0"
+                                                            HorizontalAlignment="Left"
+                                                            FontSize="{StaticResource Fs.Small}"
+                                                            Foreground="#FF8FA3BA"
+                                                            LineHeight="20"
+                                                            Text="{Binding VersionLine}"
+                                                            TextWrapping="Wrap" />
+                                                    </StackPanel>
 
-                                                <Button
-                                                    x:Name="CheckUpdateButton"
-                                                    Grid.Column="1"
-                                                    Height="34"
-                                                    Margin="24,0,0,0"
-                                                    Padding="16,0"
-                                                    VerticalAlignment="Center"
-                                                    Click="CheckUpdate_Click"
-                                                    Content="检查更新"
-                                                    FontSize="{StaticResource Fs.Body}"
-                                                    IsEnabled="{Binding UpdateButtonEnabled}"
-                                                    Style="{StaticResource GhostBtn}"
-                                                    ToolTip="从 Gitee 发行版取最新版本，启动时也会自动查一次" />
-                                            </Grid>
+                                                    <Button
+                                                        x:Name="CheckUpdateButton"
+                                                        Grid.Column="1"
+                                                        Height="34"
+                                                        Margin="24,0,0,0"
+                                                        Padding="16,0"
+                                                        VerticalAlignment="Center"
+                                                        Command="{Binding CheckUpdateCommand}"
+                                                        Content="检查更新"
+                                                        FontSize="{StaticResource Fs.Body}"
+                                                        IsEnabled="{Binding UpdateButtonEnabled}"
+                                                        Style="{StaticResource GhostBtn}" />
+                                                </Grid>
 
-                                            <Border Height="1" Background="#FF3A5570" />
+                                                <Border Height="1" Background="#FF3A5570" />
 
-                                            <!--  更新内容：只读，看发版说明，不会安装任何东西  -->
-                                            <Grid Margin="0,16">
-                                                <Grid.ColumnDefinitions>
-                                                    <ColumnDefinition Width="*" />
-                                                    <ColumnDefinition Width="Auto" />
-                                                </Grid.ColumnDefinitions>
+                                                <!--  更新内容：只读，读本地 Assets\changelog.txt，不会安装任何东西  -->
+                                                <Grid Margin="0,16">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="*" />
+                                                        <ColumnDefinition Width="Auto" />
+                                                    </Grid.ColumnDefinitions>
 
-                                                <StackPanel VerticalAlignment="Center">
-                                                    <TextBlock
-                                                        FontSize="{StaticResource Fs.Subtitle}"
-                                                        FontWeight="SemiBold"
-                                                        Foreground="#FFF0F6FD"
-                                                        Text="更新内容" />
-                                                    <TextBlock
-                                                        x:Name="UpdateNotesText"
-                                                        MaxWidth="560"
-                                                        Margin="0,4,0,0"
-                                                        HorizontalAlignment="Left"
-                                                        FontSize="{StaticResource Fs.Small}"
-                                                        Foreground="#FF8FA3BA"
-                                                        LineHeight="20"
-                                                        Text="{Binding NotesLine}"
-                                                        TextWrapping="Wrap" />
-                                                </StackPanel>
+                                                    <StackPanel VerticalAlignment="Center">
+                                                        <TextBlock
+                                                            FontSize="{StaticResource Fs.Subtitle}"
+                                                            FontWeight="SemiBold"
+                                                            Foreground="#FFF0F6FD"
+                                                            Text="更新内容" />
+                                                        <TextBlock
+                                                            x:Name="UpdateNotesText"
+                                                            MaxWidth="560"
+                                                            Margin="0,4,0,0"
+                                                            HorizontalAlignment="Left"
+                                                            FontSize="{StaticResource Fs.Small}"
+                                                            Foreground="#FF8FA3BA"
+                                                            LineHeight="20"
+                                                            Text="{Binding NotesLine}"
+                                                            TextWrapping="Wrap" />
+                                                    </StackPanel>
 
-                                                <Button
-                                                    x:Name="UpdateNotesButton"
-                                                    Grid.Column="1"
-                                                    Height="34"
-                                                    Margin="24,0,0,0"
-                                                    Padding="16,0"
-                                                    VerticalAlignment="Center"
-                                                    Click="UpdateNotes_Click"
-                                                    Content="查看更新"
-                                                    FontSize="{StaticResource Fs.Body}"
-                                                    Style="{StaticResource GhostBtn}"
-                                                    ToolTip="查看 Gitee 上最近一次发行版的说明" />
-                                            </Grid>
-                                        </StackPanel>
-                                    </Border>
+                                                    <Button
+                                                        x:Name="UpdateNotesButton"
+                                                        Grid.Column="1"
+                                                        Height="34"
+                                                        Margin="24,0,0,0"
+                                                        Padding="16,0"
+                                                        VerticalAlignment="Center"
+                                                        Command="{Binding ViewUpdateNotesCommand}"
+                                                        Content="查看更新"
+                                                        FontSize="{StaticResource Fs.Body}"
+                                                        Style="{StaticResource GhostBtn}"
+                                                        ToolTip="查看本地 Assets\changelog.txt 里的更新内容" />
+                                                </Grid>
+                                            </StackPanel>
+                                        </Border>
                                     </StackPanel>
                                 </StackPanel>
                             </ScrollViewer>
@@ -1206,7 +1207,7 @@
                         <Grid
                             x:Name="QueuePanel"
                             Grid.Row="1"
-                            Visibility="{Binding QueuePanelVisible, Converter={StaticResource BoolToVis}}">
+                            Visibility="{Binding Library.QueuePanelVisible, Converter={StaticResource BoolToVis}}">
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto" />
                                 <RowDefinition Height="*" />
@@ -1217,7 +1218,7 @@
                                     <Button
                                         Height="30"
                                         Padding="12,0"
-                                        Click="OpenDownloadDir_Click"
+                                        Command="{Binding OpenDownloadFolderCommand}"
                                         Content="打开下载目录"
                                         FontSize="{StaticResource Fs.Small}"
                                         Style="{StaticResource GhostBtn}" />
@@ -1225,7 +1226,7 @@
                                         Height="30"
                                         Margin="8,0,0,0"
                                         Padding="12,0"
-                                        Click="ClearFinished_Click"
+                                        Command="{Binding ClearFinishedCommand}"
                                         Content="清理已完成"
                                         FontSize="{StaticResource Fs.Small}"
                                         Style="{StaticResource GhostBtn}" />
@@ -1237,7 +1238,10 @@
                                 Padding="0,0,6,0"
                                 HorizontalScrollBarVisibility="Disabled"
                                 VerticalScrollBarVisibility="Auto">
-                                <ItemsControl x:Name="QueueList">
+                                <ItemsControl
+                                    x:Name="QueueList"
+                                    ItemsSource="{Binding QueueTasks}"
+                                    Visibility="{Binding QueueListVisible, Converter={StaticResource BoolToVis}}">
                                     <ItemsControl.ItemTemplate>
                                         <DataTemplate>
                                             <Border
@@ -1302,30 +1306,30 @@
                                                                 Foreground="#FF8FC2FF"
                                                                 Text="{Binding StateText}" />
                                                             <Button
-                                                                Click="QueueCancel_Click"
+                                                                Command="{Binding DataContext.CancelTaskCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                                CommandParameter="{Binding}"
                                                                 Content="取消"
                                                                 Style="{StaticResource RowActionBtn}"
-                                                                Tag="{Binding}"
                                                                 Visibility="{Binding CanCancel, Converter={StaticResource BoolToVis}}" />
                                                             <Button
-                                                                Click="QueueRetry_Click"
+                                                                Command="{Binding DataContext.RetryTaskCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                                CommandParameter="{Binding}"
                                                                 Content="重试"
                                                                 Style="{StaticResource RowActionBtn}"
-                                                                Tag="{Binding}"
                                                                 Visibility="{Binding CanRetry, Converter={StaticResource BoolToVis}}" />
                                                             <Button
                                                                 MinWidth="78"
-                                                                Click="QueueOpen_Click"
+                                                                Command="{Binding DataContext.OpenTaskFolderCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                                CommandParameter="{Binding}"
                                                                 Content="打开文件夹"
                                                                 Style="{StaticResource RowActionBtn}"
-                                                                Tag="{Binding}"
                                                                 Visibility="{Binding IsCompleted, Converter={StaticResource BoolToVis}}" />
                                                             <Button
                                                                 Margin="8,0,0,0"
-                                                                Click="QueueRemove_Click"
+                                                                Command="{Binding DataContext.RemoveTaskCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                                CommandParameter="{Binding}"
                                                                 Content="移除"
-                                                                Style="{StaticResource RowActionBtn}"
-                                                                Tag="{Binding}" />
+                                                                Style="{StaticResource RowActionBtn}" />
                                                         </StackPanel>
                                                     </Grid>
 
@@ -1365,7 +1369,7 @@
                                 Margin="0,0,0,40"
                                 HorizontalAlignment="Center"
                                 VerticalAlignment="Center"
-                                Visibility="Collapsed">
+                                Visibility="{Binding QueueEmptyVisible, Converter={StaticResource BoolToVis}}">
                                 <Border
                                     Width="56"
                                     Height="56"
@@ -1426,8 +1430,19 @@
                                 x:Name="StatusDot"
                                 Width="7"
                                 Height="7"
-                                VerticalAlignment="Center"
-                                Fill="{StaticResource B.Green}" />
+                                VerticalAlignment="Center">
+                                <!--  状态灯三档颜色：默认绿（成功），需要人注意时换强调色（见 StatusLevel）  -->
+                                <Ellipse.Style>
+                                    <Style TargetType="Ellipse">
+                                        <Setter Property="Fill" Value="{StaticResource B.Green}" />
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding StatusTone}" Value="{x:Static vm:StatusLevel.Attention}">
+                                                <Setter Property="Fill" Value="{StaticResource B.Accent}" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Ellipse.Style>
+                            </Ellipse>
                             <TextBlock
                                 x:Name="StatusText"
                                 Grid.Column="1"
@@ -1435,7 +1450,7 @@
                                 VerticalAlignment="Center"
                                 FontSize="{StaticResource Fs.Small}"
                                 Foreground="{StaticResource B.TextDim}"
-                                Text="数据已就绪"
+                                Text="{Binding StatusText}"
                                 TextTrimming="CharacterEllipsis" />
                         </Grid>
 
@@ -1452,7 +1467,7 @@
                                 Margin="0,0,16,0"
                                 VerticalAlignment="Center"
                                 Orientation="Horizontal"
-                                Visibility="{Binding CardListVisible, Converter={StaticResource BoolToVis}}">
+                                Visibility="{Binding Library.CardListVisible, Converter={StaticResource BoolToVis}}">
                                 <TextBlock
                                     Margin="0,0,8,0"
                                     VerticalAlignment="Center"
@@ -1461,8 +1476,7 @@
                                     Text="当前游戏名：" />
                                 <ComboBox
                                     x:Name="TitleLangCombo"
-                                    SelectedIndex="0"
-                                    SelectionChanged="TitleLangCombo_SelectionChanged"
+                                    SelectedIndex="{Binding Library.TitleLanguageIndex, Mode=TwoWay}"
                                     Style="{StaticResource LangCombo}"
                                     ToolTip="卡片标题显示英文还是中文；没有中文名时显示官网英文名">
                                     <ComboBoxItem Content="英文" />
@@ -1475,78 +1489,78 @@
                                 HorizontalAlignment="Right"
                                 VerticalAlignment="Center"
                                 Orientation="Horizontal"
-                                Visibility="{Binding PagerVisible, Converter={StaticResource BoolToVis}}">
-                            <TextBlock
-                                x:Name="PagerLoading"
-                                Margin="0,0,12,0"
-                                VerticalAlignment="Center"
-                                FontSize="{StaticResource Fs.Small}"
-                                Foreground="{StaticResource B.TextDim}"
-                                Text="加载中…"
-                                Visibility="{Binding PagerLoadingVisible, Converter={StaticResource BoolToVis}}" />
-                            <Button
-                                x:Name="PagerRetry"
-                                Height="28"
-                                Margin="0,0,12,0"
-                                Padding="12,0"
-                                VerticalAlignment="Center"
-                                Click="PagerRetry_Click"
-                                Content="重试"
-                                FontSize="{StaticResource Fs.Small}"
-                                Style="{StaticResource GhostBtn}"
-                                Visibility="{Binding PagerRetryVisible, Converter={StaticResource BoolToVis}}" />
-
-                            <TextBlock
-                                x:Name="PagerTotalText"
-                                Margin="0,0,12,0"
-                                VerticalAlignment="Center"
-                                FontSize="{StaticResource Fs.Small}"
-                                Foreground="{StaticResource B.TextMute}"
-                                Text="{Binding PagerTotal}"
-                                Visibility="{Binding PagerTotalVisible, Converter={StaticResource BoolToVis}}" />
-
-                            <Button
-                                x:Name="PagerPrev"
-                                Width="34"
-                                Height="30"
-                                Padding="0"
-                                VerticalAlignment="Center"
-                                Click="PagerPrev_Click"
-                                IsEnabled="{Binding PagerPrevEnabled}"
-                                Style="{StaticResource PagerButton}"
-                                ToolTip="上一页">
+                                Visibility="{Binding Library.PagerVisible, Converter={StaticResource BoolToVis}}">
                                 <TextBlock
-                                    FontFamily="{StaticResource F.Icon}"
-                                    FontSize="14"
-                                    Text="&#xE76B;" />
-                            </Button>
+                                    x:Name="PagerLoading"
+                                    Margin="0,0,12,0"
+                                    VerticalAlignment="Center"
+                                    FontSize="{StaticResource Fs.Small}"
+                                    Foreground="{StaticResource B.TextDim}"
+                                    Text="加载中…"
+                                    Visibility="{Binding Library.PagerLoadingVisible, Converter={StaticResource BoolToVis}}" />
+                                <Button
+                                    x:Name="PagerRetry"
+                                    Height="28"
+                                    Margin="0,0,12,0"
+                                    Padding="12,0"
+                                    VerticalAlignment="Center"
+                                    Command="{Binding Library.RetryPageCommand}"
+                                    Content="重试"
+                                    FontSize="{StaticResource Fs.Small}"
+                                    Style="{StaticResource GhostBtn}"
+                                    Visibility="{Binding Library.PagerRetryVisible, Converter={StaticResource BoolToVis}}" />
 
-                            <TextBlock
-                                x:Name="PagerPageText"
-                                MinWidth="62"
-                                Margin="6,0"
-                                VerticalAlignment="Center"
-                                FontSize="{StaticResource Fs.Small}"
-                                FontWeight="SemiBold"
-                                Foreground="{StaticResource B.Text}"
-                                Text="{Binding PagerPage}"
-                                TextAlignment="Center" />
-
-                            <Button
-                                x:Name="PagerNext"
-                                Width="34"
-                                Height="30"
-                                Padding="0"
-                                VerticalAlignment="Center"
-                                Click="PagerNext_Click"
-                                IsEnabled="{Binding PagerNextEnabled}"
-                                Style="{StaticResource PagerButton}"
-                                ToolTip="下一页">
                                 <TextBlock
-                                    FontFamily="{StaticResource F.Icon}"
-                                    FontSize="14"
-                                    Text="&#xE76C;" />
-                            </Button>
+                                    x:Name="PagerTotalText"
+                                    Margin="0,0,12,0"
+                                    VerticalAlignment="Center"
+                                    FontSize="{StaticResource Fs.Small}"
+                                    Foreground="{StaticResource B.TextMute}"
+                                    Text="{Binding Library.PagerTotal}"
+                                    Visibility="{Binding Library.PagerTotalVisible, Converter={StaticResource BoolToVis}}" />
+
+                                <Button
+                                    x:Name="PagerPrev"
+                                    Width="34"
+                                    Height="30"
+                                    Padding="0"
+                                    VerticalAlignment="Center"
+                                    Command="{Binding Library.PrevPageCommand}"
+                                    IsEnabled="{Binding Library.PagerPrevEnabled}"
+                                    Style="{StaticResource PagerButton}"
+                                    ToolTip="上一页">
+                                    <TextBlock
+                                        FontFamily="{StaticResource F.Icon}"
+                                        FontSize="14"
+                                        Text="&#xE76B;" />
+                                </Button>
+
+                                <TextBlock
+                                    x:Name="PagerPageText"
+                                    MinWidth="62"
+                                    Margin="6,0"
+                                    VerticalAlignment="Center"
+                                    FontSize="{StaticResource Fs.Small}"
+                                    FontWeight="SemiBold"
+                                    Foreground="{StaticResource B.Text}"
+                                    Text="{Binding Library.PagerPage}"
+                                    TextAlignment="Center" />
+
+                                <Button
+                                    x:Name="PagerNext"
+                                    Width="34"
+                                    Height="30"
+                                    Padding="0"
+                                    VerticalAlignment="Center"
+                                    Command="{Binding Library.NextPageCommand}"
+                                    IsEnabled="{Binding Library.PagerNextEnabled}"
+                                    Style="{StaticResource PagerButton}"
+                                    ToolTip="下一页">
+                                    <TextBlock
+                                        FontFamily="{StaticResource F.Icon}"
+                                        FontSize="14"
+                                        Text="&#xE76C;" />
+                                </Button>
                             </StackPanel>
                         </StackPanel>
                     </Grid>
@@ -1592,7 +1606,7 @@
             <Grid
                 x:Name="ConfirmLayer"
                 Grid.ColumnSpan="2"
-                Visibility="Collapsed">
+                Visibility="{Binding Confirm.IsOpen, Converter={StaticResource BoolToVis}}">
                 <!--  整层铺满的半透明遮罩，命中测试全归它；卡片在它上面，点卡片就轮不到这里  -->
                 <Rectangle
                     x:Name="ConfirmBackdrop"
@@ -1622,41 +1636,46 @@
                             FontSize="{StaticResource Fs.Title}"
                             FontWeight="SemiBold"
                             Foreground="#FFE6EFF8"
-                            Text="确认操作？" />
+                            Text="{Binding Confirm.Title}" />
                         <TextBlock
                             x:Name="ConfirmBody"
                             Margin="0,10,0,0"
                             FontSize="{StaticResource Fs.Body}"
                             Foreground="{StaticResource B.TextDim}"
                             LineHeight="22"
+                            Text="{Binding Confirm.Body}"
                             TextWrapping="Wrap" />
 
                         <!--  可选项：只在需要「顺手多做一件事」的确认框里显示（默认整块收起）  -->
                         <StackPanel
                             x:Name="ConfirmOptionPanel"
                             Margin="0,16,0,0"
-                            Visibility="Collapsed">
+                            Visibility="{Binding Confirm.OptionVisible, Converter={StaticResource BoolToVis}}">
                             <Border
                                 Padding="12,10"
                                 Background="#FF18293D"
                                 BorderBrush="{StaticResource B.BorderSoft}"
                                 BorderThickness="1"
                                 CornerRadius="9">
-                                <CheckBox x:Name="ConfirmOptionCheck" Style="{StaticResource CheckRow}">
+                                <CheckBox
+                                    x:Name="ConfirmOptionCheck"
+                                    IsChecked="{Binding Confirm.OptionChecked, Mode=TwoWay}"
+                                    Style="{StaticResource CheckRow}">
                                     <StackPanel>
                                         <TextBlock
                                             x:Name="ConfirmOptionText"
                                             FontSize="{StaticResource Fs.Body}"
                                             Foreground="{StaticResource B.Text}"
-                                            Text="同时做另一件事" />
+                                            Text="{Binding Confirm.OptionText}" />
                                         <TextBlock
                                             x:Name="ConfirmOptionHint"
                                             Margin="0,4,0,0"
                                             FontSize="{StaticResource Fs.Caption}"
                                             Foreground="{StaticResource B.TextMute}"
                                             LineHeight="18"
+                                            Text="{Binding Confirm.OptionHint}"
                                             TextWrapping="Wrap"
-                                            Text="" />
+                                            Visibility="{Binding Confirm.OptionHintVisible, Converter={StaticResource BoolToVis}}" />
                                     </StackPanel>
                                 </CheckBox>
                             </Border>
@@ -1669,7 +1688,7 @@
                             <Button
                                 Height="32"
                                 Padding="18,0"
-                                Click="ConfirmCancel_Click"
+                                Command="{Binding Confirm.CancelCommand}"
                                 Content="取消"
                                 FontSize="{StaticResource Fs.Body}"
                                 Style="{StaticResource GhostBtn}" />
@@ -1678,8 +1697,8 @@
                                 Height="32"
                                 Margin="10,0,0,0"
                                 Padding="18,0"
-                                Click="ConfirmOk_Click"
-                                Content="确定"
+                                Command="{Binding Confirm.OkCommand}"
+                                Content="{Binding Confirm.OkText}"
                                 Style="{StaticResource DangerBtn}" />
                         </StackPanel>
                     </StackPanel>
@@ -1828,8 +1847,10 @@
                                 VerticalAlignment="Center"
                                 Background="Transparent"
                                 Cursor="Hand"
-                                MouseLeftButtonUp="DataSourceLink_Click"
                                 ToolTip="在浏览器中打开 https://flingtrainer.com">
+                                <Border.InputBindings>
+                                    <MouseBinding Command="{Binding OpenSiteCommand}" Gesture="LeftClick" />
+                                </Border.InputBindings>
                                 <!--
                                     图标比中文「高」一截：Segoe MDL2 的字形几乎占满整个 em、
                                     中文只占约 0.86 em，两者放在同一基线上时图标顶边会冒出去，
@@ -1871,7 +1892,7 @@
                                 Height="32"
                                 Padding="20,0"
                                 HorizontalAlignment="Right"
-                                Click="AboutClose_Click"
+                                Command="{Binding CloseAboutCommand}"
                                 Content="知道了"
                                 Style="{StaticResource PrimaryBtn}" />
                         </Grid>
@@ -2003,7 +2024,7 @@
                             Margin="0,20,0,0"
                             Padding="20,0"
                             HorizontalAlignment="Right"
-                            Click="SupportClose_Click"
+                            Command="{Binding CloseSupportCommand}"
                             Content="知道了"
                             Style="{StaticResource PrimaryBtn}" />
                     </StackPanel>
@@ -2015,13 +2036,14 @@
                 这是真正意义上的模态框：遮罩故意不挂任何鼠标事件，点它什么也不会发生；
                 Esc 在 OnPreviewKeyDown 里也被挡住。想离开只有「取消更新」，
                 更新本身跑在后台线程，取消靠 CancellationToken，不会把界面卡住。
-
-                这一块整棵子树的 DataContext 是 SyncViewModel（构造函数里挂的），
+                
+                这一块整棵子树的 DataContext 是 MainWindowSyncVM（构造函数里挂的），
                 下面所有内容都是单向绑定：代码里只改 Sync.* 的状态，不再直接摸控件。
             -->
             <Grid
                 x:Name="SyncLayer"
                 Grid.ColumnSpan="2"
+                DataContext="{Binding Sync}"
                 Visibility="{Binding IsOpen, Converter={StaticResource BoolToVis}}">
                 <Rectangle Fill="#CC080D15" />
 
@@ -2088,9 +2110,7 @@
                         </Border>
 
                         <!--  ① 游戏数据：官网列表 / 本地详情页（只更新游戏名时整段收起）  -->
-                        <StackPanel
-                            x:Name="SyncDataSection"
-                            Visibility="{Binding Data.Visible, Converter={StaticResource BoolToVis}}">
+                        <StackPanel x:Name="SyncDataSection" Visibility="{Binding Data.Visible, Converter={StaticResource BoolToVis}}">
                             <Grid Margin="0,16,0,0">
                                 <StackPanel VerticalAlignment="Center" Orientation="Horizontal">
                                     <Border
@@ -2454,13 +2474,13 @@
                                     FontSize="{StaticResource Fs.Title}"
                                     FontWeight="SemiBold"
                                     Foreground="#FFE6EFF8"
-                                    Text="发现新版本" />
+                                    Text="{Binding UpdateDialog.Title}" />
                                 <TextBlock
                                     x:Name="UpdateVersionText"
                                     Margin="0,4,0,0"
                                     FontSize="{StaticResource Fs.Small}"
                                     Foreground="#FF8FA3BA"
-                                    Text="" />
+                                    Text="{Binding UpdateDialog.VersionLine}" />
                             </StackPanel>
                         </StackPanel>
 
@@ -2486,6 +2506,7 @@
                             IsReadOnly="True"
                             IsReadOnlyCaretVisible="False"
                             SelectionBrush="#807CBBFF"
+                            Text="{Binding UpdateDialog.Notes, Mode=OneWay}"
                             TextBlock.LineHeight="25"
                             TextWrapping="Wrap"
                             VerticalScrollBarVisibility="Auto" />
@@ -2500,8 +2521,9 @@
                                 FontSize="{StaticResource Fs.Caption}"
                                 Foreground="#FF7E93A9"
                                 LineHeight="18"
-                                Text="下载完成后会自动覆盖安装，程序会重启一次。"
-                                TextWrapping="Wrap" />
+                                Text="下载完成后会打开安装程序，按提示点下一步就行。"
+                                TextWrapping="Wrap"
+                                Visibility="{Binding UpdateDialog.Prompt, Converter={StaticResource BoolToVis}}" />
 
                             <StackPanel
                                 HorizontalAlignment="Right"
@@ -2511,20 +2533,134 @@
                                     x:Name="UpdateLaterButton"
                                     Height="32"
                                     Padding="18,0"
-                                    Click="UpdateLater_Click"
+                                    Command="{Binding UpdateDialog.LaterCommand}"
                                     Content="稍后再说"
                                     FontSize="{StaticResource Fs.Body}"
-                                    Style="{StaticResource GhostBtn}" />
+                                    Style="{StaticResource GhostBtn}"
+                                    Visibility="{Binding UpdateDialog.Prompt, Converter={StaticResource BoolToVis}}" />
                                 <Button
                                     x:Name="UpdateNowButton"
                                     Height="32"
                                     Margin="10,0,0,0"
                                     Padding="20,0"
-                                    Click="UpdateNow_Click"
-                                    Content="立即更新"
+                                    Command="{Binding UpdateDialog.AcceptCommand}"
+                                    Content="{Binding UpdateDialog.NowText}"
                                     FontSize="{StaticResource Fs.Body}"
                                     Style="{StaticResource PrimaryBtn}" />
                             </StackPanel>
+                        </Grid>
+                    </StackPanel>
+                </Border>
+            </Grid>
+
+            <!--
+                下载更新包：程序内进度条，下载完把安装程序拉起来。
+                数字绑 UpdateDownloadVM（UpdateService.DownloadAsync 每 100ms 报一次）。
+            -->
+            <Grid
+                x:Name="DownloadLayer"
+                Grid.ColumnSpan="2"
+                Visibility="Collapsed">
+                <Rectangle
+                    x:Name="DownloadBackdrop"
+                    Fill="#66080D15"
+                    Opacity="0" />
+
+                <Border
+                    x:Name="DownloadCard"
+                    Width="560"
+                    Padding="26,24"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    Background="#FF1D3249"
+                    BorderBrush="{StaticResource B.Border}"
+                    BorderThickness="1"
+                    CornerRadius="14"
+                    Opacity="0"
+                    RenderTransformOrigin="0.5,0.5">
+                    <Border.RenderTransform>
+                        <TransformGroup>
+                            <ScaleTransform x:Name="DownloadScale" ScaleX="0.93" ScaleY="0.93" />
+                            <TranslateTransform x:Name="DownloadShift" Y="10" />
+                        </TransformGroup>
+                    </Border.RenderTransform>
+                    <Border.Effect>
+                        <DropShadowEffect
+                            BlurRadius="28"
+                            Direction="270"
+                            Opacity="0.45"
+                            ShadowDepth="10"
+                            Color="#FF000000" />
+                    </Border.Effect>
+
+                    <StackPanel>
+                        <StackPanel Orientation="Horizontal">
+                            <Image
+                                Width="42"
+                                Height="42"
+                                RenderOptions.BitmapScalingMode="HighQuality"
+                                Source="/Assets/logo.png"
+                                Stretch="Uniform" />
+                            <StackPanel Margin="13,0,0,0" VerticalAlignment="Center">
+                                <TextBlock
+                                    FontSize="{StaticResource Fs.Title}"
+                                    FontWeight="SemiBold"
+                                    Foreground="#FFE6EFF8"
+                                    Text="{Binding UpdateDownload.Title}" />
+                                <TextBlock
+                                    Margin="0,4,0,0"
+                                    FontSize="{StaticResource Fs.Small}"
+                                    Foreground="#FF8FA3BA"
+                                    Text="{Binding UpdateDownload.SubTitle}" />
+                            </StackPanel>
+                        </StackPanel>
+
+                        <Border
+                            Height="1"
+                            Margin="0,18,0,16"
+                            Background="{StaticResource B.BorderSoft}" />
+
+                        <ProgressBar
+                            x:Name="DownloadBar"
+                            Height="8"
+                            Maximum="100"
+                            Minimum="0"
+                            Style="{StaticResource ThinProgress}"
+                            Value="{Binding UpdateDownload.Percent, Mode=OneWay}" />
+
+                        <Grid Margin="0,10,0,0">
+                            <TextBlock
+                                HorizontalAlignment="Left"
+                                FontSize="{StaticResource Fs.Caption}"
+                                Foreground="#FF8FA3BA"
+                                Text="{Binding UpdateDownload.ProgressText}" />
+                            <TextBlock
+                                HorizontalAlignment="Right"
+                                FontSize="{StaticResource Fs.Caption}"
+                                Foreground="#FF7E93A9"
+                                Text="{Binding UpdateDownload.SpeedText}" />
+                        </Grid>
+
+                        <Grid Margin="0,20,0,0">
+                            <TextBlock
+                                MaxWidth="380"
+                                HorizontalAlignment="Left"
+                                VerticalAlignment="Center"
+                                FontSize="{StaticResource Fs.Caption}"
+                                Foreground="#FF7E93A9"
+                                LineHeight="18"
+                                Text="{Binding UpdateDownload.Hint}"
+                                TextWrapping="Wrap" />
+                            <Button
+                                x:Name="DownloadCancelButton"
+                                Height="32"
+                                Padding="18,0"
+                                HorizontalAlignment="Right"
+                                VerticalAlignment="Center"
+                                Command="{Binding UpdateDownload.CancelCommand}"
+                                Content="取消"
+                                FontSize="{StaticResource Fs.Body}"
+                                Style="{StaticResource GhostBtn}" />
                         </Grid>
                     </StackPanel>
                 </Border>

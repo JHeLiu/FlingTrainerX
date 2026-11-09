@@ -8,6 +8,98 @@
     d:DesignWidth="1000"
     mc:Ignorable="d">
 
+    <UserControl.Resources>
+        <!--
+            三个页签的选中态由 VM.SelectedTab 决定：代码里不再手改背景色和文字色，
+            每个页签各挂一个 DataTrigger，切页签只是改一个 int。
+        -->
+        <Style
+            x:Key="TabShots"
+            TargetType="Button"
+            BasedOn="{StaticResource DetailTab}">
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding SelectedTab}" Value="0">
+                    <Setter Property="Background" Value="{StaticResource B.AccentDim}" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style
+            x:Key="TabOptions"
+            TargetType="Button"
+            BasedOn="{StaticResource DetailTab}">
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding SelectedTab}" Value="1">
+                    <Setter Property="Background" Value="{StaticResource B.AccentDim}" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style
+            x:Key="TabDownloads"
+            TargetType="Button"
+            BasedOn="{StaticResource DetailTab}">
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding SelectedTab}" Value="2">
+                    <Setter Property="Background" Value="{StaticResource B.AccentDim}" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <!--  页签上的文字：选中的那一项亮成纯白  -->
+        <Style x:Key="TabLabel" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="{StaticResource Fs.Body}" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Foreground" Value="#FFE6EEF8" />
+        </Style>
+
+        <Style
+            x:Key="TabLabelShots"
+            TargetType="TextBlock"
+            BasedOn="{StaticResource TabLabel}">
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding SelectedTab}" Value="0">
+                    <Setter Property="Foreground" Value="#FFFFFFFF" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style
+            x:Key="TabLabelOptions"
+            TargetType="TextBlock"
+            BasedOn="{StaticResource TabLabel}">
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding SelectedTab}" Value="1">
+                    <Setter Property="Foreground" Value="#FFFFFFFF" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style
+            x:Key="TabLabelDownloads"
+            TargetType="TextBlock"
+            BasedOn="{StaticResource TabLabel}">
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding SelectedTab}" Value="2">
+                    <Setter Property="Foreground" Value="#FFFFFFFF" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <!--  收藏按钮：已收藏时文字变成强调色  -->
+        <Style
+            x:Key="FavButton"
+            TargetType="Button"
+            BasedOn="{StaticResource GhostBtn}">
+            <Setter Property="Foreground" Value="{StaticResource B.TextDim}" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding IsFavorite}" Value="True">
+                    <Setter Property="Foreground" Value="{StaticResource B.AccentLight}" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+    </UserControl.Resources>
+
     <Border
         x:Name="Panel"
         Width="1000"
@@ -92,7 +184,7 @@
                             IsReadOnlyCaretVisible="False"
                             IsTabStop="False"
                             SelectionBrush="#B37FB4FF"
-                            Text="{Binding DisplayTitle, Mode=OneWay}"
+                            Text="{Binding Item.DisplayTitle, Mode=OneWay}"
                             TextWrapping="NoWrap"
                             ToolTip="可以拖选 / Ctrl+C 复制游戏名"
                             VerticalScrollBarVisibility="Disabled" />
@@ -101,36 +193,36 @@
                                 <TextBlock
                                     FontSize="{StaticResource Fs.Caption}"
                                     Foreground="{StaticResource B.AccentLight}"
-                                    Text="{Binding OptionCountText}" />
+                                    Text="{Binding Item.OptionCountText}" />
                             </Border>
                             <Border
                                 Background="#CC12243A"
                                 Style="{StaticResource Chip}"
-                                Visibility="{Binding Version, Converter={StaticResource TextToVis}}">
+                                Visibility="{Binding Item.Version, Converter={StaticResource TextToVis}}">
                                 <TextBlock FontSize="{StaticResource Fs.Caption}" Foreground="#FFFFFFFF">
                                     <Run Foreground="#FFDCE6F1" Text="游戏版本 " />
-                                    <Run Text="{Binding Version, Mode=OneWay}" />
+                                    <Run Text="{Binding Item.Version, Mode=OneWay}" />
                                 </TextBlock>
                             </Border>
                             <Border
                                 Background="#CC12243A"
                                 Style="{StaticResource Chip}"
-                                Visibility="{Binding PlatformText, Converter={StaticResource TextToVis}}">
+                                Visibility="{Binding Item.PlatformText, Converter={StaticResource TextToVis}}">
                                 <TextBlock FontSize="{StaticResource Fs.Caption}" Foreground="#FFFFFFFF">
                                     <Run Foreground="#FFDCE6F1" Text="平台 " />
-                                    <Run Text="{Binding PlatformText, Mode=OneWay}" />
+                                    <Run Text="{Binding Item.PlatformText, Mode=OneWay}" />
                                 </TextBlock>
                             </Border>
                             <Border Background="#CC12243A" Style="{StaticResource Chip}">
                                 <TextBlock FontSize="{StaticResource Fs.Caption}" Foreground="#FFFFFFFF">
                                     <Run Foreground="#FFDCE6F1" Text="最后更新 " />
-                                    <Run Text="{Binding UpdatedText, Mode=OneWay}" />
+                                    <Run Text="{Binding Item.UpdatedText, Mode=OneWay}" />
                                 </TextBlock>
                             </Border>
                             <Border Background="#CC12243A" Style="{StaticResource Chip}">
                                 <TextBlock FontSize="{StaticResource Fs.Caption}" Foreground="#FFFFFFFF">
                                     <Run Foreground="#FFDCE6F1" Text="发布 " />
-                                    <Run Text="{Binding Published, Mode=OneWay}" />
+                                    <Run Text="{Binding Item.Published, Mode=OneWay}" />
                                 </TextBlock>
                             </Border>
                         </WrapPanel>
@@ -141,7 +233,7 @@
                         Margin="0,14,14,0"
                         HorizontalAlignment="Right"
                         VerticalAlignment="Top"
-                        Click="CloseButton_Click"
+                        Command="{Binding CloseCommand}"
                         Style="{StaticResource RoundCloseBtn}"
                         ToolTip="关闭 (Esc)" />
                 </Grid>
@@ -167,14 +259,12 @@
                         Orientation="Horizontal">
                         <Button
                             x:Name="ShotsTab"
-                            Click="ShotsTab_Click"
-                            Style="{StaticResource DetailTab}">
+                            Command="{Binding ShowShotsCommand}"
+                            Style="{StaticResource TabShots}">
                             <StackPanel Orientation="Horizontal">
                                 <TextBlock
                                     x:Name="ShotsTabText"
-                                    FontSize="{StaticResource Fs.Body}"
-                                    FontWeight="SemiBold"
-                                    Foreground="#FFFFFFFF"
+                                    Style="{StaticResource TabLabelShots}"
                                     Text="软件截图" />
                                 <Border
                                     Margin="7,0,0,0"
@@ -185,21 +275,20 @@
                                     <TextBlock
                                         x:Name="ShotsTabCount"
                                         FontSize="{StaticResource Fs.Caption}"
-                                        Foreground="#FF7FB4FF" />
+                                        Foreground="#FF7FB4FF"
+                                        Text="{Binding ShotsCount}" />
                                 </Border>
                             </StackPanel>
                         </Button>
 
                         <Button
                             x:Name="OptionsTab"
-                            Click="OptionsTab_Click"
-                            Style="{StaticResource DetailTab}">
+                            Command="{Binding ShowOptionsCommand}"
+                            Style="{StaticResource TabOptions}">
                             <StackPanel Orientation="Horizontal">
                                 <TextBlock
                                     x:Name="OptionsTabText"
-                                    FontSize="{StaticResource Fs.Body}"
-                                    FontWeight="SemiBold"
-                                    Foreground="#FFE6EEF8"
+                                    Style="{StaticResource TabLabelOptions}"
                                     Text="选项功能" />
                                 <Border
                                     Margin="7,0,0,0"
@@ -210,21 +299,20 @@
                                     <TextBlock
                                         x:Name="OptionsTabCount"
                                         FontSize="{StaticResource Fs.Caption}"
-                                        Foreground="#FF7FB4FF" />
+                                        Foreground="#FF7FB4FF"
+                                        Text="{Binding OptionsCount}" />
                                 </Border>
                             </StackPanel>
                         </Button>
 
                         <Button
                             x:Name="DownloadTab"
-                            Click="DownloadTab_Click"
-                            Style="{StaticResource DetailTab}">
+                            Command="{Binding ShowDownloadsCommand}"
+                            Style="{StaticResource TabDownloads}">
                             <StackPanel Orientation="Horizontal">
                                 <TextBlock
                                     x:Name="DownloadTabText"
-                                    FontSize="{StaticResource Fs.Body}"
-                                    FontWeight="SemiBold"
-                                    Foreground="#FFE6EEF8"
+                                    Style="{StaticResource TabLabelDownloads}"
                                     Text="文件下载" />
                                 <Border
                                     Margin="7,0,0,0"
@@ -235,7 +323,8 @@
                                     <TextBlock
                                         x:Name="DownloadTabCount"
                                         FontSize="{StaticResource Fs.Caption}"
-                                        Foreground="#FF7FB4FF" />
+                                        Foreground="#FF7FB4FF"
+                                        Text="{Binding DownloadsCount}" />
                                 </Border>
                             </StackPanel>
                         </Button>
@@ -246,7 +335,7 @@
                     <Grid
                         x:Name="OptionsPane"
                         Grid.Row="1"
-                        Visibility="Collapsed">
+                        Visibility="{Binding OptionsPaneVisible, Converter={StaticResource BoolToVis}}">
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="*" />
@@ -285,7 +374,8 @@
                                     Height="30"
                                     Margin="7,0,8,0"
                                     FontSize="{StaticResource Fs.Small}"
-                                    Style="{StaticResource SearchBox}" />
+                                    Style="{StaticResource SearchBox}"
+                                    Text="{Binding FilterText, UpdateSourceTrigger=PropertyChanged}" />
                                 <TextBlock
                                     x:Name="FilterHint"
                                     Grid.Column="1"
@@ -294,7 +384,8 @@
                                     FontSize="{StaticResource Fs.Small}"
                                     Foreground="#FFC6D4E2"
                                     IsHitTestVisible="False"
-                                    Text="筛选选项 / 快捷键" />
+                                    Text="筛选选项 / 快捷键"
+                                    Visibility="{Binding FilterHintVisible, Converter={StaticResource BoolToVis}}" />
                             </Grid>
                         </Border>
 
@@ -304,7 +395,7 @@
                             Padding="0,0,6,0"
                             HorizontalScrollBarVisibility="Disabled"
                             VerticalScrollBarVisibility="Auto">
-                            <ItemsControl x:Name="OptionsList">
+                            <ItemsControl x:Name="OptionsList" ItemsSource="{Binding Options}">
                                 <ItemsControl.ItemsPanel>
                                     <ItemsPanelTemplate>
                                         <UniformGrid Columns="2" />
@@ -362,7 +453,8 @@
                             FontFamily="{StaticResource F.Ui}"
                             FontSize="{StaticResource Fs.Small}"
                             Foreground="#FFC6D4E2"
-                            Text="正在加载修改选项…" />
+                            Text="正在加载修改选项…"
+                            Visibility="{Binding OptionsLoadingVisible, Converter={StaticResource BoolToVis}}" />
 
                         <TextBlock
                             x:Name="EmptyHint"
@@ -373,14 +465,14 @@
                             FontSize="{StaticResource Fs.Small}"
                             Foreground="#FFC6D4E2"
                             Text="没有匹配的选项"
-                            Visibility="Collapsed" />
+                            Visibility="{Binding OptionsEmptyVisible, Converter={StaticResource BoolToVis}}" />
                     </Grid>
 
                     <!--  ===== 文件下载面板 =====  -->
                     <Grid
                         x:Name="DownloadPane"
                         Grid.Row="1"
-                        Visibility="Collapsed">
+                        Visibility="{Binding DownloadPaneVisible, Converter={StaticResource BoolToVis}}">
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="Auto" />
@@ -396,7 +488,7 @@
                             Orientation="Horizontal">
                             <Button
                                 x:Name="CopyAllButton"
-                                Click="CopyAllDownloads_Click"
+                                Command="{Binding CopyAllDownloadsCommand}"
                                 Style="{StaticResource RowIconBtn}"
                                 ToolTip="复制全部下载地址">
                                 <TextBlock
@@ -406,7 +498,8 @@
                             </Button>
                             <Button
                                 x:Name="ReloadDownloadsButton"
-                                Click="ReloadDownloads_Click"
+                                Command="{Binding ReloadDownloadsCommand}"
+                                IsEnabled="{Binding ReloadEnabled}"
                                 Style="{StaticResource RowIconBtn}"
                                 ToolTip="重新从官网读取下载信息">
                                 <TextBlock
@@ -471,7 +564,7 @@
                             Padding="0,2,6,0"
                             HorizontalScrollBarVisibility="Disabled"
                             VerticalScrollBarVisibility="Auto">
-                            <ItemsControl x:Name="DownloadsList">
+                            <ItemsControl x:Name="DownloadsList" ItemsSource="{Binding Rows}">
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate>
                                         <!--  整行可选中：鼠标移上来就变成选中行，右侧「启动程序」启动的就是它  -->
@@ -597,9 +690,9 @@
                                                         Orientation="Horizontal">
                                                         <!--  主按钮：下载 / 取消 / 重试 / 启动  -->
                                                         <Button
-                                                            Click="RowAction_Click"
-                                                            Style="{StaticResource RowActionBtn}"
-                                                            Tag="{Binding}">
+                                                            Command="{Binding DataContext.RowActionCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                            CommandParameter="{Binding}"
+                                                            Style="{StaticResource RowActionBtn}">
                                                             <StackPanel Orientation="Horizontal">
                                                                 <TextBlock
                                                                     VerticalAlignment="Center"
@@ -619,9 +712,9 @@
                                                             MinWidth="26"
                                                             Margin="4,0,0,0"
                                                             Padding="7,0"
-                                                            Click="RowOpen_Click"
+                                                            Command="{Binding DataContext.RowOpenCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                            CommandParameter="{Binding}"
                                                             Style="{StaticResource RowActionBtn}"
-                                                            Tag="{Binding}"
                                                             ToolTip="在资源管理器里定位文件"
                                                             Visibility="{Binding CanOpenFolder, Converter={StaticResource BoolToVis}}">
                                                             <TextBlock
@@ -646,8 +739,8 @@
                             FontFamily="{StaticResource F.Ui}"
                             FontSize="{StaticResource Fs.Small}"
                             Foreground="#FFC6D4E2"
-                            Text="官网暂无下载文件"
-                            Visibility="Collapsed" />
+                            Text="{Binding DownloadEmptyText}"
+                            Visibility="{Binding DownloadEmptyVisible, Converter={StaticResource BoolToVis}}" />
                     </Grid>
 
                     <!--  ===== 软件截图面板 =====  -->
@@ -655,7 +748,7 @@
                     <Grid
                         x:Name="ShotsPane"
                         Grid.Row="1"
-                        Visibility="Collapsed">
+                        Visibility="{Binding ShotsPaneVisible, Converter={StaticResource BoolToVis}}">
 
                         <ScrollViewer
                             x:Name="ShotsScroll"
@@ -663,15 +756,15 @@
                             Padding="0,4,6,0"
                             HorizontalScrollBarVisibility="Disabled"
                             VerticalScrollBarVisibility="Auto">
-                            <ItemsControl x:Name="ShotsList">
+                            <ItemsControl x:Name="ShotsList" ItemsSource="{Binding Shots}">
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate>
                                         <!--  一张图占满整行宽度，高度按原图比例自动算，弹框放大图片也跟着放大  -->
                                         <Button
                                             HorizontalAlignment="Stretch"
-                                            Click="Shot_Click"
+                                            Command="{Binding DataContext.OpenShotCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                            CommandParameter="{Binding}"
                                             Style="{StaticResource ShotCard}"
-                                            Tag="{Binding}"
                                             ToolTip="点击打开原图">
                                             <Grid MinHeight="140">
                                                 <Border
@@ -712,8 +805,8 @@
                             FontFamily="{StaticResource F.Ui}"
                             FontSize="{StaticResource Fs.Small}"
                             Foreground="#FFC6D4E2"
-                            Text="官网这篇文章没有配图"
-                            Visibility="Collapsed" />
+                            Text="{Binding ShotsEmptyText}"
+                            Visibility="{Binding ShotsEmptyVisible, Converter={StaticResource BoolToVis}}" />
                     </Grid>
                 </Grid>
 
@@ -722,7 +815,7 @@
                     <Button
                         Height="38"
                         Margin="0,0,0,8"
-                        Click="Download_Click"
+                        Command="{Binding DownloadLatestCommand}"
                         Style="{StaticResource PrimaryBtn}">
                         <StackPanel Orientation="Horizontal">
                             <TextBlock
@@ -741,11 +834,11 @@
                         x:Name="LaunchButton"
                         Height="36"
                         Margin="0,0,0,8"
-                        Click="Launch_Click"
+                        Command="{Binding LaunchCommand}"
                         Foreground="#FFF1F6FC"
-                        IsEnabled="False"
+                        IsEnabled="{Binding LaunchEnabled}"
                         Style="{StaticResource GhostBtn}"
-                        ToolTip="下载完成后可以直接在这里启动修改器">
+                        ToolTip="{Binding LaunchToolTip}">
                         <StackPanel Orientation="Horizontal">
                             <TextBlock
                                 VerticalAlignment="Center"
@@ -762,7 +855,7 @@
                     <Button
                         Height="36"
                         Margin="0,0,0,8"
-                        Click="OpenSite_Click"
+                        Command="{Binding OpenSiteCommand}"
                         Foreground="#FFF1F6FC"
                         Style="{StaticResource GhostBtn}">
                         <StackPanel Orientation="Horizontal">
@@ -780,7 +873,7 @@
                     <Button
                         Height="36"
                         Margin="0,0,0,8"
-                        Click="CopyLink_Click"
+                        Command="{Binding CopyLinkCommand}"
                         Content="复制页面链接"
                         Foreground="#FFF1F6FC"
                         Style="{StaticResource GhostBtn}" />
@@ -789,10 +882,9 @@
                         x:Name="FavButton"
                         Height="36"
                         Margin="0,0,0,4"
-                        Click="Favorite_Click"
-                        Content="加入收藏夹"
-                        Foreground="#FFF1F6FC"
-                        Style="{StaticResource GhostBtn}" />
+                        Command="{Binding ToggleFavoriteCommand}"
+                        Content="{Binding FavoriteText}"
+                        Style="{StaticResource FavButton}" />
 
                     <TextBlock
                         x:Name="ToastText"
@@ -801,7 +893,7 @@
                         FontSize="{StaticResource Fs.Caption}"
                         Foreground="{StaticResource B.Green}"
                         Opacity="0"
-                        Text=""
+                        Text="{Binding ToastText}"
                         TextWrapping="Wrap" />
                 </StackPanel>
             </Grid>
