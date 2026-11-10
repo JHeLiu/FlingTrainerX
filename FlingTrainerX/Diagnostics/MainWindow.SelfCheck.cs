@@ -2937,6 +2937,13 @@ public partial class MainWindow
         await Task.Delay(2500);
         SaveShot(Path.Combine(dir, "01-main.png"));
 
+        // 设置页趁早拍：后面的下载流程会把窗口的渲染拖住，放到中段只能拍到一张全透明的空图
+        NavList.SelectedIndex = 3;
+        await Task.Delay(800);
+        SaveShot(Path.Combine(dir, "10-settings.png"));
+        NavList.SelectedIndex = 0;
+        await Task.Delay(400);
+
         var item = _library.Items
             .OrderByDescending(i => i.RealOptionCount)
             .FirstOrDefault(i => i.Groups.Count > 0) ?? _library.Items.FirstOrDefault();
@@ -3010,10 +3017,6 @@ public partial class MainWindow
 
         CloseDetail();
         await Task.Delay(300);
-
-        NavList.SelectedIndex = 3;
-        await Task.Delay(600);
-        SaveShot(Path.Combine(dir, "10-settings.png"));
 
         DownloadManager.Instance.ClearFinished();
         NavList.SelectedIndex = 2;

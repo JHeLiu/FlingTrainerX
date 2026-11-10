@@ -36,11 +36,11 @@ It only organises and downloads — the files themselves are the originals.
 
 ## Screens
 
-**Detail dialog** — trainer screenshot on the left, option list and download entry on the right
+**Detail dialog** — option list on the left, launch and download actions on the right
 
 ![Detail dialog](docs/screenshot-detail.png)
 
-**Settings** — refresh the game data in one click
+**Settings** — game data updates and local cache cleanup
 
 ![Settings](docs/screenshot-settings.png)
 
